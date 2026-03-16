@@ -3,16 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Minecraft Server Planer</title>
+    <title>MC Server Planer</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
     <div class="app-container">
         <nav class="sidebar">
-            <h2>MC Planer</h2>
+            <div class="logo">MC Planer</div>
             <ul>
-                <li class="nav-item active" data-target="raenge">Ränge</li>
+                <li class="nav-item active" data-target="uebersicht">Übersicht</li>
+                <li class="nav-item" data-target="raenge">Ränge</li>
                 <li class="nav-item" data-target="kisten">Kisten</li>
                 <li class="nav-item" data-target="punkteshop">Punkteshop</li>
                 <li class="nav-item" data-target="gui">GUI</li>
@@ -21,39 +22,82 @@
 
         <main class="content">
             
-            <section id="raenge" class="category-section active">
-                <h2>Ränge verwalten</h2>
-                <div class="form-box">
-                    <input type="text" id="rank-name" placeholder="Rang Name (z.B. VIP)">
-                    <input type="text" id="rank-perms" placeholder="Permissions (Komma getrennt)">
-                    <select id="rank-inherit">
-                        <option value="">Erbt von... (Keiner)</option>
-                        </select>
-                    <button id="btn-save-rank">Rang speichern</button>
+            <section id="uebersicht" class="category-section active">
+                <h2>Dashboard</h2>
+                <p class="subtitle">Willkommen zurück. Hier ist der aktuelle Stand deines Servers.</p>
+                <div class="dashboard-grid">
+                    <div class="stat-card">
+                        <h3>Erstellte Ränge</h3>
+                        <p class="stat-number" id="stat-ranks">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Hochgeladene GUIs</h3>
+                        <p class="stat-number" id="stat-guis">0</p>
+                    </div>
                 </div>
-                <h3>Gespeicherte Ränge:</h3>
-                <ul id="rank-list" class="data-list"></ul>
+            </section>
+
+            <section id="raenge" class="category-section">
+                <h2>Ränge verwalten</h2>
+                <div class="form-card">
+                    <h3 id="rank-form-title">Neuen Rang erstellen</h3>
+                    <div class="input-group">
+                        <input type="text" id="rank-name" placeholder="Rang Name (z.B. VIP)">
+                        <input type="text" id="rank-perms" placeholder="Permissions (Komma getrennt)">
+                        <select id="rank-inherit">
+                            <option value="">Erbt von... (Keiner)</option>
+                        </select>
+                    </div>
+                    <div class="button-group">
+                        <button id="btn-save-rank" class="btn btn-primary">Rang speichern</button>
+                        <button id="btn-cancel-rank" class="btn btn-secondary" style="display: none;">Abbrechen</button>
+                    </div>
+                </div>
+                
+                <div class="list-header">
+                    <h3>Gespeicherte Ränge</h3>
+                </div>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Erbt von</th>
+                                <th>Permissions</th>
+                                <th>Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rank-list"></tbody>
+                    </table>
+                </div>
             </section>
 
             <section id="kisten" class="category-section">
                 <h2>Kisten verwalten</h2>
-                <p>Hier kannst du später Kisteninhalte und Wahrscheinlichkeiten planen.</p>
+                <p class="subtitle">Demnächst verfügbar.</p>
             </section>
 
             <section id="punkteshop" class="category-section">
                 <h2>Punkteshop</h2>
-                <p>Plane hier Items und Preise für deinen Shop.</p>
+                <p class="subtitle">Demnächst verfügbar.</p>
             </section>
 
             <section id="gui" class="category-section">
                 <h2>GUIs verwalten</h2>
-                <div class="form-box">
-                    <input type="text" id="gui-name" placeholder="GUI Name (z.B. Hauptmenü)">
-                    <input type="file" id="gui-image" accept="image/png">
-                    <button id="btn-save-gui">GUI hochladen & speichern</button>
-                    <p id="gui-upload-status"></p>
+                <div class="form-card">
+                    <h3 id="gui-form-title">Neues GUI hochladen</h3>
+                    <div class="input-group">
+                        <input type="text" id="gui-name" placeholder="GUI Name (z.B. Hauptmenü)">
+                        <input type="file" id="gui-image" accept="image/png">
+                    </div>
+                    <div class="button-group">
+                        <button id="btn-save-gui" class="btn btn-primary">GUI speichern</button>
+                        <button id="btn-cancel-gui" class="btn btn-secondary" style="display: none;">Abbrechen</button>
+                    </div>
+                    <p id="gui-upload-status" class="status-text"></p>
                 </div>
-                <h3>Gespeicherte GUIs:</h3>
+
+                <h3>Gespeicherte GUIs</h3>
                 <div id="gui-list" class="gui-grid"></div>
             </section>
 
