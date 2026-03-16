@@ -1,5 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+// NEU: Wir importieren jetzt 'onSnapshot' anstelle von 'getDocs'
+import { getFirestore, collection, addDoc, doc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
 
 // DEINE FIREBASE CONFIG
@@ -44,13 +45,10 @@ function updateDashboard() {
     document.getElementById('stat-guis').innerText = allGUIs.length;
 }
 
-// --- RÄNGE ---
-
-// NEUE HILFSFUNKTION: Ränge hierarchisch (nach Vererbung) sortieren
+// HILFSFUNKTION: Ränge sortieren
 function sortRanksHierarchically(ranks) {
     let sorted = [];
     let visited = new Set();
-
     let baseRanks = ranks.filter(r => !r.inherits_from);
     
     function addChildren(parentName) {
@@ -72,54 +70,118 @@ function sortRanksHierarchically(ranks) {
         }
     });
 
-    ranks.forEach(r => {
-        if (!visited.has(r.id)) sorted.push(r);
-    });
-
+    ranks.forEach(r => { if (!visited.has(r.id)) sorted.push(r); });
     return sorted;
 }
 
-async function loadRanks() {
-    try {
-        const snap = await getDocs(collection(db, "ranks"));
-        let unsortedRanks = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
-        allRanks = sortRanksHierarchically(unsortedRanks);
-        
-        const list = document.getElementById('rank-list');
-        list.innerHTML = '';
-        allRanks.forEach(rank => {
-            const myPerms = rank.permissions || [];
-            const parentRank = rank.inherits_from ? allRanks.find(r => r.name === rank.inherits_from) : null;
-            const inherited = parentRank ? (parentRank.permissions || []) : [];
-            
-            let permsHtml = myPerms.map(p => `<span class="perm-badge">${p}</span>`).join('') + 
-                            inherited.map(p => `<span class="perm-badge perm-inherited">${p}</span>`).join('');
-            
-            let imgHtml = rank.image_url ? `<img src="${rank.image_url}" class="thumbnail">` : '<div class="thumbnail"></div>';
-            let indent = rank.inherits_from ? '<span style="color:#9ca3af; margin-right:5px;">↳</span>' : '';
+// ==========================================
+// REALTIME LISTENER (LIVE-UPDATES)
+// ==========================================
 
-            list.innerHTML += `<tr>
-                <td>${imgHtml}</td>
-                <td><strong>${indent}${rank.name}</strong></td>
-                <td>${rank.inherits_from || '-'}</td>
-                <td>${permsHtml || '-'}</td>
-                <td><button class="btn btn-danger btn-sm" onclick="deleteEntry('ranks', '${rank.id}')">Löschen</button></td>
-            </tr>`;
-        });
+// RÄNGE Live-Update
+onSnapshot(collection(db, "ranks"), (snap) => {
+    let unsortedRanks = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    allRanks = sortRanksHierarchically(unsortedRanks);
+    
+    const list = document.getElementById('rank-list');
+    list.innerHTML = '';
+    allRanks.forEach(rank => {
+        const myPerms = rank.permissions || [];
+        const parentRank = rank.inherits_from ? allRanks.find(r => r.name === rank.inherits_from) : null;
+        const inherited = parentRank ? (parentRank.permissions || []) : [];
         
-        const dropdown = document.getElementById('rank-inherit');
-        dropdown.innerHTML = '<option value="">Erbt von... (Keiner)</option>';
-        allRanks.forEach(r => dropdown.innerHTML += `<option value="${r.name}">${r.name}</option>`);
-        updateDashboard();
-    } catch (error) {
-        console.error("Fehler beim Laden der Ränge:", error);
-    }
-}
+        let permsHtml = myPerms.map(p => `<span class="perm-badge">${p}</span>`).join('') + 
+                        inherited.map(p => `<span class="perm-badge perm-inherited">${p}</span>`).join('');
+        
+        let imgHtml = rank.image_url ? `<img src="${rank.image_url}" class="thumbnail">` : '<div class="thumbnail"></div>';
+        let indent = rank.inherits_from ? '<span style="color:#9ca3af; margin-right:5px;">↳</span>' : '';
+
+        list.innerHTML += `<tr>
+            <td>${imgHtml}</td>
+            <td><strong>${indent}${rank.name}</strong></td>
+            <td>${rank.inherits_from || '-'}</td>
+            <td>${permsHtml || '-'}</td>
+            <td><button class="btn btn-danger btn-sm" onclick="deleteEntry('ranks', '${rank.id}')">Löschen</button></td>
+        </tr>`;
+    });
+    
+    const dropdown = document.getElementById('rank-inherit');
+    dropdown.innerHTML = '<option value="">Erbt von... (Keiner)</option>';
+    allRanks.forEach(r => dropdown.innerHTML += `<option value="${r.name}">${r.name}</option>`);
+    updateDashboard();
+});
+
+// KISTEN Live-Update
+onSnapshot(collection(db, "crates"), (snap) => {
+    allCrates = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const list = document.getElementById('crate-list');
+    list.innerHTML = '';
+    allCrates.forEach(item => {
+        let imgHtml = item.image_url ? `<img src="${item.image_url}" class="thumbnail">` : '<div class="thumbnail"></div>';
+        list.innerHTML += `<tr>
+            <td>${imgHtml}</td><td><strong>${item.crate_name}</strong></td><td>${item.item_name}</td>
+            <td>${item.chance}%</td>
+            <td><button class="btn btn-danger btn-sm" onclick="deleteEntry('crates', '${item.id}')">Löschen</button></td>
+        </tr>`;
+    });
+    updateDashboard();
+});
+
+// SHOP Live-Update
+onSnapshot(collection(db, "shop"), (snap) => {
+    allShop = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const list = document.getElementById('shop-list');
+    list.innerHTML = '';
+    allShop.forEach(item => {
+        let imgHtml = item.image_url ? `<img src="${item.image_url}" class="thumbnail">` : '<div class="thumbnail"></div>';
+        list.innerHTML += `<tr>
+            <td>${imgHtml}</td><td><strong>${item.name}</strong></td><td>${item.price} Pkt.</td>
+            <td><button class="btn btn-danger btn-sm" onclick="deleteEntry('shop', '${item.id}')">Löschen</button></td>
+        </tr>`;
+    });
+    updateDashboard();
+});
+
+// GUIs Live-Update
+onSnapshot(collection(db, "guis"), (snap) => {
+    allGUIs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const list = document.getElementById('gui-list');
+    list.innerHTML = '';
+    allGUIs.forEach(gui => {
+        let title = gui.name || gui.title;
+        list.innerHTML += `
+            <div class="gui-card">
+                <div class="gui-card-header"><span>${title}</span><button class="btn btn-danger btn-sm" onclick="deleteEntry('guis', '${gui.id}')">Löschen</button></div>
+                <img src="${gui.image_url}" alt="${title}">
+            </div>`;
+    });
+    updateDashboard();
+});
+
+// ADS Live-Update
+onSnapshot(collection(db, "ads"), (snap) => {
+    allAds = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const list = document.getElementById('ad-list');
+    list.innerHTML = '';
+    allAds.forEach(ad => {
+        let title = ad.name || ad.title;
+        let linkHtml = ad.link ? `<a href="${ad.link}" target="_blank" style="font-size:12px; display:block; margin-bottom:10px;">Link öffnen</a>` : '';
+        list.innerHTML += `
+            <div class="gui-card">
+                <div class="gui-card-header"><span>${title}</span><button class="btn btn-danger btn-sm" onclick="deleteEntry('ads', '${ad.id}')">Löschen</button></div>
+                ${linkHtml}
+                <img src="${ad.image_url}" alt="${title}">
+            </div>`;
+    });
+});
+
+
+// ==========================================
+// SPEICHERN & LÖSCHEN LOGIK
+// ==========================================
 
 document.getElementById('btn-save-rank').addEventListener('click', async () => {
     const name = document.getElementById('rank-name').value;
-    // Trennt am Zeilenumbruch \n
     const perms = document.getElementById('rank-perms').value.split('\n').map(p => p.trim()).filter(p => p !== "");
     const inherits = document.getElementById('rank-inherit').value;
     const file = document.getElementById('rank-image').files[0];
@@ -129,34 +191,14 @@ document.getElementById('btn-save-rank').addEventListener('click', async () => {
     status.innerText = "Speichere...";
 
     const imageUrl = await uploadImage(file, 'ranks') || null;
-    
     await addDoc(collection(db, "ranks"), { name, permissions: perms, inherits_from: inherits || null, image_url: imageUrl });
     
+    // Eingabefelder leeren
     status.innerText = "";
     document.getElementById('rank-name').value = ''; 
     document.getElementById('rank-perms').value = ''; 
     if(document.getElementById('rank-image')) document.getElementById('rank-image').value = '';
-    loadRanks();
 });
-
-// --- KISTEN ---
-async function loadCrates() {
-    try {
-        const snap = await getDocs(collection(db, "crates"));
-        allCrates = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const list = document.getElementById('crate-list');
-        list.innerHTML = '';
-        allCrates.forEach(item => {
-            let imgHtml = item.image_url ? `<img src="${item.image_url}" class="thumbnail">` : '<div class="thumbnail"></div>';
-            list.innerHTML += `<tr>
-                <td>${imgHtml}</td><td><strong>${item.crate_name}</strong></td><td>${item.item_name}</td>
-                <td>${item.chance}%</td>
-                <td><button class="btn btn-danger btn-sm" onclick="deleteEntry('crates', '${item.id}')">Löschen</button></td>
-            </tr>`;
-        });
-        updateDashboard();
-    } catch(e) { console.error("Fehler beim Laden der Kisten:", e); }
-}
 
 document.getElementById('btn-save-crate').addEventListener('click', async () => {
     const crate_name = document.getElementById('crate-name').value;
@@ -173,26 +215,7 @@ document.getElementById('btn-save-crate').addEventListener('click', async () => 
     
     status.innerText = "";
     document.getElementById('crate-name').value = ''; document.getElementById('crate-item').value = ''; document.getElementById('crate-chance').value = '';
-    loadCrates();
 });
-
-// --- PUNKTESHOP ---
-async function loadShop() {
-    try {
-        const snap = await getDocs(collection(db, "shop"));
-        allShop = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const list = document.getElementById('shop-list');
-        list.innerHTML = '';
-        allShop.forEach(item => {
-            let imgHtml = item.image_url ? `<img src="${item.image_url}" class="thumbnail">` : '<div class="thumbnail"></div>';
-            list.innerHTML += `<tr>
-                <td>${imgHtml}</td><td><strong>${item.name}</strong></td><td>${item.price} Pkt.</td>
-                <td><button class="btn btn-danger btn-sm" onclick="deleteEntry('shop', '${item.id}')">Löschen</button></td>
-            </tr>`;
-        });
-        updateDashboard();
-    } catch(e) { console.error("Fehler beim Laden des Shops:", e); }
-}
 
 document.getElementById('btn-save-shop').addEventListener('click', async () => {
     const name = document.getElementById('shop-item').value;
@@ -207,29 +230,7 @@ document.getElementById('btn-save-shop').addEventListener('click', async () => {
     
     document.getElementById('shop-status').innerText = "";
     document.getElementById('shop-item').value = ''; document.getElementById('shop-price').value = '';
-    loadShop();
 });
-
-// --- GUI & WERBUNG ---
-async function loadGrids(collectionName, containerId) {
-    try {
-        const snap = await getDocs(collection(db, collectionName));
-        const list = document.getElementById(containerId);
-        list.innerHTML = '';
-        snap.docs.forEach(doc => {
-            const data = doc.data();
-            let title = data.name || data.title;
-            let linkHtml = data.link ? `<a href="${data.link}" target="_blank" style="font-size:12px; display:block; margin-bottom:10px;">Link öffnen</a>` : '';
-            list.innerHTML += `
-                <div class="gui-card">
-                    <div class="gui-card-header"><span>${title}</span><button class="btn btn-danger btn-sm" onclick="deleteEntry('${collectionName}', '${doc.id}')">Löschen</button></div>
-                    ${linkHtml}
-                    <img src="${data.image_url}" alt="${title}">
-                </div>`;
-        });
-        if(collectionName === 'guis') { allGUIs = snap.docs; updateDashboard(); }
-    } catch(e) { console.error("Fehler beim Laden von " + collectionName, e); }
-}
 
 document.getElementById('btn-save-gui').addEventListener('click', async () => {
     const file = document.getElementById('gui-image').files[0];
@@ -237,8 +238,10 @@ document.getElementById('btn-save-gui').addEventListener('click', async () => {
     document.getElementById('gui-upload-status').innerText = "Speichere...";
     const imageUrl = await uploadImage(file, 'guis');
     await addDoc(collection(db, "guis"), { name: document.getElementById('gui-name').value, image_url: imageUrl });
+    
     document.getElementById('gui-upload-status').innerText = "";
-    loadGrids('guis', 'gui-list');
+    document.getElementById('gui-name').value = '';
+    document.getElementById('gui-image').value = '';
 });
 
 document.getElementById('btn-save-ad').addEventListener('click', async () => {
@@ -247,33 +250,16 @@ document.getElementById('btn-save-ad').addEventListener('click', async () => {
     document.getElementById('ad-status').innerText = "Speichere...";
     const imageUrl = await uploadImage(file, 'ads');
     await addDoc(collection(db, "ads"), { title: document.getElementById('ad-title').value, link: document.getElementById('ad-link').value, image_url: imageUrl });
+    
     document.getElementById('ad-status').innerText = "";
-    loadGrids('ads', 'ad-list');
+    document.getElementById('ad-title').value = '';
+    document.getElementById('ad-link').value = '';
+    document.getElementById('ad-image').value = '';
 });
 
-// Globale Lösch-Funktion
+// Lösch-Funktion (braucht auch keinen Reload mehr!)
 window.deleteEntry = async (collectionName, id) => {
     if(confirm('Wirklich löschen?')) {
         await deleteDoc(doc(db, collectionName, id));
-        if(collectionName === 'ranks') loadRanks();
-        if(collectionName === 'crates') loadCrates();
-        if(collectionName === 'shop') loadShop();
-        if(collectionName === 'guis') loadGrids('guis', 'gui-list');
-        if(collectionName === 'ads') loadGrids('ads', 'ad-list');
     }
 };
-
-// --- INITIALISIERUNG ---
-function initApp() {
-    loadRanks(); 
-    loadCrates(); 
-    loadShop(); 
-    loadGrids('guis', 'gui-list'); 
-    loadGrids('ads', 'ad-list');
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initApp);
-} else {
-    initApp();
-}
