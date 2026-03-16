@@ -2,6 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebas
 import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
 
+// DEINE FIREBASE CONFIG HIER EINFÜGEN
 const firebaseConfig = {
   apiKey: "AIzaSyBZXXBcEnn5YjURWupDLZt4p0ljGZvsKb0",
   authDomain: "mc-server-planer.firebaseapp.com",
@@ -15,12 +16,19 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-let allRanks = [];
-let allGUIs = [];
-let editingRankId = null; // Speichert die ID, wenn wir bearbeiten
-let editingGuiId = null;
+// Daten-Speicher
+let allRanks = [], allGUIs = [], allCrates = [], allShop = [], allAds = [];
+let editingRankId = null;
 
-// --- NAVIGATION ---
+// HILFSFUNKTION: Bilder hochladen
+async function uploadImage(file, folderPath) {
+    if (!file) return null;
+    const storageRef = ref(storage, `${folderPath}/${Date.now()}_${file.name}`);
+    await uploadBytes(storageRef, file);
+    return await getDownloadURL(storageRef);
+}
+
+// NAVIGATION
 document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', (e) => {
         document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
@@ -31,231 +39,176 @@ document.querySelectorAll('.nav-item').forEach(item => {
     });
 });
 
-// --- ÜBERSICHT (DASHBOARD) ---
 function updateDashboard() {
     document.getElementById('stat-ranks').innerText = allRanks.length;
+    document.getElementById('stat-crates').innerText = allCrates.length;
+    document.getElementById('stat-shop').innerText = allShop.length;
     document.getElementById('stat-guis').innerText = allGUIs.length;
 }
 
 // --- RÄNGE ---
 async function loadRanks() {
-    const querySnapshot = await getDocs(collection(db, "ranks"));
-    allRanks = [];
-    querySnapshot.forEach((doc) => {
-        allRanks.push({ id: doc.id, ...doc.data() });
+    const snap = await getDocs(collection(db, "ranks"));
+    allRanks = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    const list = document.getElementById('rank-list');
+    list.innerHTML = '';
+    allRanks.forEach(rank => {
+        let inherited = rank.inherits_from ? allRanks.find(r => r.name === rank.inherits_from)?.permissions || [] : [];
+        let permsHtml = rank.permissions.map(p => `<span class="perm-badge">${p}</span>`).join('') + 
+                        inherited.map(p => `<span class="perm-badge perm-inherited">${p}</span>`).join('');
+        
+        let imgHtml = rank.image_url ? `<img src="${rank.image_url}" class="thumbnail">` : '<div class="thumbnail"></div>';
+
+        list.innerHTML += `<tr>
+            <td>${imgHtml}</td><td><strong>${rank.name}</strong></td>
+            <td>${rank.inherits_from || '-'}</td><td>${permsHtml || '-'}</td>
+            <td><button class="btn btn-danger btn-sm" onclick="deleteEntry('ranks', '${rank.id}')">Löschen</button></td>
+        </tr>`;
     });
-    renderRanks();
-    updateRankDropdown();
+    
+    const dropdown = document.getElementById('rank-inherit');
+    dropdown.innerHTML = '<option value="">Erbt von... (Keiner)</option>';
+    allRanks.forEach(r => dropdown.innerHTML += `<option value="${r.name}">${r.name}</option>`);
     updateDashboard();
 }
 
-function renderRanks() {
-    const list = document.getElementById('rank-list');
-    list.innerHTML = '';
-
-    allRanks.forEach(rank => {
-        let inheritedPerms = [];
-        if (rank.inherits_from) {
-            const parentRank = allRanks.find(r => r.name === rank.inherits_from);
-            if (parentRank) inheritedPerms = parentRank.permissions;
-        }
-
-        let permsHtml = rank.permissions.map(p => `<span class="perm-badge">${p}</span>`).join('');
-        permsHtml += inheritedPerms.map(p => `<span class="perm-badge perm-inherited">${p}</span>`).join('');
-
-        list.innerHTML += `
-            <tr>
-                <td><strong>${rank.name}</strong></td>
-                <td><span style="color: #6b7280; font-size: 13px;">${rank.inherits_from || '-'}</span></td>
-                <td>${permsHtml || '<span style="color:#9ca3af; font-size: 12px;">Keine</span>'}</td>
-                <td class="action-cell">
-                    <button class="btn btn-secondary btn-sm edit-rank-btn" data-id="${rank.id}">Bearbeiten</button>
-                    <button class="btn btn-danger btn-sm delete-rank-btn" data-id="${rank.id}">Löschen</button>
-                </td>
-            </tr>
-        `;
-    });
-}
-
-function updateRankDropdown() {
-    const dropdown = document.getElementById('rank-inherit');
-    dropdown.innerHTML = '<option value="">Erbt von... (Keiner)</option>';
-    allRanks.forEach(rank => {
-        // Man soll nicht von sich selbst erben können
-        if(rank.id !== editingRankId) {
-            dropdown.innerHTML += `<option value="${rank.name}">${rank.name}</option>`;
-        }
-    });
-}
-
-// Rang Speichern / Updaten
 document.getElementById('btn-save-rank').addEventListener('click', async () => {
     const name = document.getElementById('rank-name').value;
-    const permsInput = document.getElementById('rank-perms').value;
+    const perms = document.getElementById('rank-perms').value.split(',').map(p => p.trim()).filter(p => p);
     const inherits = document.getElementById('rank-inherit').value;
+    const file = document.getElementById('rank-image').files[0];
+    const status = document.getElementById('rank-status');
 
-    if(!name) return alert("Bitte einen Namen eingeben!");
+    if(!name) return alert("Name fehlt!");
+    status.innerText = "Speichere...";
 
-    const permissions = permsInput.split(',').map(p => p.trim()).filter(p => p !== "");
-    const rankData = { name, permissions, inherits_from: inherits || null };
-
-    if (editingRankId) {
-        // Bearbeiten-Modus
-        await updateDoc(doc(db, "ranks", editingRankId), rankData);
-        resetRankForm();
-    } else {
-        // Neu erstellen
-        await addDoc(collection(db, "ranks"), rankData);
-        document.getElementById('rank-name').value = '';
-        document.getElementById('rank-perms').value = '';
-    }
+    const imageUrl = await uploadImage(file, 'ranks') || null;
+    
+    await addDoc(collection(db, "ranks"), { name, permissions: perms, inherits_from: inherits || null, image_url: imageUrl });
+    
+    status.innerText = "";
+    document.getElementById('rank-name').value = ''; document.getElementById('rank-perms').value = ''; document.getElementById('rank-image').value = '';
     loadRanks();
 });
 
-function resetRankForm() {
-    editingRankId = null;
-    document.getElementById('rank-form-title').innerText = "Neuen Rang erstellen";
-    document.getElementById('btn-save-rank').innerText = "Rang speichern";
-    document.getElementById('btn-cancel-rank').style.display = "none";
-    document.getElementById('rank-name').value = '';
-    document.getElementById('rank-perms').value = '';
-    updateRankDropdown();
-}
-
-document.getElementById('btn-cancel-rank').addEventListener('click', resetRankForm);
-
-// Event Delegation für Ränge (Bearbeiten/Löschen Buttons in der Tabelle)
-document.getElementById('rank-list').addEventListener('click', async (e) => {
-    const id = e.target.getAttribute('data-id');
-    if (!id) return;
-
-    if (e.target.classList.contains('edit-rank-btn')) {
-        const rank = allRanks.find(r => r.id === id);
-        document.getElementById('rank-name').value = rank.name;
-        document.getElementById('rank-perms').value = rank.permissions.join(', ');
-        editingRankId = rank.id;
-        updateRankDropdown(); // Wichtig, damit man im Dropdown den alten Erbe-Status setzen kann
-        document.getElementById('rank-inherit').value = rank.inherits_from || '';
-        
-        document.getElementById('rank-form-title').innerText = "Rang bearbeiten";
-        document.getElementById('btn-save-rank').innerText = "Änderungen speichern";
-        document.getElementById('btn-cancel-rank').style.display = "inline-block";
-        window.scrollTo(0, 0); // Nach oben scrollen
-    }
-
-    if (e.target.classList.contains('delete-rank-btn')) {
-        if(confirm('Möchtest du diesen Rang wirklich löschen?')) {
-            await deleteDoc(doc(db, "ranks", id));
-            loadRanks();
-        }
-    }
-});
-
-
-// --- GUI ---
-async function loadGUIs() {
-    const querySnapshot = await getDocs(collection(db, "guis"));
-    allGUIs = [];
-    querySnapshot.forEach((doc) => {
-        allGUIs.push({ id: doc.id, ...doc.data() });
+// --- KISTEN ---
+async function loadCrates() {
+    const snap = await getDocs(collection(db, "crates"));
+    allCrates = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const list = document.getElementById('crate-list');
+    list.innerHTML = '';
+    allCrates.forEach(item => {
+        let imgHtml = item.image_url ? `<img src="${item.image_url}" class="thumbnail">` : '<div class="thumbnail"></div>';
+        list.innerHTML += `<tr>
+            <td>${imgHtml}</td><td><strong>${item.crate_name}</strong></td><td>${item.item_name}</td>
+            <td>${item.chance}%</td>
+            <td><button class="btn btn-danger btn-sm" onclick="deleteEntry('crates', '${item.id}')">Löschen</button></td>
+        </tr>`;
     });
-    renderGUIs();
     updateDashboard();
 }
 
-function renderGUIs() {
-    const list = document.getElementById('gui-list');
+document.getElementById('btn-save-crate').addEventListener('click', async () => {
+    const crate_name = document.getElementById('crate-name').value;
+    const item_name = document.getElementById('crate-item').value;
+    const chance = document.getElementById('crate-chance').value;
+    const file = document.getElementById('crate-image').files[0];
+    const status = document.getElementById('crate-status');
+
+    if(!crate_name || !item_name) return alert("Kisten- und Item-Name fehlen!");
+    status.innerText = "Speichere...";
+    
+    const imageUrl = await uploadImage(file, 'crates') || null;
+    await addDoc(collection(db, "crates"), { crate_name, item_name, chance: Number(chance), image_url: imageUrl });
+    
+    status.innerText = "";
+    document.getElementById('crate-name').value = ''; document.getElementById('crate-item').value = ''; document.getElementById('crate-chance').value = '';
+    loadCrates();
+});
+
+// --- PUNKTESHOP ---
+async function loadShop() {
+    const snap = await getDocs(collection(db, "shop"));
+    allShop = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const list = document.getElementById('shop-list');
     list.innerHTML = '';
-    allGUIs.forEach(gui => {
+    allShop.forEach(item => {
+        let imgHtml = item.image_url ? `<img src="${item.image_url}" class="thumbnail">` : '<div class="thumbnail"></div>';
+        list.innerHTML += `<tr>
+            <td>${imgHtml}</td><td><strong>${item.name}</strong></td><td>${item.price} Pkt.</td>
+            <td><button class="btn btn-danger btn-sm" onclick="deleteEntry('shop', '${item.id}')">Löschen</button></td>
+        </tr>`;
+    });
+    updateDashboard();
+}
+
+document.getElementById('btn-save-shop').addEventListener('click', async () => {
+    const name = document.getElementById('shop-item').value;
+    const price = document.getElementById('shop-price').value;
+    const file = document.getElementById('shop-image').files[0];
+    
+    if(!name || !price) return alert("Name und Preis fehlen!");
+    document.getElementById('shop-status').innerText = "Speichere...";
+    
+    const imageUrl = await uploadImage(file, 'shop') || null;
+    await addDoc(collection(db, "shop"), { name, price: Number(price), image_url: imageUrl });
+    
+    document.getElementById('shop-status').innerText = "";
+    document.getElementById('shop-item').value = ''; document.getElementById('shop-price').value = '';
+    loadShop();
+});
+
+// --- GUI & WERBUNG ---
+async function loadGrids(collectionName, containerId) {
+    const snap = await getDocs(collection(db, collectionName));
+    const list = document.getElementById(containerId);
+    list.innerHTML = '';
+    snap.docs.forEach(doc => {
+        const data = doc.data();
+        let title = data.name || data.title;
+        let linkHtml = data.link ? `<a href="${data.link}" target="_blank" style="font-size:12px; display:block; margin-bottom:10px;">Link öffnen</a>` : '';
         list.innerHTML += `
             <div class="gui-card">
-                <div class="gui-card-header">
-                    <span>${gui.name}</span>
-                    <button class="btn btn-danger btn-sm delete-gui-btn" data-id="${gui.id}">Löschen</button>
-                </div>
-                <img src="${gui.image_url}" alt="${gui.name}">
-                <button class="btn btn-secondary btn-sm edit-gui-btn" data-id="${gui.id}">Name ändern</button>
-            </div>
-        `;
+                <div class="gui-card-header"><span>${title}</span><button class="btn btn-danger btn-sm" onclick="deleteEntry('${collectionName}', '${doc.id}')">Löschen</button></div>
+                ${linkHtml}
+                <img src="${data.image_url}" alt="${title}">
+            </div>`;
     });
+    if(collectionName === 'guis') { allGUIs = snap.docs; updateDashboard(); }
 }
 
-// GUI Speichern / Updaten
 document.getElementById('btn-save-gui').addEventListener('click', async () => {
-    const name = document.getElementById('gui-name').value;
-    const fileInput = document.getElementById('gui-image');
-    const statusText = document.getElementById('gui-upload-status');
-
-    if(!name) return alert("Bitte einen Namen angeben!");
-
-    if (editingGuiId) {
-        // Nur den Namen aktualisieren (Bild bleibt vorerst gleich, um es simpel zu halten)
-        await updateDoc(doc(db, "guis", editingGuiId), { name: name });
-        resetGuiForm();
-        loadGUIs();
-        return;
-    }
-
-    if(fileInput.files.length === 0) return alert("Bitte ein Bild zum Hochladen auswählen!");
-
-    const file = fileInput.files[0];
-    statusText.innerText = "Lade Bild hoch...";
-
-    try {
-        const storageRef = ref(storage, 'guis/' + Date.now() + '_' + file.name); // Eindeutiger Dateiname
-        await uploadBytes(storageRef, file);
-        const downloadURL = await getDownloadURL(storageRef);
-
-        statusText.innerText = "Speichere in Datenbank...";
-        await addDoc(collection(db, "guis"), { name: name, image_url: downloadURL });
-
-        statusText.innerText = "Erfolgreich gespeichert!";
-        setTimeout(() => statusText.innerText = "", 3000);
-        document.getElementById('gui-name').value = '';
-        fileInput.value = '';
-        loadGUIs();
-    } catch (error) {
-        console.error(error);
-        statusText.innerText = "Fehler beim Hochladen!";
-    }
+    const file = document.getElementById('gui-image').files[0];
+    if(!file || !document.getElementById('gui-name').value) return alert("Bild und Name fehlen!");
+    document.getElementById('gui-upload-status').innerText = "Speichere...";
+    const imageUrl = await uploadImage(file, 'guis');
+    await addDoc(collection(db, "guis"), { name: document.getElementById('gui-name').value, image_url: imageUrl });
+    document.getElementById('gui-upload-status').innerText = "";
+    loadGrids('guis', 'gui-list');
 });
 
-function resetGuiForm() {
-    editingGuiId = null;
-    document.getElementById('gui-form-title').innerText = "Neues GUI hochladen";
-    document.getElementById('btn-save-gui').innerText = "GUI speichern";
-    document.getElementById('btn-cancel-gui').style.display = "none";
-    document.getElementById('gui-name').value = '';
-    document.getElementById('gui-image').style.display = "block"; // Dateiauswahl wieder anzeigen
-}
-
-document.getElementById('btn-cancel-gui').addEventListener('click', resetGuiForm);
-
-// Event Delegation für GUI (Bearbeiten/Löschen)
-document.getElementById('gui-list').addEventListener('click', async (e) => {
-    const id = e.target.getAttribute('data-id');
-    if (!id) return;
-
-    if (e.target.classList.contains('edit-gui-btn')) {
-        const gui = allGUIs.find(g => g.id === id);
-        document.getElementById('gui-name').value = gui.name;
-        editingGuiId = gui.id;
-        
-        document.getElementById('gui-form-title').innerText = "GUI Name bearbeiten";
-        document.getElementById('btn-save-gui').innerText = "Name aktualisieren";
-        document.getElementById('btn-cancel-gui').style.display = "inline-block";
-        document.getElementById('gui-image').style.display = "none"; // Beim Bearbeiten ändern wir nur den Namen
-        window.scrollTo(0, 0);
-    }
-
-    if (e.target.classList.contains('delete-gui-btn')) {
-        if(confirm('Möchtest du dieses GUI wirklich löschen?')) {
-            await deleteDoc(doc(db, "guis", id));
-            loadGUIs();
-        }
-    }
+document.getElementById('btn-save-ad').addEventListener('click', async () => {
+    const file = document.getElementById('ad-image').files[0];
+    if(!file || !document.getElementById('ad-title').value) return alert("Bild und Titel fehlen!");
+    document.getElementById('ad-status').innerText = "Speichere...";
+    const imageUrl = await uploadImage(file, 'ads');
+    await addDoc(collection(db, "ads"), { title: document.getElementById('ad-title').value, link: document.getElementById('ad-link').value, image_url: imageUrl });
+    document.getElementById('ad-status').innerText = "";
+    loadGrids('ads', 'ad-list');
 });
+
+// Globale Lösch-Funktion (wird von den Buttons im HTML per onclick aufgerufen)
+window.deleteEntry = async (collectionName, id) => {
+    if(confirm('Wirklich löschen?')) {
+        await deleteDoc(doc(db, collectionName, id));
+        if(collectionName === 'ranks') loadRanks();
+        if(collectionName === 'crates') loadCrates();
+        if(collectionName === 'shop') loadShop();
+        if(collectionName === 'guis') loadGrids('guis', 'gui-list');
+        if(collectionName === 'ads') loadGrids('ads', 'ad-list');
+    }
+};
 
 // Start
-loadRanks();
-loadGUIs();
+loadRanks(); loadCrates(); loadShop(); loadGrids('guis', 'gui-list'); loadGrids('ads', 'ad-list');

@@ -17,6 +17,7 @@
                 <li class="nav-item" data-target="kisten">Kisten</li>
                 <li class="nav-item" data-target="punkteshop">Punkteshop</li>
                 <li class="nav-item" data-target="gui">GUI</li>
+                <li class="nav-item" data-target="werbung">Werbung</li>
             </ul>
         </nav>
 
@@ -26,14 +27,10 @@
                 <h2>Dashboard</h2>
                 <p class="subtitle">Willkommen zurück. Hier ist der aktuelle Stand deines Servers.</p>
                 <div class="dashboard-grid">
-                    <div class="stat-card">
-                        <h3>Erstellte Ränge</h3>
-                        <p class="stat-number" id="stat-ranks">0</p>
-                    </div>
-                    <div class="stat-card">
-                        <h3>Hochgeladene GUIs</h3>
-                        <p class="stat-number" id="stat-guis">0</p>
-                    </div>
+                    <div class="stat-card"><h3>Ränge</h3><p class="stat-number" id="stat-ranks">0</p></div>
+                    <div class="stat-card"><h3>Kisten-Items</h3><p class="stat-number" id="stat-crates">0</p></div>
+                    <div class="stat-card"><h3>Shop-Items</h3><p class="stat-number" id="stat-shop">0</p></div>
+                    <div class="stat-card"><h3>GUIs</h3><p class="stat-number" id="stat-guis">0</p></div>
                 </div>
             </section>
 
@@ -47,39 +44,66 @@
                         <select id="rank-inherit">
                             <option value="">Erbt von... (Keiner)</option>
                         </select>
+                        <input type="file" id="rank-image" accept="image/png, image/jpeg" title="Titelbild für Rang">
                     </div>
                     <div class="button-group">
                         <button id="btn-save-rank" class="btn btn-primary">Rang speichern</button>
                         <button id="btn-cancel-rank" class="btn btn-secondary" style="display: none;">Abbrechen</button>
                     </div>
+                    <p id="rank-status" class="status-text"></p>
                 </div>
                 
-                <div class="list-header">
-                    <h3>Gespeicherte Ränge</h3>
-                </div>
                 <div class="table-container">
                     <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Erbt von</th>
-                                <th>Permissions</th>
-                                <th>Aktionen</th>
-                            </tr>
-                        </thead>
+                        <thead><tr><th>Bild</th><th>Name</th><th>Erbt von</th><th>Permissions</th><th>Aktionen</th></tr></thead>
                         <tbody id="rank-list"></tbody>
                     </table>
                 </div>
             </section>
 
             <section id="kisten" class="category-section">
-                <h2>Kisten verwalten</h2>
-                <p class="subtitle">Demnächst verfügbar.</p>
+                <h2>Kisten & Drops</h2>
+                <div class="form-card">
+                    <h3 id="crate-form-title">Neues Item zu Kiste hinzufügen</h3>
+                    <div class="input-group">
+                        <input type="text" id="crate-name" placeholder="Name der Kiste (z.B. Epic Crate)">
+                        <input type="text" id="crate-item" placeholder="Item Name (z.B. Diamantschwert)">
+                        <input type="number" id="crate-chance" placeholder="Wahrscheinlichkeit in %" min="0" max="100">
+                        <input type="file" id="crate-image" accept="image/png, image/jpeg" title="Item/Kisten Bild">
+                    </div>
+                    <div class="button-group">
+                        <button id="btn-save-crate" class="btn btn-primary">Item speichern</button>
+                    </div>
+                    <p id="crate-status" class="status-text"></p>
+                </div>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead><tr><th>Bild</th><th>Kiste</th><th>Item</th><th>Chance</th><th>Aktionen</th></tr></thead>
+                        <tbody id="crate-list"></tbody>
+                    </table>
+                </div>
             </section>
 
             <section id="punkteshop" class="category-section">
                 <h2>Punkteshop</h2>
-                <p class="subtitle">Demnächst verfügbar.</p>
+                <div class="form-card">
+                    <h3 id="shop-form-title">Neues Item im Shop anbieten</h3>
+                    <div class="input-group">
+                        <input type="text" id="shop-item" placeholder="Item Name (z.B. 1000 Münzen)">
+                        <input type="number" id="shop-price" placeholder="Preis (Punkte)">
+                        <input type="file" id="shop-image" accept="image/png, image/jpeg">
+                    </div>
+                    <div class="button-group">
+                        <button id="btn-save-shop" class="btn btn-primary">Shop-Item speichern</button>
+                    </div>
+                    <p id="shop-status" class="status-text"></p>
+                </div>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead><tr><th>Bild</th><th>Item Name</th><th>Preis</th><th>Aktionen</th></tr></thead>
+                        <tbody id="shop-list"></tbody>
+                    </table>
+                </div>
             </section>
 
             <section id="gui" class="category-section">
@@ -90,20 +114,29 @@
                         <input type="text" id="gui-name" placeholder="GUI Name (z.B. Hauptmenü)">
                         <input type="file" id="gui-image" accept="image/png">
                     </div>
-                    <div class="button-group">
-                        <button id="btn-save-gui" class="btn btn-primary">GUI speichern</button>
-                        <button id="btn-cancel-gui" class="btn btn-secondary" style="display: none;">Abbrechen</button>
-                    </div>
+                    <div class="button-group"><button id="btn-save-gui" class="btn btn-primary">GUI speichern</button></div>
                     <p id="gui-upload-status" class="status-text"></p>
                 </div>
-
-                <h3>Gespeicherte GUIs</h3>
                 <div id="gui-list" class="gui-grid"></div>
+            </section>
+
+            <section id="werbung" class="category-section">
+                <h2>Werbung & Banner</h2>
+                <div class="form-card">
+                    <h3 id="ad-form-title">Neue Werbung erstellen</h3>
+                    <div class="input-group">
+                        <input type="text" id="ad-title" placeholder="Titel der Kampagne">
+                        <input type="text" id="ad-link" placeholder="Link (URL)">
+                        <input type="file" id="ad-image" accept="image/png, image/jpeg">
+                    </div>
+                    <div class="button-group"><button id="btn-save-ad" class="btn btn-primary">Werbung speichern</button></div>
+                    <p id="ad-status" class="status-text"></p>
+                </div>
+                <div id="ad-list" class="gui-grid"></div>
             </section>
 
         </main>
     </div>
-
     <script type="module" src="app.js"></script>
 </body>
 </html>
