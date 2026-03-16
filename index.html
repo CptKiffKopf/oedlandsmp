@@ -43,12 +43,13 @@
                         <select id="rank-inherit">
                             <option value="">Erbt von... (Keiner)</option>
                         </select>
-                        <input type="file" id="rank-image" accept="image/png, image/jpeg" title="Titelbild für Rang">
+                        <input type="file" id="rank-image" accept="image/png, image/jpeg" title="Titelbild für Rang (Optional)">
                     </div>
                     <textarea id="rank-perms" placeholder="Permissions (eine pro Zeile)&#10;essentials.spawn&#10;essentials.msg" rows="4"></textarea>
                     
                     <div class="button-group" style="margin-top: 15px;">
                         <button id="btn-save-rank" class="btn btn-primary">Rang speichern</button>
+                        <button id="btn-cancel-rank" class="btn btn-secondary" style="display: none;">Abbrechen</button>
                     </div>
                     <p id="rank-status" class="status-text"></p>
                 </div>
@@ -74,7 +75,6 @@
                     </div>
                     <p id="crate-status" class="status-text"></p>
                 </div>
-
                 <div id="crates-container" class="crates-layout"></div>
             </section>
 
@@ -130,7 +130,9 @@
             </section>
 
         </main>
-    </div> <div id="item-modal" class="modal">
+    </div>
+
+    <div id="item-modal" class="modal">
         <div class="modal-content">
             <h3>Item zur Kiste hinzufügen</h3>
             <input type="hidden" id="modal-crate-id">
