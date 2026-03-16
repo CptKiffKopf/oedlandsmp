@@ -28,7 +28,7 @@
                 <p class="subtitle">Willkommen zurück. Hier ist der aktuelle Stand deines Servers.</p>
                 <div class="dashboard-grid">
                     <div class="stat-card"><h3>Ränge</h3><p class="stat-number" id="stat-ranks">0</p></div>
-                    <div class="stat-card"><h3>Kisten-Items</h3><p class="stat-number" id="stat-crates">0</p></div>
+                    <div class="stat-card"><h3>Kisten</h3><p class="stat-number" id="stat-crates">0</p></div>
                     <div class="stat-card"><h3>Shop-Items</h3><p class="stat-number" id="stat-shop">0</p></div>
                     <div class="stat-card"><h3>GUIs</h3><p class="stat-number" id="stat-guis">0</p></div>
                 </div>
@@ -63,26 +63,20 @@
             </section>
 
             <section id="kisten" class="category-section">
-                <h2>Kisten & Drops</h2>
+                <h2>Kisten verwalten</h2>
                 <div class="form-card">
-                    <h3 id="crate-form-title">Neues Item zu Kiste hinzufügen</h3>
+                    <h3>Neue Kiste erstellen</h3>
                     <div class="input-group">
                         <input type="text" id="crate-name" placeholder="Name der Kiste (z.B. Epic Crate)">
-                        <input type="text" id="crate-item" placeholder="Item Name (z.B. Diamantschwert)">
-                        <input type="number" id="crate-chance" placeholder="Wahrscheinlichkeit in %" min="0" max="100">
-                        <input type="file" id="crate-image" accept="image/png, image/jpeg" title="Item/Kisten Bild">
+                        <input type="file" id="crate-image" accept="image/png, image/jpeg" title="Kisten Bild (Optional)">
                     </div>
                     <div class="button-group">
-                        <button id="btn-save-crate" class="btn btn-primary">Item speichern</button>
+                        <button id="btn-save-crate" class="btn btn-primary">Kiste erstellen</button>
                     </div>
                     <p id="crate-status" class="status-text"></p>
                 </div>
-                <div class="table-container">
-                    <table class="data-table">
-                        <thead><tr><th>Bild</th><th>Kiste</th><th>Item</th><th>Chance</th><th>Aktionen</th></tr></thead>
-                        <tbody id="crate-list"></tbody>
-                    </table>
-                </div>
+
+                <div id="crates-container" class="crates-layout"></div>
             </section>
 
             <section id="punkteshop" class="category-section">
@@ -138,6 +132,26 @@
 
         </main>
     </div>
+
+    <div id="item-modal" class="modal">
+        <div class="modal-content">
+            <h3>Item zur Kiste hinzufügen</h3>
+            <input type="hidden" id="modal-crate-id">
+            
+            <div class="input-group" style="flex-direction: column; gap: 10px; margin-top: 15px;">
+                <input type="text" id="modal-item-name" placeholder="Item Name (z.B. Diamantschwert)" style="width:100%;">
+                <input type="number" id="modal-item-chance" placeholder="Wahrscheinlichkeit in %" min="0" max="100" style="width:100%;">
+                <input type="file" id="modal-item-image" accept="image/png, image/jpeg" title="Item Bild" style="width:100%;">
+            </div>
+            
+            <div class="button-group" style="margin-top: 20px;">
+                <button id="btn-save-item" class="btn btn-primary">Item speichern</button>
+                <button id="btn-close-modal" class="btn btn-secondary">Abbrechen</button>
+            </div>
+            <p id="modal-status" class="status-text"></p>
+        </div>
+    </div>
+
     <script type="module" src="app.js"></script>
 </body>
 </html>
