@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Server Planer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="app-container">
+        <nav class="sidebar">
+            <h2>MC Planer</h2>
+            <ul>
+                <li class="nav-item active" data-target="raenge">Ränge</li>
+                <li class="nav-item" data-target="kisten">Kisten</li>
+                <li class="nav-item" data-target="punkteshop">Punkteshop</li>
+                <li class="nav-item" data-target="gui">GUI</li>
+            </ul>
+        </nav>
+
+        <main class="content">
+            
+            <section id="raenge" class="category-section active">
+                <h2>Ränge verwalten</h2>
+                <div class="form-box">
+                    <input type="text" id="rank-name" placeholder="Rang Name (z.B. VIP)">
+                    <input type="text" id="rank-perms" placeholder="Permissions (Komma getrennt)">
+                    <select id="rank-inherit">
+                        <option value="">Erbt von... (Keiner)</option>
+                        </select>
+                    <button id="btn-save-rank">Rang speichern</button>
+                </div>
+                <h3>Gespeicherte Ränge:</h3>
+                <ul id="rank-list" class="data-list"></ul>
+            </section>
+
+            <section id="kisten" class="category-section">
+                <h2>Kisten verwalten</h2>
+                <p>Hier kannst du später Kisteninhalte und Wahrscheinlichkeiten planen.</p>
+            </section>
+
+            <section id="punkteshop" class="category-section">
+                <h2>Punkteshop</h2>
+                <p>Plane hier Items und Preise für deinen Shop.</p>
+            </section>
+
+            <section id="gui" class="category-section">
+                <h2>GUIs verwalten</h2>
+                <div class="form-box">
+                    <input type="text" id="gui-name" placeholder="GUI Name (z.B. Hauptmenü)">
+                    <input type="file" id="gui-image" accept="image/png">
+                    <button id="btn-save-gui">GUI hochladen & speichern</button>
+                    <p id="gui-upload-status"></p>
+                </div>
+                <h3>Gespeicherte GUIs:</h3>
+                <div id="gui-list" class="gui-grid"></div>
+            </section>
+
+        </main>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
