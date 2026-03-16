@@ -40,13 +40,14 @@
                     <h3 id="rank-form-title">Neuen Rang erstellen</h3>
                     <div class="input-group">
                         <input type="text" id="rank-name" placeholder="Rang Name (z.B. VIP)">
-                        <input type="text" id="rank-perms" placeholder="Permissions (Komma getrennt)">
                         <select id="rank-inherit">
                             <option value="">Erbt von... (Keiner)</option>
                         </select>
                         <input type="file" id="rank-image" accept="image/png, image/jpeg" title="Titelbild für Rang">
                     </div>
-                    <div class="button-group">
+                    <textarea id="rank-perms" placeholder="Permissions (eine pro Zeile)&#10;essentials.spawn&#10;essentials.msg" rows="4"></textarea>
+                    
+                    <div class="button-group" style="margin-top: 15px;">
                         <button id="btn-save-rank" class="btn btn-primary">Rang speichern</button>
                         <button id="btn-cancel-rank" class="btn btn-secondary" style="display: none;">Abbrechen</button>
                     </div>
