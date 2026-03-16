@@ -1,5 +1,4 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-// HIER WICHTIG: 'updateDoc' wurde hinzugefügt!
 import { getFirestore, collection, addDoc, doc, deleteDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
 
@@ -84,17 +83,15 @@ onSnapshot(collection(db, "ranks"), (snap) => {
     updateDashboard();
 });
 
-// NEU: KISTEN Live-Update (mit verschachtelten Items)
 onSnapshot(collection(db, "crates"), (snap) => {
     allCrates = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     const container = document.getElementById('crates-container');
     container.innerHTML = '';
     
     allCrates.forEach(crate => {
-        let items = crate.items || []; // Lädt die Item-Liste der Kiste
+        let items = crate.items || [];
         let crateImgHtml = crate.image_url ? `<img src="${crate.image_url}" class="thumbnail" style="width:50px;height:50px;">` : `<div class="thumbnail" style="width:50px;height:50px;"></div>`;
         
-        // HTML für die Items innerhalb dieser Kiste generieren
         let itemsHtml = items.map(item => `
             <tr>
                 <td>${item.image_url ? `<img src="${item.image_url}" class="thumbnail" style="width:30px;height:30px;">` : '-'}</td>
@@ -104,13 +101,12 @@ onSnapshot(collection(db, "crates"), (snap) => {
             </tr>
         `).join('');
 
-        // Komplette Kisten-Karte zeichnen
         container.innerHTML += `
             <div class="crate-box">
                 <div class="crate-header">
                     <div class="crate-header-left">
                         ${crateImgHtml}
-                        <h3 style="font-size: 18px;">${crate.name}</h3>
+                        <h3 style="font-size: 18px;">${crate.name || 'Unbenannte Kiste'}</h3>
                     </div>
                     <div class="button-group">
                         <button class="btn btn-primary btn-sm" onclick="openItemModal('${crate.id}')">+ Item hinzufügen</button>
@@ -178,22 +174,42 @@ document.getElementById('btn-save-rank').addEventListener('click', async () => {
     document.getElementById('rank-name').value = ''; document.getElementById('rank-perms').value = ''; if(document.getElementById('rank-image')) document.getElementById('rank-image').value = '';
 });
 
-// NEU: Kiste (ohne Item) erstellen
+// Kiste erstellen
 document.getElementById('btn-save-crate').addEventListener('click', async () => {
-    const crate_name = document.getElementById('crate-name').value;
-    const file = document.getElementById('crate-image').files[0];
-    const status = document.getElementById('crate-status');
+    try {
+        const crate_name = document.getElementById('crate-name').value;
+        const fileInput = document.getElementById('crate-image');
+        const file = fileInput ? fileInput.files[0] : null;
+        const status = document.getElementById('crate-status');
 
-    if(!crate_name) return alert("Kisten-Name fehlt!");
-    status.innerText = "Erstelle Kiste...";
-    
-    const imageUrl = await uploadImage(file, 'crates') || null;
-    
-    // Kiste mit leerem Array (items: []) erstellen
-    await addDoc(collection(db, "crates"), { name: crate_name, image_url: imageUrl, items: [] });
-    
-    status.innerText = "";
-    document.getElementById('crate-name').value = ''; document.getElementById('crate-image').value = '';
+        if(!crate_name) {
+            alert("Bitte gib einen Namen für die Kiste ein!");
+            return;
+        }
+        
+        status.innerText = "Erstelle Kiste...";
+        let imageUrl = null;
+        if (file) {
+            imageUrl = await uploadImage(file, 'crates');
+        }
+        
+        await addDoc(collection(db, "crates"), { 
+            name: crate_name, 
+            image_url: imageUrl, 
+            items: [] 
+        });
+        
+        status.innerText = "Erfolgreich!";
+        setTimeout(() => status.innerText = "", 2000);
+        
+        document.getElementById('crate-name').value = ''; 
+        if(fileInput) fileInput.value = '';
+
+    } catch (error) {
+        console.error("Fehler beim Erstellen der Kiste:", error);
+        alert("Fehler beim Speichern: " + error.message);
+        document.getElementById('crate-status').innerText = "Fehler!";
+    }
 });
 
 document.getElementById('btn-save-shop').addEventListener('click', async () => {
@@ -229,7 +245,6 @@ document.getElementById('btn-save-ad').addEventListener('click', async () => {
 // MODAL (ITEMS ZU KISTE HINZUFÜGEN) LOGIK
 // ==========================================
 
-// Wird vom HTML-Button der jeweiligen Kiste aufgerufen
 window.openItemModal = (crateId) => {
     document.getElementById('modal-crate-id').value = crateId;
     document.getElementById('item-modal').classList.add('active');
@@ -240,52 +255,55 @@ document.getElementById('btn-close-modal').addEventListener('click', () => {
 });
 
 document.getElementById('btn-save-item').addEventListener('click', async () => {
-    const crateId = document.getElementById('modal-crate-id').value;
-    const name = document.getElementById('modal-item-name').value;
-    const chance = document.getElementById('modal-item-chance').value;
-    const file = document.getElementById('modal-item-image').files[0];
-    const status = document.getElementById('modal-status');
+    try {
+        const crateId = document.getElementById('modal-crate-id').value;
+        const name = document.getElementById('modal-item-name').value;
+        const chance = document.getElementById('modal-item-chance').value;
+        const file = document.getElementById('modal-item-image').files[0];
+        const status = document.getElementById('modal-status');
 
-    if(!name || !chance) return alert("Item-Name und Chance fehlen!");
-    status.innerText = "Speichere Item in Kiste...";
+        if(!name || !chance) return alert("Item-Name und Chance fehlen!");
+        status.innerText = "Speichere Item in Kiste...";
 
-    const imageUrl = await uploadImage(file, 'crates/items') || null;
-    
-    // Wir erzeugen ein neues Item-Objekt
-    const newItem = {
-        id: Date.now().toString(), // Eine einmalige ID für das Item
-        name: name,
-        chance: Number(chance),
-        image_url: imageUrl
-    };
+        const imageUrl = await uploadImage(file, 'crates/items') || null;
+        
+        const newItem = {
+            id: Date.now().toString(),
+            name: name,
+            chance: Number(chance),
+            image_url: imageUrl
+        };
 
-    // Wir holen uns die Kiste, hängen das neue Item an die Liste an und updaten die Datenbank
-    const crateRef = doc(db, "crates", crateId);
-    const crate = allCrates.find(c => c.id === crateId);
-    const updatedItems = [...(crate.items || []), newItem];
-    
-    await updateDoc(crateRef, { items: updatedItems });
-
-    // Aufräumen & Schließen
-    status.innerText = "";
-    document.getElementById('modal-item-name').value = '';
-    document.getElementById('modal-item-chance').value = '';
-    if(document.getElementById('modal-item-image')) document.getElementById('modal-item-image').value = '';
-    document.getElementById('item-modal').classList.remove('active');
-});
-
-// Löscht ein einzelnes Item AUS einer Kiste
-window.deleteCrateItem = async (crateId, itemId) => {
-    if(confirm("Möchtest du dieses Item wirklich aus der Kiste entfernen?")) {
         const crateRef = doc(db, "crates", crateId);
         const crate = allCrates.find(c => c.id === crateId);
-        // Wir filtern das zu löschende Item heraus und speichern den Rest wieder
-        const updatedItems = (crate.items || []).filter(i => i.id !== itemId);
+        const updatedItems = [...(crate.items || []), newItem];
+        
         await updateDoc(crateRef, { items: updatedItems });
+
+        status.innerText = "";
+        document.getElementById('modal-item-name').value = '';
+        document.getElementById('modal-item-chance').value = '';
+        if(document.getElementById('modal-item-image')) document.getElementById('modal-item-image').value = '';
+        document.getElementById('item-modal').classList.remove('active');
+    } catch (error) {
+        console.error("Fehler beim Speichern des Items:", error);
+        alert("Fehler beim Speichern: " + error.message);
+    }
+});
+
+window.deleteCrateItem = async (crateId, itemId) => {
+    if(confirm("Möchtest du dieses Item wirklich aus der Kiste entfernen?")) {
+        try {
+            const crateRef = doc(db, "crates", crateId);
+            const crate = allCrates.find(c => c.id === crateId);
+            const updatedItems = (crate.items || []).filter(i => i.id !== itemId);
+            await updateDoc(crateRef, { items: updatedItems });
+        } catch (error) {
+            console.error("Fehler beim Löschen des Items:", error);
+        }
     }
 };
 
-// Löscht ein ganzes Dokument (z.B. eine ganze Kiste, einen Rang etc.)
 window.deleteEntry = async (collectionName, id) => {
     if(confirm('Wirklich löschen?')) {
         await deleteDoc(doc(db, collectionName, id));
