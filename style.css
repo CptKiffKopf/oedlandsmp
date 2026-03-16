@@ -1,0 +1,33 @@
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+body { background-color: #1e1e2e; color: #cdd6f4; }
+
+.app-container { display: flex; height: 100vh; }
+
+/* Menü */
+.sidebar { width: 250px; background-color: #181825; padding: 20px; }
+.sidebar h2 { margin-bottom: 20px; color: #89b4fa; }
+.sidebar ul { list-style: none; }
+.sidebar li { padding: 12px; margin-bottom: 8px; background: #313244; border-radius: 6px; cursor: pointer; transition: 0.2s; }
+.sidebar li:hover { background: #45475a; }
+.sidebar li.active { background: #89b4fa; color: #11111b; font-weight: bold; }
+
+/* Hauptbereich */
+.content { flex: 1; padding: 30px; overflow-y: auto; }
+.category-section { display: none; }
+.category-section.active { display: block; }
+
+/* Formulare */
+.form-box { background: #313244; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+input, select, button { display: block; width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 4px; border: none; }
+input, select { background: #1e1e2e; color: #fff; }
+button { background: #a6e3a1; color: #11111b; font-weight: bold; cursor: pointer; }
+button:hover { background: #94e289; }
+
+/* Listen & Grids */
+.data-list li { background: #313244; padding: 15px; margin-bottom: 10px; border-radius: 6px; list-style: none;}
+.perm-badge { background: #f38ba8; color: #111; padding: 2px 6px; border-radius: 4px; font-size: 12px; margin-right: 5px; }
+.perm-inherited { background: #89dceb; } /* Farbe für vererbte Perms */
+
+.gui-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; }
+.gui-card { background: #313244; padding: 10px; border-radius: 8px; text-align: center; }
+.gui-card img { max-width: 100%; border-radius: 4px; margin-top: 10px; }
