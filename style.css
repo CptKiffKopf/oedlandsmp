@@ -72,7 +72,7 @@ textarea:focus { border-color: var(--text-muted); }
 .gui-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px; }
 .gui-card { background: var(--surface-color); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
 .gui-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-weight: 500; }
-.gui-card img { width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 12px; }
+.gui-card img { width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 12px; image-rendering: pixelated; }
 
 /* Kisten Layout */
 .crates-layout { display: flex; flex-direction: column; gap: 20px; }
@@ -90,54 +90,67 @@ textarea:focus { border-color: var(--text-muted); }
 .modal-content { background: var(--surface-color); padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
 
 /* Thumbnails */
-.thumbnail { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-color); display: block; }
+.thumbnail { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-color); display: block; image-rendering: pixelated; }
 input[type="file"] { padding: 7px; background: var(--bg-color); font-size: 12px; cursor: pointer; }
 input[type="number"] { width: 100px; }
 .status-text { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
+
 /* ========================================= */
-/* GUI EDITOR CSS (Dunkles Theme)            */
+/* EIGENSTÄNDIGE GUI EDITOR SEITE            */
 /* ========================================= */
 
-.editor-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #2c2c2c; color: #fff; z-index: 20000; flex-direction: column; padding: 20px; overflow-y: auto; user-select: none; }
-.editor-overlay.active { display: flex; }
-.editor-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; width: 100%; border-bottom: 1px solid #555; padding-bottom: 10px; }
-.editor-header h2 { margin: 0; color: #fff; }
+#gui-editor {
+    background: #2c2c2c;
+    color: #fff;
+    padding: 30px;
+    border-radius: 12px;
+    user-select: none;
+    min-height: 80vh;
+}
 
-.main-container-editor { display: flex; gap: 20px; align-items: flex-start; justify-content: center; width: 100%; }
-.sidebar-editor { display: flex; flex-direction: column; gap: 10px; width: 300px; max-height: 85vh; overflow-y: auto; padding-right: 5px; }
+.editor-main-container { display: flex; gap: 20px; align-items: flex-start; justify-content: flex-start; }
+.editor-sidebar { display: flex; flex-direction: column; gap: 10px; width: 300px; padding-right: 5px;}
 
-.panel-editor { background: #3c3c3c; padding: 12px; border-radius: 8px; border: 1px solid #555; }
-.panel-editor h3 { margin: 0 0 8px 0; font-size: 0.95rem; color: #aaa; border-bottom: 1px solid #555; padding-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
+.editor-panel { background: #3c3c3c; padding: 12px; border-radius: 8px; border: 1px solid #555; text-align: left; }
+.editor-panel h3 { margin: 0 0 8px 0; font-size: 0.95rem; color: #aaa; border-bottom: 1px solid #555; padding-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;}
 
-.tool-grid-editor { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
-.btn-eraser-mode { background: #444; border: 1px dashed #aaa; }
-.btn-eraser-mode.active { background: #FF9800; border: 2px solid #E65100; color: #fff; }
+.editor-tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+#gui-editor .btn { background: #555; color: white; border: none; padding: 8px; cursor: pointer; border-radius: 4px; transition: background 0.1s; text-align: center; font-size: 0.85rem;}
+#gui-editor .btn:hover { background: #666; }
+#gui-editor .btn.active { background: #4CAF50; font-weight: bold; border: 2px solid #2E7D32; }
+
+.editor-btn-eraser-mode { background: #444; border: 1px dashed #aaa; }
+.editor-btn-eraser-mode.active { background: #FF9800; border: 2px solid #E65100; color: #fff; }
+
 .btn-undo { background: #FF9800; width: 100%; margin-bottom: 5px;}
+#gui-editor .btn-danger { background: #d32f2f; } 
+#gui-editor .btn-danger:hover { background: #b71c1c; }
 .btn-action { background: #2196F3; margin-top: 5px; width: 100%; padding: 10px; font-weight: bold;}
-.btn-template { background: #546E7A; border: 1px solid #455A64; }
-.btn-copy { background: #9C27B0; } 
-.btn-import { background: #009688; }
-.btn-ref { background: #673AB7; margin-top:5px; } .btn-ref:hover { background: #512DA8; }
+.editor-btn-template { background: #546E7A; border: 1px solid #455A64; }
+.editor-btn-copy { background: #9C27B0; } 
+.editor-btn-import { background: #009688; }
 
-.canvas-wrapper { position: relative; border: 2px solid #555; background-image: linear-gradient(45deg, #808080 25%, transparent 25%), linear-gradient(-45deg, #808080 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #808080 75%), linear-gradient(-45deg, transparent 75%, #808080 75%); background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px; display: inline-block; cursor: none; }
-canvas { display: block; image-rendering: pixelated; position: relative; z-index: 1; }
+#gui-editor input[type="number"], #gui-editor input[type="text"], #gui-editor select { width: 100%; padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;}
 
-.ref-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0.2; pointer-events: none; display: none; image-rendering: pixelated; z-index: 5; }
-.grid-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; background-image: linear-gradient(to right, rgba(255, 255, 255, 0.25) 1px, transparent 1px), linear-gradient(to bottom, rgba(255, 255, 255, 0.25) 1px, transparent 1px); display: none; z-index: 10; }
-.center-line { position: absolute; top: 0; width: 2px; height: 100%; background: rgba(255, 0, 0, 0.6); pointer-events: none; display: none; left: 50%; transform: translateX(-50%); z-index: 10; }
+.editor-canvas-wrapper { 
+    position: relative; border: 2px solid #555; 
+    background-image: linear-gradient(45deg, #808080 25%, transparent 25%), linear-gradient(-45deg, #808080 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #808080 75%), linear-gradient(-45deg, transparent 75%, #808080 75%); 
+    background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px; 
+    display: inline-block; cursor: crosshair; 
+}
 
-#toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 10px 20px; border-radius: 20px; pointer-events: none; opacity: 0; transition: opacity 0.3s; z-index: 30000; font-size: 0.9rem; }
+#gui-editor canvas { display: block; image-rendering: pixelated; position: relative; z-index: 1; max-width: none !important; width: auto; height: auto; }
 
-.palette-grid { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 5px; }
-.color-swatch { width: 22px; height: 22px; border: 1px solid #000; cursor: pointer; }
-.color-swatch.active { border: 2px solid #fff; outline: 2px solid #4CAF50; z-index: 10; transform: scale(1.2); }
-.row-editor { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; gap: 5px; }
+.editor-ref-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0.2; pointer-events: none; display: none; image-rendering: pixelated; z-index: 5; max-width: none !important; }
+.editor-grid-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; background-image: linear-gradient(to right, rgba(255, 255, 255, 0.25) 1px, transparent 1px), linear-gradient(to bottom, rgba(255, 255, 255, 0.25) 1px, transparent 1px); display: none; z-index: 10; }
+.editor-center-line { position: absolute; top: 0; width: 2px; height: 100%; background: rgba(255, 0, 0, 0.6); pointer-events: none; display: none; left: 50%; transform: translateX(-50%); z-index: 10; }
 
-/* Editor Inputs */
-.sidebar-editor input[type="number"], .sidebar-editor input[type="text"], .sidebar-editor select { width: 100%; padding: 4px; background: #222; border: 1px solid #555; color: #fff; margin-bottom: 5px; }
-.sidebar-editor .btn { background: #555; color: white; border: none; padding: 8px; cursor: pointer; border-radius: 4px; transition: background 0.1s; text-align: center; font-size: 0.85rem;}
-.sidebar-editor .btn:hover { background: #666; }
-.sidebar-editor .btn.active { background: #4CAF50; font-weight: bold; border: 2px solid #2E7D32; }
+#editor-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 10px 20px; border-radius: 20px; pointer-events: none; opacity: 0; transition: opacity 0.3s; z-index: 20100; font-size: 0.9rem; }
+
+.editor-palette-grid { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 5px; }
+#gui-editor .color-swatch { width: 22px; height: 22px; border: 1px solid #000; cursor: pointer; }
+#gui-editor .color-swatch.active { border: 2px solid #fff; outline: 2px solid #4CAF50; z-index: 10; transform: scale(1.2); }
+.editor-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; gap: 5px; }
