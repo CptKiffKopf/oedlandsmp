@@ -33,7 +33,6 @@ async function uploadImage(file, folderPath) {
     return await getDownloadURL(storageRef);
 }
 
-// Konvertiert ein DataURL (Canvas Base64) in ein echtes File-Objekt für Firebase
 function dataURLtoFile(dataurl, filename) {
     let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
         bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
@@ -139,7 +138,6 @@ function startRealtimeListeners() {
         updateDashboard();
     });
 
-    // GUI Card Render (Unterstützt jetzt GUIs ohne Bild)
     onSnapshot(collection(db, "guis"), (snap) => {
         allGUIs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const list = document.getElementById('gui-list'); list.innerHTML = '';
@@ -157,17 +155,15 @@ function startRealtimeListeners() {
     });
 }
 
+
 // ==========================================
 // STANDARD SPEICHERN LOGIK
 // ==========================================
 
 document.getElementById('btn-save-plugin').addEventListener('click', async () => {
     try {
-        const name = document.getElementById('plugin-name').value;
-        const info = document.getElementById('plugin-info').value;
-        const status = document.getElementById('plugin-status');
-        if(!name) return alert("Bitte gib einen Plugin-Namen ein!");
-        status.innerText = "Speichere...";
+        const name = document.getElementById('plugin-name').value; const info = document.getElementById('plugin-info').value; const status = document.getElementById('plugin-status');
+        if(!name) return alert("Bitte gib einen Plugin-Namen ein!"); status.innerText = "Speichere...";
         await addDoc(collection(db, "plugins"), { name: name, info: info });
         status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000);
         document.getElementById('plugin-name').value = ''; document.getElementById('plugin-info').value = '';
@@ -175,22 +171,15 @@ document.getElementById('btn-save-plugin').addEventListener('click', async () =>
 });
 
 document.getElementById('btn-save-gui').addEventListener('click', async () => {
-    const file = document.getElementById('gui-image').files[0];
-    const name = document.getElementById('gui-name').value;
+    const file = document.getElementById('gui-image').files[0]; const name = document.getElementById('gui-name').value;
     if(!name) return alert("Bitte zumindest einen Namen für das GUI angeben!");
     document.getElementById('gui-upload-status').innerText = "Speichere...";
-    
-    // Bild-Upload ist jetzt OPTIONAL
     const imageUrl = file ? await uploadImage(file, 'guis') : null;
-    
     await addDoc(collection(db, "guis"), { name: name, image_url: imageUrl });
-    document.getElementById('gui-upload-status').innerText = "Erfolgreich gespeichert!";
-    setTimeout(() => document.getElementById('gui-upload-status').innerText = "", 2000);
+    document.getElementById('gui-upload-status').innerText = "Erfolgreich gespeichert!"; setTimeout(() => document.getElementById('gui-upload-status').innerText = "", 2000);
     document.getElementById('gui-name').value = ''; document.getElementById('gui-image').value = '';
 });
 
-// ... [Die restlichen Standard Speicher-Funktionen für Ränge, Shop, Kisten bleiben unverändert] ...
-// (Zur Übersicht gekürzt, da sie in den vorherigen Versionen stabil waren)
 document.getElementById('btn-save-rank').addEventListener('click', async () => {
     const name = document.getElementById('rank-name').value; const perms = document.getElementById('rank-perms').value.split('\n').map(p => p.trim()).filter(p => p !== ""); const inherits = document.getElementById('rank-inherit').value; const file = document.getElementById('rank-image').files[0]; const status = document.getElementById('rank-status');
     if(!name) return alert("Name fehlt!"); status.innerText = "Speichere...";
@@ -200,43 +189,50 @@ document.getElementById('btn-save-rank').addEventListener('click', async () => {
     status.innerText = "Gespeichert!"; setTimeout(() => status.innerText = "", 2000);
     editingRankId = null; document.getElementById('rank-form-title').innerText = "Neuen Rang erstellen"; document.getElementById('btn-save-rank').innerText = "Rang speichern"; document.getElementById('btn-cancel-rank').style.display = "none"; document.getElementById('rank-name').value = ''; document.getElementById('rank-perms').value = ''; document.getElementById('rank-inherit').value = ''; if(document.getElementById('rank-image')) document.getElementById('rank-image').value = '';
 });
+
 window.editRank = (id) => { const rank = allRanks.find(r => r.id === id); if (!rank) return; editingRankId = id; document.getElementById('rank-name').value = rank.name; document.getElementById('rank-perms').value = (rank.permissions || []).join('\n'); document.getElementById('rank-inherit').value = rank.inherits_from || ''; document.getElementById('rank-form-title').innerText = "Rang bearbeiten: " + rank.name; document.getElementById('btn-save-rank').innerText = "Änderungen speichern"; document.getElementById('btn-cancel-rank').style.display = "inline-block"; window.scrollTo({ top: 0, behavior: 'smooth' }); };
 document.getElementById('btn-cancel-rank').addEventListener('click', () => { editingRankId = null; document.getElementById('rank-form-title').innerText = "Neuen Rang erstellen"; document.getElementById('btn-save-rank').innerText = "Rang speichern"; document.getElementById('btn-cancel-rank').style.display = "none"; document.getElementById('rank-name').value = ''; document.getElementById('rank-perms').value = ''; document.getElementById('rank-inherit').value = ''; if(document.getElementById('rank-image')) document.getElementById('rank-image').value = '';});
+
 document.getElementById('btn-export-ranks').addEventListener('click', () => { if(allRanks.length === 0) return alert("Keine Ränge!"); let yamlContent = "groups:\n"; allRanks.forEach(rank => { const safeName = rank.name.toLowerCase().replace(/[^a-z0-9_-]/g, ''); yamlContent += `  ${safeName}:\n`; if (rank.permissions && rank.permissions.length > 0) { yamlContent += `    permissions:\n`; rank.permissions.forEach(p => { yamlContent += `      - ${p}: true\n`; }); } if (rank.inherits_from) { const safeInherit = rank.inherits_from.toLowerCase().replace(/[^a-z0-9_-]/g, ''); yamlContent += `    parents:\n`; yamlContent += `      - ${safeInherit}\n`; } }); const blob = new Blob([yamlContent], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'luckperms_ranks.yml'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); });
+
 document.getElementById('btn-save-crate').addEventListener('click', async () => { const crate_name = document.getElementById('crate-name').value; const fileInput = document.getElementById('crate-image'); const file = fileInput ? fileInput.files[0] : null; const status = document.getElementById('crate-status'); if(!crate_name) return alert("Name fehlt!"); status.innerText = "Erstelle Kiste..."; let imageUrl = null; if (file) imageUrl = await uploadImage(file, 'crates'); await addDoc(collection(db, "crates"), { name: crate_name, image_url: imageUrl, items: [] }); status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('crate-name').value = ''; if(fileInput) fileInput.value = ''; });
 document.getElementById('btn-save-shop').addEventListener('click', async () => { const name = document.getElementById('shop-item').value; const price = document.getElementById('shop-price').value; const file = document.getElementById('shop-image').files[0]; if(!name || !price) return alert("Name und Preis fehlen!"); document.getElementById('shop-status').innerText = "Speichere..."; const imageUrl = await uploadImage(file, 'shop') || null; await addDoc(collection(db, "shop"), { name, price: Number(price), image_url: imageUrl }); document.getElementById('shop-status').innerText = ""; document.getElementById('shop-item').value = ''; document.getElementById('shop-price').value = ''; });
 document.getElementById('btn-save-ad').addEventListener('click', async () => { const file = document.getElementById('ad-image').files[0]; if(!file || !document.getElementById('ad-title').value) return alert("Bild und Titel fehlen!"); const imageUrl = await uploadImage(file, 'ads'); await addDoc(collection(db, "ads"), { title: document.getElementById('ad-title').value, link: document.getElementById('ad-link').value, image_url: imageUrl }); document.getElementById('ad-title').value = ''; document.getElementById('ad-link').value = ''; document.getElementById('ad-image').value = ''; });
+
 window.openItemModal = (crateId) => { document.getElementById('modal-crate-id').value = crateId; document.getElementById('item-modal').classList.add('active'); };
 document.getElementById('btn-close-modal').addEventListener('click', () => { document.getElementById('item-modal').classList.remove('active'); });
+
 document.getElementById('btn-save-item').addEventListener('click', async () => { try { const crateId = document.getElementById('modal-crate-id').value; const name = document.getElementById('modal-item-name').value; const quantity = document.getElementById('modal-item-quantity').value; const chance = document.getElementById('modal-item-chance').value; const file = document.getElementById('modal-item-image').files[0]; const status = document.getElementById('modal-status'); if(!name || !chance || !quantity) return alert("Item-Name, Menge und Chance fehlen!"); status.innerText = "Speichere Item in Kiste..."; const imageUrl = await uploadImage(file, 'crates/items') || null; const newItem = { id: Date.now().toString(), name: name, quantity: Number(quantity), chance: Number(chance), image_url: imageUrl }; const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId); const updatedItems = [...(crate.items || []), newItem]; await updateDoc(crateRef, { items: updatedItems }); status.innerText = ""; document.getElementById('modal-item-name').value = ''; document.getElementById('modal-item-quantity').value = '1'; document.getElementById('modal-item-chance').value = ''; if(document.getElementById('modal-item-image')) document.getElementById('modal-item-image').value = ''; document.getElementById('item-modal').classList.remove('active'); } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
 window.deleteCrateItem = async (crateId, itemId) => { if(confirm("Möchtest du dieses Item wirklich aus der Kiste entfernen?")) { try { const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId); const updatedItems = (crate.items || []).filter(i => i.id !== itemId); await updateDoc(crateRef, { items: updatedItems }); } catch (error) { console.error(error); } } };
 window.deleteEntry = async (collectionName, id) => { if(confirm('Wirklich löschen?')) { await deleteDoc(doc(db, collectionName, id)); } };
 
 
 // ==========================================
-// VOLLBILD GUI EDITOR LOGIK (INTEGRIERT)
+// 1:1 GUI EDITOR LOGIK
 // ==========================================
+let editorInitialized = false;
 
 function initEditor() {
+    if (editorInitialized) return;
+    editorInitialized = true;
+
     // --- FONT DATA ---
     const fontMap={A:[[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],Ä:[[1,0,0,1],[0,0,0,0],[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],B:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,1],[1,1,1,0]],C:[[0,1,1,1],[1,0,0,0],[1,0,0,0],[1,0,0,0],[0,1,1,1]],D:[[1,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,0]],E:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,1,1,1]],F:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,0,0,0]],G:[[0,1,1,1],[1,0,0,0],[1,0,1,1],[1,0,0,1],[0,1,1,1]],H:[[1,0,0,1],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],I:[[1,1,1],[0,1,0],[0,1,0],[0,1,0],[1,1,1]],J:[[0,0,1,1],[0,0,0,1],[0,0,0,1],[1,0,0,1],[0,1,1,0]],K:[[1,0,0,1],[1,0,1,0],[1,1,0,0],[1,0,1,0],[1,0,0,1]],L:[[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,1,1,1]],M:[[1,0,0,0,1],[1,1,0,1,1],[1,0,1,0,1],[1,0,0,0,1],[1,0,0,0,1]],N:[[1,0,0,1],[1,1,0,1],[1,0,1,1],[1,0,0,1],[1,0,0,1]],O:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],Ö:[[1,0,0,1],[0,0,0,0],[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],P:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,0],[1,0,0,0]],Q:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,1,1],[0,1,1,1]],R:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,1,0],[1,0,0,1]],S:[[0,1,1,1],[1,0,0,0],[0,1,1,0],[0,0,0,1],[1,1,1,0]],T:[[1,1,1],[0,1,0],[0,1,0],[0,1,0],[0,1,0]],U:[[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],Ü:[[1,0,0,1],[0,0,0,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],V:[[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0],[0,0,1,0]],W:[[1,0,0,0,1],[1,0,0,0,1],[1,0,1,0,1],[1,1,0,1,1],[1,0,0,0,1]],X:[[1,0,0,1],[0,1,1,0],[0,1,1,0],[1,0,0,1]],Y:[[1,0,0,1],[0,1,1,0],[0,0,1,0],[0,0,1,0],[0,0,1,0]],Z:[[1,1,1,1],[0,0,0,1],[0,1,1,0],[1,0,0,0],[1,1,1,1]],0:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],1:[[0,1,0],[1,1,0],[0,1,0],[0,1,0],[1,1,1]],2:[[1,1,1,0],[0,0,0,1],[0,1,1,0],[1,0,0,0],[1,1,1,1]],3:[[1,1,1,0],[0,0,0,1],[0,1,1,0],[0,0,0,1],[1,1,1,0]],4:[[1,0,0,1],[1,0,0,1],[1,1,1,1],[0,0,0,1],[0,0,0,1]],5:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[0,0,0,1],[1,1,1,0]],6:[[0,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,1],[0,1,1,0]],7:[[1,1,1,1],[0,0,0,1],[0,0,1,0],[0,1,0,0],[0,1,0,0]],8:[[0,1,1,0],[1,0,0,1],[0,1,1,0],[1,0,0,1],[0,1,1,0]],9:[[0,1,1,0],[1,0,0,1],[0,1,1,1],[0,0,0,1],[0,1,1,0]],' ':[[0],[0],[0],[0],[0]],'.':[[0],[0],[0],[0],[1]],'ß':[[0,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,1],[1,1,1,0]]};
 
     const canvas = document.getElementById('pixelCanvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     
-    let currentZoom = 2; let currentTool = 'brush'; let selectedColor = '#a49e95'; let currentStamp = 'slot'; 
+    let currentZoom = 2; let currentTool = 'brush'; let selectedColor = '#a49e95'; window.currentStamp = 'slot'; 
     let autoCenter = false; let isDrawing = false; let isEraseMode = false; let startPos = {x:0, y:0}; 
     let canvasSnapshot; let selectionBuffer = null; let clipboardData = { img: null, x: 0, y: 0 }; let importedImage = null; 
     const undoStack = []; const maxUndoSteps = 30;
 
-    const myColors = ['#a49e95', '#766f6a', '#483f46', '#231c2c', '#1e1829', '#539d33', '#ffffff', '#000000'];
-    myColors.forEach(c => window.createPaletteSwatch(c));
-    window.resizeCanvas(); saveState(); refreshSnapshot();
-
-    function showToast(msg) { const t = document.getElementById('toast'); t.innerText = msg; t.style.opacity = 1; setTimeout(() => t.style.opacity = 0, 2000); }
+    function showToast(msg) { const t = document.querySelector('#editor-modal #toast'); t.innerText = msg; t.style.opacity = 1; setTimeout(() => t.style.opacity = 0, 2000); }
+    
+    // ALLE WINDOW-FUNKTIONEN DEFINIEREN BEVOR WIR SIE AUFRUFEN
     window.loadReference = function(input) { if(input.files && input.files[0]) { const reader = new FileReader(); reader.onload = function(e) { const img = document.getElementById('refOverlay'); img.src = e.target.result; img.style.display = 'block'; img.style.width = (canvas.width * currentZoom) + 'px'; img.style.height = (canvas.height * currentZoom) + 'px'; showToast("👻 Referenzbild geladen!"); }; reader.readAsDataURL(input.files[0]); } }
     window.clearReference = function() { const img = document.getElementById('refOverlay'); img.style.display = 'none'; img.src = ''; document.getElementById('refInput').value = ''; showToast("🚫 Referenz entfernt"); }
-    window.deleteSelectedColor = function() { if(confirm("Farbe " + selectedColor + " löschen?")) { saveState(); const targetRgb = hexToRgb(selectedColor); if (!targetRgb) return; const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height); const d = imgData.data; let deletedCount = 0; for(let i = 0; i < d.length; i += 4) { if(d[i+3] > 0 && d[i] === targetRgb.r && d[i+1] === targetRgb.g && d[i+2] === targetRgb.b) { d[i+3] = 0; deletedCount++; } } if (deletedCount > 0) { ctx.putImageData(imgData, 0, 0); refreshSnapshot(); showToast("🧹 Pixel gelöscht!"); } else { undoStack.pop(); showToast("ℹ️ Farbe nicht gefunden."); } } }
+    window.deleteSelectedColor = function() { if(confirm("Farbe " + selectedColor + " löschen?")) { saveState(); const targetRgb = window.hexToRgb(selectedColor); if (!targetRgb) return; const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height); const d = imgData.data; let deletedCount = 0; for(let i = 0; i < d.length; i += 4) { if(d[i+3] > 0 && d[i] === targetRgb.r && d[i+1] === targetRgb.g && d[i+2] === targetRgb.b) { d[i+3] = 0; deletedCount++; } } if (deletedCount > 0) { ctx.putImageData(imgData, 0, 0); refreshSnapshot(); showToast("🧹 Pixel gelöscht!"); } else { undoStack.pop(); showToast("ℹ️ Farbe nicht gefunden."); } } }
     window.handleImport = function(input) { if(input.files && input.files[0]) { const reader = new FileReader(); reader.onload = function(e) { const img = new Image(); img.onload = function() { importedImage = img; window.setTool('import'); showToast("🖼️ Bild geladen! Klicke zum Platzieren."); }; img.src = e.target.result; }; reader.readAsDataURL(input.files[0]); } }
 
     function saveState() { undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height)); if (undoStack.length > maxUndoSteps) undoStack.shift(); refreshSnapshot(); }
@@ -245,7 +241,7 @@ function initEditor() {
     document.addEventListener('keydown', e => { if((e.ctrlKey||e.metaKey)&&e.key==='z') window.undo(); });
 
     window.resizeCanvas = function() {
-        saveState(); const s = document.querySelector('input[name="size"]:checked').value; const tempCanvas = document.createElement('canvas'); tempCanvas.width = canvas.width; tempCanvas.height = canvas.height; tempCanvas.getContext('2d').putImageData(ctx.getImageData(0,0,canvas.width, canvas.height), 0, 0);
+        saveState(); const s = document.querySelector('#editor-modal input[name="size"]:checked').value; const tempCanvas = document.createElement('canvas'); tempCanvas.width = canvas.width; tempCanvas.height = canvas.height; tempCanvas.getContext('2d').putImageData(ctx.getImageData(0,0,canvas.width, canvas.height), 0, 0);
         if (s === 'square') { canvas.width = 256; canvas.height = 256; currentZoom = 2; } else if (s === 'rect') { canvas.width = 256; canvas.height = 128; currentZoom = 2; } else if (s === 'tall') { canvas.width = 192; canvas.height = 256; currentZoom = 2; } else if (s === 'mid') { canvas.width = 50; canvas.height = 50; currentZoom = 10; } else if (s === 'icon') { canvas.width = 16; canvas.height = 16; currentZoom = 25; }
         canvas.style.width = (canvas.width * currentZoom) + 'px'; canvas.style.height = (canvas.height * currentZoom) + 'px';
         window.updateGuides(); ctx.imageSmoothingEnabled = false; ctx.drawImage(tempCanvas, 0, 0); saveState();
@@ -254,7 +250,7 @@ function initEditor() {
     document.getElementById('uploadInput').addEventListener('change', e => { if(e.target.files[0]){ saveState(); const r = new FileReader(); r.onload = ev => { const i = new Image(); i.onload = () => { ctx.imageSmoothingEnabled = false; ctx.drawImage(i, 0, 0, canvas.width, canvas.height); saveState(); }; i.src = ev.target.result; }; r.readAsDataURL(e.target.files[0]); } });
 
     window.setTool = function(tool) {
-        currentTool = tool; document.querySelectorAll('.tool-grid-editor .btn').forEach(b => b.classList.remove('active')); const btn = document.getElementById('tool' + tool.charAt(0).toUpperCase() + tool.slice(1)); if(btn) btn.classList.add('active');
+        currentTool = tool; document.querySelectorAll('#editor-modal .tool-grid .btn').forEach(b => b.classList.remove('active')); const btn = document.getElementById('tool' + tool.charAt(0).toUpperCase() + tool.slice(1)); if(btn) btn.classList.add('active');
         if(tool === 'import' && !importedImage) document.getElementById('toolImport')?.classList.remove('active');
         document.getElementById('stampOptions').style.display = (tool === 'stamp') ? 'block' : 'none'; document.getElementById('textOptions').style.display = (tool === 'text') ? 'block' : 'none';
         if (tool !== 'select') selectionBuffer = null; if(canvasSnapshot) ctx.putImageData(canvasSnapshot, 0, 0); refreshSnapshot();
@@ -302,8 +298,10 @@ function initEditor() {
     window.toggleGrid = function() { document.getElementById('gridOverlay').style.display = document.getElementById('gridCheck').checked ? 'block' : 'none'; window.updateGuides(); }
     window.toggleAutoCenter = function() { autoCenter = !autoCenter; document.getElementById('btnAutoCenter').classList.toggle('active'); document.getElementById('btnAutoCenter').innerText = autoCenter ? "🧲 Zentrieren (AN)" : "🧲 Zentrieren (Aus)"; document.getElementById('centerSettings').style.display = autoCenter ? 'block' : 'none'; window.updateGuides(); }
     window.toggleYInput = function() { const el = document.getElementById('fixedYVal'); const active = document.getElementById('useFixedY').checked; el.disabled = !active; el.style.opacity = active ? "1" : "0.5"; }
+    
+    // HIER WAR DER FEHLER: Wir definieren window.createPaletteSwatch BEVOR wir es aufrufen!
     window.addToPalette = function(){window.createPaletteSwatch(document.getElementById('colorPicker').value);}
-    window.createPaletteSwatch = function(c){const d=document.createElement('div');d.className='color-swatch';d.style.backgroundColor=c;d.onclick=()=>{selectedColor=c;document.getElementById('colorPicker').value=c;document.querySelectorAll('.color-swatch').forEach(e=>e.classList.remove('active'));d.classList.add('active'); window.setTool('brush');};document.getElementById('paletteGrid').appendChild(d);}
+    window.createPaletteSwatch = function(c){const d=document.createElement('div');d.className='color-swatch';d.style.backgroundColor=c;d.onclick=()=>{selectedColor=c;document.getElementById('colorPicker').value=c;document.querySelectorAll('#editor-modal .color-swatch').forEach(e=>e.classList.remove('active'));d.classList.add('active'); window.setTool('brush');};document.getElementById('paletteGrid').appendChild(d);}
     window.clearCanvas = function(){if(confirm("Löschen?")){saveState();ctx.clearRect(0,0,canvas.width,canvas.height); saveState();}}
     window.hexToRgb = function(h){const r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h);return r?{r:parseInt(r[1],16),g:parseInt(r[2],16),b:parseInt(r[3],16)}:null;}
     window.getAutoY = function(p){if(autoCenter&&document.getElementById('useFixedY').checked)return parseInt(document.getElementById('fixedYVal').value)||0;return p.y;}
@@ -339,15 +337,13 @@ function initEditor() {
     window.applyTemplate = function(type) { saveState(); const w=canvas.width; const cx=Math.floor((w-176)/2); if(type==='chest'){ const sy=10; drawGuiBase(cx,sy,176,166); for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+17+r*18,false); for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+83+r*18,false); for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+141,false); } else if(type==='inv'){ const sy=80; for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+r*18,false); for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+58,false); } refreshSnapshot(); }
     function floodFill(x,y,erase){ const startPixel=ctx.getImageData(x,y,1,1).data; const startR=startPixel[0],startG=startPixel[1],startB=startPixel[2],startA=startPixel[3]; const f=window.hexToRgb(selectedColor); if(erase){ if(startA===0) return; } else { if(startR===f.r&&startG===f.g&&startB===f.b&&startA===255) return; } const img=ctx.getImageData(0,0,canvas.width,canvas.height); const d=img.data; const s=[[x,y]]; const w=canvas.width,h=canvas.height; while(s.length){ const[cx,cy]=s.pop(); if(cx<0||cx>=w||cy<0||cy>=h)continue; const i=(cy*w+cx)*4; if(d[i]===startR&&d[i+1]===startG&&d[i+2]===startB&&d[i+3]===startA){ if(erase) d[i+3]=0; else { d[i]=f.r; d[i+1]=f.g; d[i+2]=f.b; d[i+3]=255; } s.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]); } } ctx.putImageData(img,0,0); }
 
-    // --- NEU: DIREKT IN FIREBASE SPEICHERN ---
+    // IN FIREBASE SPEICHERN
     window.saveEditorToFirebase = async function() {
         const inputGuiName = document.getElementById('gui-name').value;
         const guiName = prompt("Wie soll dieses GUI heißen?", inputGuiName || "Mein Neues GUI");
         if(!guiName) return;
 
         showToast("Speichere in Datenbank...");
-        
-        // Canvas zu File konvertieren
         const dataUrl = canvas.toDataURL('image/png');
         const file = dataURLtoFile(dataUrl, `gui_${Date.now()}.png`);
         
@@ -355,13 +351,13 @@ function initEditor() {
             const imageUrl = await uploadImage(file, 'guis');
             await addDoc(collection(db, "guis"), { name: guiName, image_url: imageUrl });
             showToast("Erfolgreich gespeichert!");
-            
-            // Editor schließen
             document.getElementById('editor-modal').classList.remove('active');
             document.getElementById('gui-name').value = '';
-        } catch (error) {
-            console.error(error);
-            showToast("Fehler beim Speichern!");
-        }
+        } catch (error) { console.error(error); showToast("Fehler beim Speichern!"); }
     }
+
+    // --- INIT (WICHTIG: GANZ UNTEN!) ---
+    const myColors = ['#a49e95', '#766f6a', '#483f46', '#231c2c', '#1e1829', '#539d33', '#ffffff', '#000000'];
+    myColors.forEach(c => window.createPaletteSwatch(c));
+    window.resizeCanvas(); saveState(); refreshSnapshot();
 }
