@@ -43,7 +43,7 @@
                     <div class="stat-card"><h3>Kisten</h3><p class="stat-number" id="stat-crates">0</p></div>
                     <div class="stat-card"><h3>Plugins</h3><p class="stat-number" id="stat-plugins">0</p></div>
                     <div class="stat-card"><h3>Shop-Items</h3><p class="stat-number" id="stat-shop">0</p></div>
-                    <div class="stat-card"><h3>GUIs</h3><p class="stat-number" id="stat-guis">0</p></div>
+                    <div class="stat-card"><h3>GUI Pakete</h3><p class="stat-number" id="stat-guis">0</p></div>
                 </div>
             </section>
 
@@ -107,20 +107,18 @@
             </section>
 
             <section id="gui" class="category-section">
-                <h2>GUIs verwalten</h2>
+                <h2>GUI Pakete verwalten</h2>
                 <div class="form-card">
-                    <h3 id="gui-form-title">Neues GUI erstellen oder hochladen</h3>
+                    <h3>Neues GUI Paket (Topic) erstellen</h3>
                     <div class="input-group">
-                        <input type="text" id="gui-name" placeholder="GUI Name (z.B. Hauptmenü)">
-                        <input type="file" id="gui-image" accept="image/png" title="Optional: Bild hochladen">
+                        <input type="text" id="gui-package-name" placeholder="Paket Name (z.B. Shop System oder Admin GUIs)">
                     </div>
                     <div class="button-group">
-                        <button id="btn-save-gui" class="btn btn-primary">Speichern (mit/ohne Upload)</button>
-                        <button onclick="document.getElementById('editor-modal').classList.add('active')" class="btn btn-secondary">✏️ Im Editor zeichnen</button>
+                        <button id="btn-save-gui-package" class="btn btn-primary">Paket erstellen</button>
                     </div>
-                    <p id="gui-upload-status" class="status-text"></p>
+                    <p id="gui-package-status" class="status-text"></p>
                 </div>
-                <div id="gui-list" class="gui-grid"></div>
+                <div id="gui-packages-container" class="crates-layout"></div>
             </section>
 
             <section id="plugins" class="category-section">
@@ -169,9 +167,25 @@
             </div>
             <div class="button-group" style="margin-top: 20px;">
                 <button id="btn-save-item" class="btn btn-primary">Item speichern</button>
-                <button id="btn-close-modal" class="btn btn-secondary">Abbrechen</button>
+                <button onclick="document.getElementById('item-modal').classList.remove('active')" class="btn btn-secondary">Abbrechen</button>
             </div>
             <p id="modal-status" class="status-text"></p>
+        </div>
+    </div>
+
+    <div id="gui-upload-modal" class="modal">
+        <div class="modal-content">
+            <h3>GUI Bild in Paket hochladen</h3>
+            <input type="hidden" id="modal-gui-package-id">
+            <div class="input-group" style="flex-direction: column; gap: 10px; margin-top: 15px;">
+                <input type="text" id="modal-gui-name" placeholder="GUI Name (z.B. Hauptmenü)" style="width:100%;">
+                <input type="file" id="modal-gui-image" accept="image/png, image/jpeg" style="width:100%;">
+            </div>
+            <div class="button-group" style="margin-top: 20px;">
+                <button id="btn-save-gui-upload" class="btn btn-primary">Bild hochladen</button>
+                <button onclick="document.getElementById('gui-upload-modal').classList.remove('active')" class="btn btn-secondary">Abbrechen</button>
+            </div>
+            <p id="modal-gui-status" class="status-text"></p>
         </div>
     </div>
 
@@ -196,19 +210,11 @@
                     <div class="row">
                         <label style="font-size:0.9em; color:#4CAF50; font-weight:bold;"><input type="radio" name="size" value="icon" onchange="window.resizeCanvas()"> 16x16</label>
                     </div>
-                    
                     <hr style="border:0; border-top:1px solid #555; margin:10px 0;">
-    
-                    <label class="btn" style="margin-top:5px; display:block;">
-                        📂 Projekt laden <input type="file" id="uploadInput" accept="image/*" style="display:none">
-                    </label>
+                    <label class="btn" style="margin-top:5px; display:block;">📂 Projekt laden <input type="file" id="uploadInput" accept="image/*" style="display:none"></label>
                     <button class="btn btn-danger" style="width:100%; margin-top:5px;" onclick="window.clearCanvas()">🗑️ Leinwand Leeren</button>
-                    
                     <hr style="border:0; border-top:1px solid #555; margin:10px 0;">
-                    
-                    <label class="btn btn-ref" style="display:block;">
-                        👻 Referenz laden (20%) <input type="file" id="refInput" accept="image/*" style="display:none" onchange="window.loadReference(this)">
-                    </label>
+                    <label class="btn btn-ref" style="display:block;">👻 Referenz laden (20%) <input type="file" id="refInput" accept="image/*" style="display:none" onchange="window.loadReference(this)"></label>
                     <button class="btn btn-danger" style="width:100%; margin-top:5px; font-size: 0.8em;" onclick="window.clearReference()">🚫 Referenz entfernen</button>
                 </div>
     
@@ -234,9 +240,7 @@
                         <button class="btn btn-copy" onclick="window.pasteFromClipboard()">📋 Fix Paste</button>
                         <button class="btn btn-copy" onclick="window.pasteClipboardMove()" style="grid-column: span 2;">🖱️ Paste & Bewegen</button>
                     </div>
-                    <label class="btn btn-import" style="margin-top:5px; display:block; text-align:center;">
-                        🖼️ Bild Importieren <input type="file" id="importInput" accept="image/*" style="display:none" onchange="window.handleImport(this)">
-                    </label>
+                    <label class="btn btn-import" style="margin-top:5px; display:block; text-align:center;">🖼️ Bild Importieren <input type="file" id="importInput" accept="image/*" style="display:none" onchange="window.handleImport(this)"></label>
                 </div>
     
                 <div class="panel">
@@ -278,9 +282,7 @@
                     <h3>Hilfen</h3>
                     <div class="tool-grid">
                         <button class="btn btn-toggle" id="btnAutoCenter" onclick="window.toggleAutoCenter()">🧲 Zentrieren</button>
-                        <label class="btn" style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin:0;">
-                            <input type="checkbox" id="gridCheck" onchange="window.toggleGrid()"> 📏 18x18 Gitter
-                        </label>
+                        <label class="btn" style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin:0;"><input type="checkbox" id="gridCheck" onchange="window.toggleGrid()"> 📏 18x18 Gitter</label>
                     </div>
                     <div id="centerSettings" style="margin-top:5px; display:none; font-size:0.85em; background:#444; padding:5px; border-radius:4px;">
                         <label><input type="checkbox" id="useContentAlign"> Am Inhalt</label>
@@ -306,7 +308,7 @@
                     <div class="palette-grid" id="paletteGrid"></div>
                 </div>
     
-                <button class="btn btn-action" onclick="window.saveEditorToFirebase()">☁️ In GUI-Liste speichern</button>
+                <button class="btn btn-action" onclick="window.saveEditorToFirebase()">☁️ In GUI Paket speichern</button>
             </div>
     
             <div class="canvas-wrapper" id="canvasWrapper">
@@ -315,7 +317,6 @@
                 <div id="centerLine" class="center-line"></div>
             </div>
         </div>
-        
         <div id="toast">Nachricht</div>
     </div>
 
