@@ -46,7 +46,7 @@ onAuthStateChanged(auth, (user) => {
         document.getElementById('main-app').style.display = 'flex';
         if (!listenersActive) { 
             startRealtimeListeners(); 
-            initEditor(); // Editor im Hintergrund bereit machen
+            initEditor(); 
             listenersActive = true; 
         }
     } else {
@@ -66,7 +66,6 @@ document.getElementById('btn-login').addEventListener('click', async () => {
 });
 document.getElementById('btn-logout').addEventListener('click', () => { signOut(auth); });
 
-// Navigation Logik (inklusive Fix für Canvas Resize)
 document.querySelectorAll('.nav-item:not(#btn-logout)').forEach(item => {
     item.addEventListener('click', (e) => {
         document.querySelectorAll('.nav-item:not(#btn-logout)').forEach(nav => nav.classList.remove('active'));
@@ -75,8 +74,7 @@ document.querySelectorAll('.nav-item:not(#btn-logout)').forEach(item => {
         document.querySelectorAll('.category-section').forEach(sec => sec.classList.remove('active'));
         document.getElementById(targetId).classList.add('active');
         
-        // Wenn der Editor Tab aufgerufen wird, müssen wir das Canvas kurz updaten, 
-        // damit es in der richtigen Größe gerendert wird (weil display:none es vorher stört)
+        // Canvas Size Update wenn Editor geöffnet wird
         if(targetId === 'gui-editor') {
             setTimeout(() => { if(window.resizeCanvas) window.resizeCanvas(); }, 50);
         }
@@ -158,15 +156,13 @@ function startRealtimeListeners() {
         if(!container) return;
         container.innerHTML = '';
         
-        // Editor Dropdown füllen
         const currentEditorVal = editorSelect.value;
-        editorSelect.innerHTML = '<option value="">Paket wählen...</option>';
+        editorSelect.innerHTML = '<option value="">Ziel-Paket wählen...</option>';
 
         allGUIs.forEach(pkg => {
             editorSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`;
             let items = pkg.items || [];
             
-            // NEU: Hinzufügen von "✏️ Bearbeiten" Button zu jedem GUI-Item
             let itemsHtml = items.map(item => `
                 <div class="gui-card">
                     <div class="gui-card-header">
@@ -308,13 +304,10 @@ window.deleteGuiItem = async (pkgId, itemId) => {
 let editorInitialized = false;
 
 window.openGuiEditorForPkg = (pkgId) => {
-    // 1. Tab wechseln
     document.querySelector('[data-target="gui-editor"]').click();
-    // 2. Felder zurücksetzen
     document.getElementById('editor-pkg-select').value = pkgId;
     document.getElementById('editor-gui-name').value = '';
     document.getElementById('editor-gui-item-id').value = '';
-    // 3. Canvas leeren
     if(window.clearCanvasSilent) window.clearCanvasSilent();
 };
 
@@ -324,18 +317,14 @@ window.editGuiItemInEditor = (pkgId, itemId) => {
     const item = (pkg.items || []).find(i => i.id === itemId);
     if(!item) return;
 
-    // 1. Tab wechseln
     document.querySelector('[data-target="gui-editor"]').click();
-    
-    // 2. Daten eintragen
     document.getElementById('editor-pkg-select').value = pkgId;
     document.getElementById('editor-gui-name').value = item.name;
-    document.getElementById('editor-gui-item-id').value = item.id; // GANZ WICHTIG: Erinnert sich ans Editieren!
+    document.getElementById('editor-gui-item-id').value = item.id; 
     
-    // 3. Bild laden (mit CORS Lösung für Firebase)
     if(item.image_url) {
         const img = new Image();
-        img.crossOrigin = "Anonymous"; // Erlaubt das Neuspeichern von Firebase Bildern
+        img.crossOrigin = "Anonymous";
         img.onload = () => {
             if(window.clearCanvasSilent) window.clearCanvasSilent();
             const canvas = document.getElementById('pixelCanvas');
@@ -350,6 +339,7 @@ window.editGuiItemInEditor = (pkgId, itemId) => {
     }
 };
 
+// 1:1 EDITOR LOGIK 
 function initEditor() {
     if (editorInitialized) return;
     editorInitialized = true;
@@ -373,15 +363,19 @@ function initEditor() {
     window.handleImport = function(input) { if(input.files && input.files[0]) { const reader = new FileReader(); reader.onload = function(e) { const img = new Image(); img.onload = function() { importedImage = img; window.setTool('import'); showToast("🖼️ Bild geladen! Klicke zum Platzieren."); }; img.src = e.target.result; }; reader.readAsDataURL(input.files[0]); } }
 
     function saveState() { undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height)); if (undoStack.length > maxUndoSteps) undoStack.shift(); refreshSnapshot(); }
-    window.triggerSaveState = saveState; // Für Edit Funktion
+    window.triggerSaveState = saveState;
     function refreshSnapshot() { canvasSnapshot = ctx.getImageData(0,0,canvas.width,canvas.height); }
-    
     window.undo = function() { if (undoStack.length > 0) { const data = undoStack.pop(); ctx.putImageData(data, 0, 0); refreshSnapshot(); isDrawing = false; selectionBuffer = null; window.updateGuides(); } }
     document.addEventListener('keydown', e => { if((e.ctrlKey||e.metaKey)&&e.key==='z') window.undo(); });
 
     window.resizeCanvas = function() {
-        saveState(); const s = document.querySelector('#gui-editor input[name="size"]:checked').value; const tempCanvas = document.createElement('canvas'); tempCanvas.width = canvas.width; tempCanvas.height = canvas.height; tempCanvas.getContext('2d').putImageData(ctx.getImageData(0,0,canvas.width, canvas.height), 0, 0);
+        saveState(); 
+        const s = document.querySelector('#gui-editor input[name="size"]:checked').value; 
+        const tempCanvas = document.createElement('canvas'); tempCanvas.width = canvas.width; tempCanvas.height = canvas.height; 
+        tempCanvas.getContext('2d').putImageData(ctx.getImageData(0,0,canvas.width, canvas.height), 0, 0);
+        
         if (s === 'square') { canvas.width = 256; canvas.height = 256; currentZoom = 2; } else if (s === 'rect') { canvas.width = 256; canvas.height = 128; currentZoom = 2; } else if (s === 'tall') { canvas.width = 192; canvas.height = 256; currentZoom = 2; } else if (s === 'mid') { canvas.width = 50; canvas.height = 50; currentZoom = 10; } else if (s === 'icon') { canvas.width = 16; canvas.height = 16; currentZoom = 25; }
+        
         canvas.style.width = (canvas.width * currentZoom) + 'px'; canvas.style.height = (canvas.height * currentZoom) + 'px';
         window.updateGuides(); ctx.imageSmoothingEnabled = false; ctx.drawImage(tempCanvas, 0, 0); saveState();
     }
@@ -498,7 +492,7 @@ function initEditor() {
     
     function floodFill(x,y,erase){ const startPixel=ctx.getImageData(x,y,1,1).data; const startR=startPixel[0],startG=startPixel[1],startB=startPixel[2],startA=startPixel[3]; const f=window.hexToRgb(selectedColor); if(erase){ if(startA===0) return; } else { if(startR===f.r&&startG===f.g&&startB===f.b&&startA===255) return; } const img=ctx.getImageData(0,0,canvas.width,canvas.height); const d=img.data; const s=[[x,y]]; const w=canvas.width,h=canvas.height; while(s.length){ const[cx,cy]=s.pop(); if(cx<0||cx>=w||cy<0||cy>=h)continue; const i=(cy*w+cx)*4; if(d[i]===startR&&d[i+1]===startG&&d[i+2]===startB&&d[i+3]===startA){ if(erase) d[i+3]=0; else { d[i]=f.r; d[i+1]=f.g; d[i+2]=f.b; d[i+3]=255; } s.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]); } } ctx.putImageData(img,0,0); }
 
-    // IN FIREBASE SPEICHERN (BEARBEITEN ODER NEU)
+    // IN FIREBASE (ZUM PAKET) SPEICHERN
     window.saveEditorToFirebase = async function() {
         const pkgId = document.getElementById('editor-pkg-select').value;
         const guiName = document.getElementById('editor-gui-name').value;
@@ -518,7 +512,6 @@ function initEditor() {
             let updatedItems = [...(pkg.items || [])];
 
             if (editItemId) {
-                // Bestehendes Bild überschreiben
                 const idx = updatedItems.findIndex(i => i.id === editItemId);
                 if(idx > -1) {
                     updatedItems[idx].name = guiName;
@@ -527,15 +520,12 @@ function initEditor() {
                     updatedItems.push({ id: editItemId, name: guiName, image_url: imageUrl });
                 }
             } else {
-                // Neues Bild hinzufügen
                 updatedItems.push({ id: Date.now().toString(), name: guiName, image_url: imageUrl });
             }
 
             await updateDoc(pkgRef, { items: updatedItems });
 
             showToast("Erfolgreich gespeichert!");
-            
-            // Zurück zur GUI-Pakete Seite wechseln
             document.querySelector('[data-target="gui"]').click();
             
         } catch (error) { console.error(error); showToast("Fehler beim Speichern!"); }
