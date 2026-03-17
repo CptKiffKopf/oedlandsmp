@@ -77,7 +77,7 @@ function updateDashboard() {
     document.getElementById('stat-crates').innerText = allCrates.length;
     document.getElementById('stat-plugins').innerText = allPlugins.length;
     document.getElementById('stat-shop').innerText = allShop.length;
-    document.getElementById('stat-guis').innerText = allGUIs.length;
+    document.getElementById('stat-guis').innerText = allGUIs.length; // Anzahl der Pakete
 }
 
 function sortRanksHierarchically(ranks) {
@@ -138,53 +138,62 @@ function startRealtimeListeners() {
         updateDashboard();
     });
 
-    onSnapshot(collection(db, "guis"), (snap) => {
-        allGUIs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const list = document.getElementById('gui-list'); list.innerHTML = '';
-        allGUIs.forEach(gui => {
-            let imgContent = gui.image_url ? `<img src="${gui.image_url}">` : `<div style="width:100%; height:100px; background:#e5e7eb; display:flex; align-items:center; justify-content:center; border-radius:6px; color:#6b7280; font-size:12px;">Kein Bild</div>`;
-            list.innerHTML += `<div class="gui-card"><div class="gui-card-header"><span>${gui.name || gui.title}</span><button class="btn btn-danger btn-sm" onclick="deleteEntry('guis', '${gui.id}')">Löschen</button></div>${imgContent}</div>`;
-        });
-        updateDashboard();
-    });
-
     onSnapshot(collection(db, "ads"), (snap) => {
         allAds = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const list = document.getElementById('ad-list'); list.innerHTML = '';
         allAds.forEach(ad => { let linkHtml = ad.link ? `<a href="${ad.link}" target="_blank" style="font-size:12px; display:block; margin-bottom:10px;">Link öffnen</a>` : ''; list.innerHTML += `<div class="gui-card"><div class="gui-card-header"><span>${ad.title}</span><button class="btn btn-danger btn-sm" onclick="deleteEntry('ads', '${ad.id}')">Löschen</button></div>${linkHtml}<img src="${ad.image_url}"></div>`; });
     });
+
+    // GUI PAKETE RENDER (Fehler behoben!)
+    onSnapshot(collection(db, "guis"), (snap) => {
+        allGUIs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const container = document.getElementById('gui-packages-container');
+        if(!container) return;
+        container.innerHTML = '';
+        
+        allGUIs.forEach(pkg => {
+            let items = pkg.items || [];
+            
+            let itemsHtml = items.map(item => `
+                <div class="gui-card">
+                    <div class="gui-card-header">
+                        <span>${item.name}</span>
+                        <button class="btn btn-danger btn-sm" onclick="deleteGuiItem('${pkg.id}', '${item.id}')">Löschen</button>
+                    </div>
+                    <img src="${item.image_url}" alt="${item.name}">
+                </div>
+            `).join('');
+
+            container.innerHTML += `
+                <div class="crate-box">
+                    <div class="crate-header">
+                        <div class="crate-header-left"><h3 style="font-size: 18px;">${pkg.name}</h3></div>
+                        <div class="button-group">
+                            <button class="btn btn-primary btn-sm" onclick="openGuiUploadModal('${pkg.id}')">🖼️ Bild hochladen</button>
+                            <button class="btn btn-secondary btn-sm" onclick="openGuiEditor('${pkg.id}')">✏️ Im Editor zeichnen</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteEntry('guis', '${pkg.id}')">Paket löschen</button>
+                        </div>
+                    </div>
+                    ${items.length > 0 ? `<div class="gui-grid">${itemsHtml}</div>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine GUIs in diesem Paket.</p>'}
+                </div>
+            `;
+        });
+        updateDashboard();
+    });
 }
 
 
 // ==========================================
-// STANDARD SPEICHERN LOGIK
+// STANDARD SPEICHERN LOGIK (Ränge, Kisten etc.)
 // ==========================================
 
 document.getElementById('btn-save-plugin').addEventListener('click', async () => {
-    try {
-        const name = document.getElementById('plugin-name').value; const info = document.getElementById('plugin-info').value; const status = document.getElementById('plugin-status');
-        if(!name) return alert("Bitte gib einen Plugin-Namen ein!"); status.innerText = "Speichere...";
-        await addDoc(collection(db, "plugins"), { name: name, info: info });
-        status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000);
-        document.getElementById('plugin-name').value = ''; document.getElementById('plugin-info').value = '';
-    } catch (error) { console.error(error); alert("Fehler: " + error.message); }
-});
-
-document.getElementById('btn-save-gui').addEventListener('click', async () => {
-    const file = document.getElementById('gui-image').files[0]; const name = document.getElementById('gui-name').value;
-    if(!name) return alert("Bitte zumindest einen Namen für das GUI angeben!");
-    document.getElementById('gui-upload-status').innerText = "Speichere...";
-    const imageUrl = file ? await uploadImage(file, 'guis') : null;
-    await addDoc(collection(db, "guis"), { name: name, image_url: imageUrl });
-    document.getElementById('gui-upload-status').innerText = "Erfolgreich gespeichert!"; setTimeout(() => document.getElementById('gui-upload-status').innerText = "", 2000);
-    document.getElementById('gui-name').value = ''; document.getElementById('gui-image').value = '';
+    try { const name = document.getElementById('plugin-name').value; const info = document.getElementById('plugin-info').value; const status = document.getElementById('plugin-status'); if(!name) return alert("Bitte gib einen Plugin-Namen ein!"); status.innerText = "Speichere..."; await addDoc(collection(db, "plugins"), { name: name, info: info }); status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('plugin-name').value = ''; document.getElementById('plugin-info').value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); }
 });
 
 document.getElementById('btn-save-rank').addEventListener('click', async () => {
     const name = document.getElementById('rank-name').value; const perms = document.getElementById('rank-perms').value.split('\n').map(p => p.trim()).filter(p => p !== ""); const inherits = document.getElementById('rank-inherit').value; const file = document.getElementById('rank-image').files[0]; const status = document.getElementById('rank-status');
-    if(!name) return alert("Name fehlt!"); status.innerText = "Speichere...";
-    const rankData = { name: name, permissions: perms, inherits_from: inherits || null };
-    if (file) { rankData.image_url = await uploadImage(file, 'ranks'); }
+    if(!name) return alert("Name fehlt!"); status.innerText = "Speichere..."; const rankData = { name: name, permissions: perms, inherits_from: inherits || null }; if (file) { rankData.image_url = await uploadImage(file, 'ranks'); }
     if (editingRankId) { await updateDoc(doc(db, "ranks", editingRankId), rankData); } else { await addDoc(collection(db, "ranks"), rankData); }
     status.innerText = "Gespeichert!"; setTimeout(() => status.innerText = "", 2000);
     editingRankId = null; document.getElementById('rank-form-title').innerText = "Neuen Rang erstellen"; document.getElementById('btn-save-rank').innerText = "Rang speichern"; document.getElementById('btn-cancel-rank').style.display = "none"; document.getElementById('rank-name').value = ''; document.getElementById('rank-perms').value = ''; document.getElementById('rank-inherit').value = ''; if(document.getElementById('rank-image')) document.getElementById('rank-image').value = '';
@@ -199,18 +208,89 @@ document.getElementById('btn-save-crate').addEventListener('click', async () => 
 document.getElementById('btn-save-shop').addEventListener('click', async () => { const name = document.getElementById('shop-item').value; const price = document.getElementById('shop-price').value; const file = document.getElementById('shop-image').files[0]; if(!name || !price) return alert("Name und Preis fehlen!"); document.getElementById('shop-status').innerText = "Speichere..."; const imageUrl = await uploadImage(file, 'shop') || null; await addDoc(collection(db, "shop"), { name, price: Number(price), image_url: imageUrl }); document.getElementById('shop-status').innerText = ""; document.getElementById('shop-item').value = ''; document.getElementById('shop-price').value = ''; });
 document.getElementById('btn-save-ad').addEventListener('click', async () => { const file = document.getElementById('ad-image').files[0]; if(!file || !document.getElementById('ad-title').value) return alert("Bild und Titel fehlen!"); const imageUrl = await uploadImage(file, 'ads'); await addDoc(collection(db, "ads"), { title: document.getElementById('ad-title').value, link: document.getElementById('ad-link').value, image_url: imageUrl }); document.getElementById('ad-title').value = ''; document.getElementById('ad-link').value = ''; document.getElementById('ad-image').value = ''; });
 
+// Kisten-Items Logik
 window.openItemModal = (crateId) => { document.getElementById('modal-crate-id').value = crateId; document.getElementById('item-modal').classList.add('active'); };
-document.getElementById('btn-close-modal').addEventListener('click', () => { document.getElementById('item-modal').classList.remove('active'); });
-
 document.getElementById('btn-save-item').addEventListener('click', async () => { try { const crateId = document.getElementById('modal-crate-id').value; const name = document.getElementById('modal-item-name').value; const quantity = document.getElementById('modal-item-quantity').value; const chance = document.getElementById('modal-item-chance').value; const file = document.getElementById('modal-item-image').files[0]; const status = document.getElementById('modal-status'); if(!name || !chance || !quantity) return alert("Item-Name, Menge und Chance fehlen!"); status.innerText = "Speichere Item in Kiste..."; const imageUrl = await uploadImage(file, 'crates/items') || null; const newItem = { id: Date.now().toString(), name: name, quantity: Number(quantity), chance: Number(chance), image_url: imageUrl }; const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId); const updatedItems = [...(crate.items || []), newItem]; await updateDoc(crateRef, { items: updatedItems }); status.innerText = ""; document.getElementById('modal-item-name').value = ''; document.getElementById('modal-item-quantity').value = '1'; document.getElementById('modal-item-chance').value = ''; if(document.getElementById('modal-item-image')) document.getElementById('modal-item-image').value = ''; document.getElementById('item-modal').classList.remove('active'); } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
 window.deleteCrateItem = async (crateId, itemId) => { if(confirm("Möchtest du dieses Item wirklich aus der Kiste entfernen?")) { try { const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId); const updatedItems = (crate.items || []).filter(i => i.id !== itemId); await updateDoc(crateRef, { items: updatedItems }); } catch (error) { console.error(error); } } };
 window.deleteEntry = async (collectionName, id) => { if(confirm('Wirklich löschen?')) { await deleteDoc(doc(db, collectionName, id)); } };
 
 
 // ==========================================
-// 1:1 GUI EDITOR LOGIK
+// GUI PAKETE SPEICHER LOGIK (Fehler behoben!)
+// ==========================================
+
+// 1. GUI Paket erstellen
+document.getElementById('btn-save-gui-package').addEventListener('click', async () => {
+    const pkgName = document.getElementById('gui-package-name').value;
+    const status = document.getElementById('gui-package-status');
+    if(!pkgName) return alert("Bitte gib dem GUI Paket einen Namen!");
+    
+    status.innerText = "Erstelle Paket...";
+    try {
+        await addDoc(collection(db, "guis"), { name: pkgName, items: [] });
+        status.innerText = "Erfolgreich!";
+        setTimeout(() => status.innerText = "", 2000);
+        document.getElementById('gui-package-name').value = '';
+    } catch (e) { console.error(e); status.innerText = "Fehler!"; }
+});
+
+// 2. Upload Modal öffnen
+window.openGuiUploadModal = (pkgId) => {
+    document.getElementById('modal-gui-package-id').value = pkgId;
+    document.getElementById('gui-upload-modal').classList.add('active');
+};
+
+// 3. Bild in Paket hochladen
+document.getElementById('btn-save-gui-upload').addEventListener('click', async () => {
+    const pkgId = document.getElementById('modal-gui-package-id').value;
+    const name = document.getElementById('modal-gui-name').value;
+    const file = document.getElementById('modal-gui-image').files[0];
+    const status = document.getElementById('modal-gui-status');
+
+    if(!name || !file) return alert("Bitte Name und Bild angeben!");
+    status.innerText = "Lade hoch...";
+
+    try {
+        const imageUrl = await uploadImage(file, 'guis/images');
+        const newItem = { id: Date.now().toString(), name: name, image_url: imageUrl };
+        
+        const pkgRef = doc(db, "guis", pkgId);
+        const pkg = allGUIs.find(g => g.id === pkgId);
+        const updatedItems = [...(pkg.items || []), newItem];
+        
+        await updateDoc(pkgRef, { items: updatedItems });
+
+        status.innerText = "";
+        document.getElementById('modal-gui-name').value = '';
+        document.getElementById('modal-gui-image').value = '';
+        document.getElementById('gui-upload-modal').classList.remove('active');
+    } catch (e) { console.error(e); alert("Fehler beim Hochladen!"); }
+});
+
+// 4. GUI Bild löschen
+window.deleteGuiItem = async (pkgId, itemId) => {
+    if(confirm("Möchtest du dieses GUI wirklich löschen?")) {
+        try {
+            const pkgRef = doc(db, "guis", pkgId);
+            const pkg = allGUIs.find(g => g.id === pkgId);
+            const updatedItems = (pkg.items || []).filter(i => i.id !== itemId);
+            await updateDoc(pkgRef, { items: updatedItems });
+        } catch (error) { console.error(error); }
+    }
+};
+
+// 5. Editor öffnen (mit Paket ID)
+window.openGuiEditor = (pkgId) => {
+    window.currentGuiPackageId = pkgId;
+    document.getElementById('editor-modal').classList.add('active');
+};
+
+
+// ==========================================
+// 1:1 GUI EDITOR LOGIK (Integrierte Doppel-Kiste)
 // ==========================================
 let editorInitialized = false;
+window.currentGuiPackageId = null;
 
 function initEditor() {
     if (editorInitialized) return;
@@ -229,7 +309,6 @@ function initEditor() {
 
     function showToast(msg) { const t = document.querySelector('#editor-modal #toast'); t.innerText = msg; t.style.opacity = 1; setTimeout(() => t.style.opacity = 0, 2000); }
     
-    // ALLE WINDOW-FUNKTIONEN DEFINIEREN BEVOR WIR SIE AUFRUFEN
     window.loadReference = function(input) { if(input.files && input.files[0]) { const reader = new FileReader(); reader.onload = function(e) { const img = document.getElementById('refOverlay'); img.src = e.target.result; img.style.display = 'block'; img.style.width = (canvas.width * currentZoom) + 'px'; img.style.height = (canvas.height * currentZoom) + 'px'; showToast("👻 Referenzbild geladen!"); }; reader.readAsDataURL(input.files[0]); } }
     window.clearReference = function() { const img = document.getElementById('refOverlay'); img.style.display = 'none'; img.src = ''; document.getElementById('refInput').value = ''; showToast("🚫 Referenz entfernt"); }
     window.deleteSelectedColor = function() { if(confirm("Farbe " + selectedColor + " löschen?")) { saveState(); const targetRgb = window.hexToRgb(selectedColor); if (!targetRgb) return; const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height); const d = imgData.data; let deletedCount = 0; for(let i = 0; i < d.length; i += 4) { if(d[i+3] > 0 && d[i] === targetRgb.r && d[i+1] === targetRgb.g && d[i+2] === targetRgb.b) { d[i+3] = 0; deletedCount++; } } if (deletedCount > 0) { ctx.putImageData(imgData, 0, 0); refreshSnapshot(); showToast("🧹 Pixel gelöscht!"); } else { undoStack.pop(); showToast("ℹ️ Farbe nicht gefunden."); } } }
@@ -299,7 +378,6 @@ function initEditor() {
     window.toggleAutoCenter = function() { autoCenter = !autoCenter; document.getElementById('btnAutoCenter').classList.toggle('active'); document.getElementById('btnAutoCenter').innerText = autoCenter ? "🧲 Zentrieren (AN)" : "🧲 Zentrieren (Aus)"; document.getElementById('centerSettings').style.display = autoCenter ? 'block' : 'none'; window.updateGuides(); }
     window.toggleYInput = function() { const el = document.getElementById('fixedYVal'); const active = document.getElementById('useFixedY').checked; el.disabled = !active; el.style.opacity = active ? "1" : "0.5"; }
     
-    // HIER WAR DER FEHLER: Wir definieren window.createPaletteSwatch BEVOR wir es aufrufen!
     window.addToPalette = function(){window.createPaletteSwatch(document.getElementById('colorPicker').value);}
     window.createPaletteSwatch = function(c){const d=document.createElement('div');d.className='color-swatch';d.style.backgroundColor=c;d.onclick=()=>{selectedColor=c;document.getElementById('colorPicker').value=c;document.querySelectorAll('#editor-modal .color-swatch').forEach(e=>e.classList.remove('active'));d.classList.add('active'); window.setTool('brush');};document.getElementById('paletteGrid').appendChild(d);}
     window.clearCanvas = function(){if(confirm("Löschen?")){saveState();ctx.clearRect(0,0,canvas.width,canvas.height); saveState();}}
@@ -334,13 +412,32 @@ function initEditor() {
     function drawPixelText(t, x, y, preview) { if(!t) return; if(preview) ctx.globalAlpha = 0.5; t = t.toUpperCase(); const s = parseInt(document.getElementById('textScale').value)||1; const shad = document.getElementById('textShadow').checked; function dC(ch, dx, dy, col) { ctx.fillStyle = col; const m = fontMap[ch]||fontMap[' ']; if(!m) return 4*s; for(let r=0;r<m.length;r++) for(let c=0;c<m[r].length;c++) if(m[r][c]) ctx.fillRect(dx+(c*s), dy+(r*s), s, s); return ((m[0]?.length||3)*s)+s; } if(shad) { let sx=x+s; for(let c of t) sx+=dC(c, sx, y+s, "#1a1a1a"); } let cx=x; for(let c of t) cx+=dC(c, cx, y, selectedColor); if(preview) ctx.globalAlpha = 1.0; }
     function drawRect(x,y,w,h,col){ctx.fillStyle=col;ctx.fillRect(x,y,w,h);}
     function drawGuiBase(x,y,w,h){ctx.fillStyle='#c6c6c6';ctx.fillRect(x,y,w,h);ctx.fillStyle='#ffffff';ctx.fillRect(x,y,w,2);ctx.fillRect(x,y,2,h);ctx.fillStyle='#555555';ctx.fillRect(x+2,y+h-2,w-2,2);ctx.fillRect(x+w-2,y+2,2,h-2);}
-    window.applyTemplate = function(type) { saveState(); const w=canvas.width; const cx=Math.floor((w-176)/2); if(type==='chest'){ const sy=10; drawGuiBase(cx,sy,176,166); for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+17+r*18,false); for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+83+r*18,false); for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+141,false); } else if(type==='inv'){ const sy=80; for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+r*18,false); for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+58,false); } refreshSnapshot(); }
+    
+    window.applyTemplate = function(type) { 
+        saveState(); const w=canvas.width; const cx=Math.floor((w-176)/2); 
+        if(type==='chest'){ 
+            const sy=10; drawGuiBase(cx,sy,176,166); 
+            for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+17+r*18,false); 
+            for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+83+r*18,false); 
+            for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+141,false); 
+        } else if(type==='double'){ 
+            const sy=5; drawGuiBase(cx,sy,176,222); 
+            for(let r=0;r<6;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+17+r*18,false); 
+            for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+139+r*18,false); 
+            for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+197,false); 
+        } else if(type==='inv'){ 
+            const sy=80; 
+            for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+r*18,false); 
+            for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+58,false); 
+        } 
+        refreshSnapshot(); 
+    }
+    
     function floodFill(x,y,erase){ const startPixel=ctx.getImageData(x,y,1,1).data; const startR=startPixel[0],startG=startPixel[1],startB=startPixel[2],startA=startPixel[3]; const f=window.hexToRgb(selectedColor); if(erase){ if(startA===0) return; } else { if(startR===f.r&&startG===f.g&&startB===f.b&&startA===255) return; } const img=ctx.getImageData(0,0,canvas.width,canvas.height); const d=img.data; const s=[[x,y]]; const w=canvas.width,h=canvas.height; while(s.length){ const[cx,cy]=s.pop(); if(cx<0||cx>=w||cy<0||cy>=h)continue; const i=(cy*w+cx)*4; if(d[i]===startR&&d[i+1]===startG&&d[i+2]===startB&&d[i+3]===startA){ if(erase) d[i+3]=0; else { d[i]=f.r; d[i+1]=f.g; d[i+2]=f.b; d[i+3]=255; } s.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]); } } ctx.putImageData(img,0,0); }
 
-    // IN FIREBASE SPEICHERN
+    // IN FIREBASE (ZUM PAKET) SPEICHERN
     window.saveEditorToFirebase = async function() {
-        const inputGuiName = document.getElementById('gui-name').value;
-        const guiName = prompt("Wie soll dieses GUI heißen?", inputGuiName || "Mein Neues GUI");
+        const guiName = prompt("Wie soll dieses gezeichnete GUI heißen?", "Mein Neues GUI");
         if(!guiName) return;
 
         showToast("Speichere in Datenbank...");
@@ -348,15 +445,22 @@ function initEditor() {
         const file = dataURLtoFile(dataUrl, `gui_${Date.now()}.png`);
         
         try {
-            const imageUrl = await uploadImage(file, 'guis');
-            await addDoc(collection(db, "guis"), { name: guiName, image_url: imageUrl });
+            const imageUrl = await uploadImage(file, 'guis/images');
+            const newItem = { id: Date.now().toString(), name: guiName, image_url: imageUrl };
+            
+            const pkgRef = doc(db, "guis", window.currentGuiPackageId);
+            const pkg = allGUIs.find(g => g.id === window.currentGuiPackageId);
+            const updatedItems = [...(pkg.items || []), newItem];
+            await updateDoc(pkgRef, { items: updatedItems });
+
             showToast("Erfolgreich gespeichert!");
             document.getElementById('editor-modal').classList.remove('active');
-            document.getElementById('gui-name').value = '';
+            
+            ctx.clearRect(0,0,canvas.width,canvas.height); 
+            refreshSnapshot();
         } catch (error) { console.error(error); showToast("Fehler beim Speichern!"); }
     }
 
-    // --- INIT (WICHTIG: GANZ UNTEN!) ---
     const myColors = ['#a49e95', '#766f6a', '#483f46', '#231c2c', '#1e1829', '#539d33', '#ffffff', '#000000'];
     myColors.forEach(c => window.createPaletteSwatch(c));
     window.resizeCanvas(); saveState(); refreshSnapshot();
