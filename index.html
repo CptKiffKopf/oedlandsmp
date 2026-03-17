@@ -8,16 +8,31 @@
 </head>
 <body>
 
-    <div class="app-container">
+    <div id="login-screen" class="login-overlay">
+        <div class="login-card">
+            <h2 style="margin-bottom: 10px;">Admin Login</h2>
+            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 25px;">Bitte logge dich ein, um den Planer zu öffnen.</p>
+            <input type="email" id="login-email" placeholder="E-Mail Adresse" style="width: 100%; margin-bottom: 15px;">
+            <input type="password" id="login-password" placeholder="Passwort" style="width: 100%; margin-bottom: 20px;">
+            <button id="btn-login" class="btn btn-primary" style="width: 100%;">Einloggen</button>
+            <p id="login-error" class="status-text" style="color: var(--danger); margin-top: 15px;"></p>
+        </div>
+    </div>
+
+    <div class="app-container" id="main-app" style="display: none;">
         <nav class="sidebar">
             <div class="logo">MC Planer</div>
-            <ul>
+            <ul style="display: flex; flex-direction: column; height: calc(100% - 60px);">
                 <li class="nav-item active" data-target="uebersicht">Übersicht</li>
                 <li class="nav-item" data-target="raenge">Ränge</li>
                 <li class="nav-item" data-target="kisten">Kisten</li>
                 <li class="nav-item" data-target="punkteshop">Punkteshop</li>
                 <li class="nav-item" data-target="gui">GUI</li>
+                <li class="nav-item" data-target="plugins">Plugins</li>
                 <li class="nav-item" data-target="werbung">Werbung</li>
+                
+                <div style="flex-grow: 1;"></div>
+                <li id="btn-logout" style="border-top: 1px solid var(--border-color); margin-top: 15px; padding-top: 15px; color: var(--danger);">🚪 Logout</li>
             </ul>
         </nav>
 
@@ -29,6 +44,7 @@
                 <div class="dashboard-grid">
                     <div class="stat-card"><h3>Ränge</h3><p class="stat-number" id="stat-ranks">0</p></div>
                     <div class="stat-card"><h3>Kisten</h3><p class="stat-number" id="stat-crates">0</p></div>
+                    <div class="stat-card"><h3>Plugins</h3><p class="stat-number" id="stat-plugins">0</p></div>
                     <div class="stat-card"><h3>Shop-Items</h3><p class="stat-number" id="stat-shop">0</p></div>
                     <div class="stat-card"><h3>GUIs</h3><p class="stat-number" id="stat-guis">0</p></div>
                 </div>
@@ -55,6 +71,10 @@
                 </div>
                 
                 <div class="table-container">
+                    <div style="padding: 15px 16px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: var(--bg-color);">
+                        <h3 style="margin:0; font-size: 14px; color: var(--text-muted);">Gespeicherte Ränge</h3>
+                        <button id="btn-export-ranks" class="btn btn-secondary btn-sm" style="border-color: #3b82f6; color: #3b82f6;">LuckPerms .yml Exportieren</button>
+                    </div>
                     <table class="data-table">
                         <thead><tr><th>Bild</th><th>Name</th><th>Erbt von</th><th>Permissions</th><th>Aktionen</th></tr></thead>
                         <tbody id="rank-list"></tbody>
@@ -114,6 +134,27 @@
                 <div id="gui-list" class="gui-grid"></div>
             </section>
 
+            <section id="plugins" class="category-section">
+                <h2>Server Plugins</h2>
+                <div class="form-card">
+                    <h3>Neues Plugin hinzufügen</h3>
+                    <div class="input-group">
+                        <input type="text" id="plugin-name" placeholder="Plugin Name (z.B. EssentialsX)" style="width: 100%;">
+                    </div>
+                    <textarea id="plugin-info" placeholder="Info Text / Notizen / Commands..." rows="4"></textarea>
+                    <div class="button-group" style="margin-top: 15px;">
+                        <button id="btn-save-plugin" class="btn btn-primary">Plugin speichern</button>
+                    </div>
+                    <p id="plugin-status" class="status-text"></p>
+                </div>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead><tr><th style="width: 200px;">Plugin Name</th><th>Info Text & Notizen</th><th style="text-align: right;">Aktionen</th></tr></thead>
+                        <tbody id="plugin-list"></tbody>
+                    </table>
+                </div>
+            </section>
+
             <section id="werbung" class="category-section">
                 <h2>Werbung & Banner</h2>
                 <div class="form-card">
@@ -130,19 +171,16 @@
             </section>
 
         </main>
-    </div>
-
-    <div id="item-modal" class="modal">
+    </div> <div id="item-modal" class="modal">
         <div class="modal-content">
             <h3>Item zur Kiste hinzufügen</h3>
             <input type="hidden" id="modal-crate-id">
-            
             <div class="input-group" style="flex-direction: column; gap: 10px; margin-top: 15px;">
-                <input type="text" id="modal-item-name" placeholder="Item Name (z.B. Diamantschwert)" style="width:100%;">
+                <input type="text" id="modal-item-name" placeholder="Item Name (z.B. Diamant)" style="width:100%;">
+                <input type="number" id="modal-item-quantity" placeholder="Menge (z.B. 1 oder 64)" min="1" value="1" style="width:100%;">
                 <input type="number" id="modal-item-chance" placeholder="Wahrscheinlichkeit in %" min="0" max="100" style="width:100%;">
                 <input type="file" id="modal-item-image" accept="image/png, image/jpeg" title="Item Bild" style="width:100%;">
             </div>
-            
             <div class="button-group" style="margin-top: 20px;">
                 <button id="btn-save-item" class="btn btn-primary">Item speichern</button>
                 <button id="btn-close-modal" class="btn btn-secondary">Abbrechen</button>

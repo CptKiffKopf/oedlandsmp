@@ -12,17 +12,19 @@
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
 body { background-color: var(--bg-color); color: var(--text-main); }
 
-.app-container { display: flex; height: 100vh; }
+/* --- LOGIN SCREEN --- */
+.login-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--bg-color); display: flex; align-items: center; justify-content: center; z-index: 10000; }
+.login-card { background: var(--surface-color); padding: 40px; border-radius: 12px; width: 90%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: center; }
 
-/* Seitenleiste */
-.sidebar { width: 260px; background-color: var(--surface-color); border-right: 1px solid var(--border-color); padding: 24px 16px; }
+/* --- APP LAYOUT --- */
+.app-container { height: 100vh; }
+.sidebar { width: 260px; background-color: var(--surface-color); border-right: 1px solid var(--border-color); padding: 24px 16px; display: flex; flex-direction: column; }
 .logo { font-size: 20px; font-weight: 700; margin-bottom: 30px; padding-left: 12px; letter-spacing: -0.5px; }
 .sidebar ul { list-style: none; }
 .sidebar li { padding: 10px 12px; margin-bottom: 4px; border-radius: 6px; cursor: pointer; color: var(--text-muted); font-weight: 500; transition: all 0.2s ease; }
 .sidebar li:hover { background-color: var(--bg-color); color: var(--text-main); }
 .sidebar li.active { background-color: var(--bg-color); color: var(--text-main); font-weight: 600; }
 
-/* Hauptbereich */
 .content { flex: 1; padding: 40px; overflow-y: auto; }
 .category-section { display: none; animation: fadeIn 0.3s ease; }
 .category-section.active { display: block; }
@@ -82,28 +84,10 @@ textarea:focus { border-color: var(--text-muted); }
 .crate-items-table td { padding: 8px; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
 .crate-items-table tr:last-child td { border-bottom: none; }
 
-/* Modal (Popup) - FIX !important */
-.modal { 
-    display: none; 
-    position: fixed !important; 
-    top: 0 !important; 
-    left: 0 !important; 
-    width: 100vw !important; 
-    height: 100vh !important; 
-    background: rgba(0,0,0,0.6); 
-    align-items: center; 
-    justify-content: center; 
-    z-index: 9999 !important; 
-}
+/* Modal (Popup) */
+.modal { display: none; position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; background: rgba(0,0,0,0.6); align-items: center; justify-content: center; z-index: 9999 !important; }
 .modal.active { display: flex; animation: fadeIn 0.2s ease; }
-.modal-content { 
-    background: var(--surface-color); 
-    padding: 30px; 
-    border-radius: 12px; 
-    width: 90%; 
-    max-width: 400px; 
-    box-shadow: 0 10px 25px rgba(0,0,0,0.5); 
-}
+.modal-content { background: var(--surface-color); padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
 
 /* Thumbnails */
 .thumbnail { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-color); display: block; }
