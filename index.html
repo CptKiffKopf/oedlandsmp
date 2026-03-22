@@ -135,32 +135,36 @@
                             </select>
                             <input type="text" id="editor-gui-name" placeholder="Name des GUIs" style="margin-bottom: 8px; font-size: 0.9em;">
                             <input type="hidden" id="editor-gui-item-id">
-                            <button class="btn-editor btn-action" onclick="window.saveEditorToFirebase()">💾 In Paket speichern</button>
+                            <button id="btn-editor-save" class="btn-editor btn-action" onclick="window.saveEditorToFirebase()">💾 In Paket speichern</button>
                         </div>
 
                         <div class="panel-editor">
-                            <h3>Leinwand & Zoom</h3>
-                            <select id="canvas-resolution" onchange="window.resizeCanvas()" style="margin-bottom: 10px; font-size: 0.9em;">
-                                <option value="square">256x256 (Standard)</option>
-                                <option value="tall">192x256 (Hoch)</option>
-                                <option value="rect">256x128 (Breit)</option>
-                                <option value="mid">50x50 (Mittel)</option>
-                                <option value="icon">16x16 (Icon)</option>
-                            </select>
-                            
-                            <div style="margin-bottom: 5px; display: flex; justify-content: space-between;">
-                                <label style="font-size:0.8em; color: #aaa;">Zoomfaktor</label>
-                                <label style="font-size:0.8em; color: #aaa;"><span id="zoomVal">2</span>x</label>
+                            <button class="btn-editor btn-undo" onclick="window.undo()">↩️ Rückgängig (Strg+Z)</button>
+                            <div class="row-editor" style="border-top:1px solid #555; padding-top:10px;">
+                                <label style="font-size:0.9em"><input type="radio" name="size" value="square" checked onchange="window.resizeCanvas()"> 256²</label>
+                                <label style="font-size:0.9em"><input type="radio" name="size" value="tall" onchange="window.resizeCanvas()"> 192x256</label>
                             </div>
-                            <input type="range" id="zoomSlider" min="1" max="20" value="2" oninput="window.changeZoom(this.value)" style="width: 100%; margin-bottom: 10px;">
-                            
-                            <button class="btn-editor btn-undo" onclick="window.undo()" style="width:100%; margin-bottom:5px;">↩️ Rückgängig (Strg+Z)</button>
-                            <button class="btn-editor btn-danger" style="width:100%; margin-bottom: 10px;" onclick="window.clearCanvas()">🗑️ Leinwand Leeren</button>
+                            <div class="row-editor">
+                                <label style="font-size:0.9em"><input type="radio" name="size" value="rect" onchange="window.resizeCanvas()"> 256x128</label>
+                                <label style="font-size:0.9em; color:#FFC107; font-weight:bold;"><input type="radio" name="size" value="mid" onchange="window.resizeCanvas()"> 50x50</label>
+                            </div>
+                            <div class="row-editor">
+                                <label style="font-size:0.9em; color:#4CAF50; font-weight:bold;"><input type="radio" name="size" value="icon" onchange="window.resizeCanvas()"> 16x16</label>
+                            </div>
                             
                             <hr style="border:0; border-top:1px solid #555; margin:10px 0;">
-                            <label class="btn-editor" style="display:block;">
-                                📂 Lokales Bild öffnen <input type="file" id="uploadInput" accept="image/*" style="display:none">
+            
+                            <label class="btn-editor" style="margin-top:5px; display:block; text-align:center;">
+                                📂 Projekt laden <input type="file" id="uploadInput" accept="image/*" style="display:none">
                             </label>
+                            <button class="btn-editor btn-danger" style="width:100%; margin-top:5px;" onclick="window.clearCanvas()">🗑️ Leinwand Leeren</button>
+                            
+                            <hr style="border:0; border-top:1px solid #555; margin:10px 0;">
+                            
+                            <label class="btn-editor btn-ref" style="display:block; text-align:center;">
+                                👻 Referenz laden (20%) <input type="file" id="refInput" accept="image/*" style="display:none" onchange="window.loadReference(this)">
+                            </label>
+                            <button class="btn-editor btn-danger" style="width:100%; margin-top:5px; font-size: 0.8em;" onclick="window.clearReference()">🚫 Referenz entfernen</button>
                         </div>
             
                         <div class="panel-editor">
@@ -226,7 +230,7 @@
                         </div>
                         
                         <div class="panel-editor">
-                            <h3>Hilfen & Referenz</h3>
+                            <h3>Hilfen</h3>
                             <div class="tool-grid">
                                 <button class="btn-editor btn-toggle" id="btnAutoCenter" onclick="window.toggleAutoCenter()">🧲 Zentrieren</button>
                                 <label class="btn-editor" style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin:0;"><input type="checkbox" id="gridCheck" onchange="window.toggleGrid()"> 📏 Gitter</label>
@@ -239,9 +243,6 @@
                                 <label style="font-size:0.8em">Pinsel-Größe: <span id="sizeVal">1</span>px</label>
                                 <input type="range" id="brushSize" min="1" max="10" value="1" oninput="document.getElementById('sizeVal').innerText = this.value" style="width:100%">
                             </div>
-                            <hr style="border:0; border-top:1px solid #555; margin:10px 0;">
-                            <label class="btn-editor btn-ref" style="display:block;">👻 Referenz laden (20%) <input type="file" id="refInput" accept="image/*" style="display:none" onchange="window.loadReference(this)"></label>
-                            <button class="btn-editor btn-danger" style="width:100%; margin-top:5px; font-size: 0.8em;" onclick="window.clearReference()">🚫 Referenz entfernen</button>
                         </div>
             
                         <div class="panel-editor">
