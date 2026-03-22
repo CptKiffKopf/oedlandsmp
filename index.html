@@ -63,6 +63,11 @@
                         <input type="file" id="rank-image" accept="image/png, image/jpeg" title="Titelbild für Rang (Optional)">
                     </div>
                     <textarea id="rank-perms" placeholder="Permissions (eine pro Zeile)&#10;essentials.spawn&#10;essentials.msg" rows="4"></textarea>
+                    
+                    <div style="margin-top: 5px; text-align: right;">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="window.importPluginPerms()" style="color: #00BCD4; border-color: #00BCD4;">🪄 Perms aus Plugins importieren</button>
+                    </div>
+
                     <div class="button-group" style="margin-top: 15px;">
                         <button id="btn-save-rank" class="btn btn-primary">Rang speichern</button>
                         <button id="btn-cancel-rank" class="btn btn-secondary" style="display: none;">Abbrechen</button>
@@ -135,8 +140,7 @@
                     
                     <div class="panel-editor" style="width: 250px; flex-shrink: 0;">
                         <h3 style="color: #00BCD4; border-bottom: 1px solid #00BCD4;">Vorgefertigte Items</h3>
-                        <div id="palette-items" style="display: flex; flex-direction: column; gap: 8px; margin-top: 15px;">
-                        </div>
+                        <div id="palette-items" style="display: flex; flex-direction: column; gap: 8px; margin-top: 15px;"></div>
                         <p style="font-size: 11px; color: #888; margin-top: 15px; text-align: center;">Tipp: Klicke auf ein Item im Inventar, um es wieder zu löschen.</p>
                     </div>
 
@@ -169,7 +173,7 @@
             </section>
 
             <section id="gui-editor" class="category-section" style="background: #2c2c2c; color: #fff; padding: 20px; border-radius: 8px;">
-                <h1>MC GUI Editor <span style="font-size:0.5em; color:#aaa;">V44</span></h1>
+                <h1>MC GUI Editor <span style="font-size:0.5em; color:#aaa;">V45</span></h1>
 
                 <div class="main-container-editor">
                     <div class="sidebar-editor">
@@ -275,19 +279,17 @@
                         </div>
                         
                         <div class="panel-editor">
-                            <h3>Hilfen</h3>
+                            <h3>Hilfen & Referenz</h3>
                             <div class="tool-grid">
                                 <button class="btn-editor btn-toggle" id="btnAutoCenter" onclick="window.toggleAutoCenter()">🧲 Zentrieren</button>
-                                <label class="btn-editor" style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin:0;">
-                                    <input type="checkbox" id="gridCheck" onchange="window.toggleGrid()"> 📏 18x18 Gitter
-                                </label>
+                                <label class="btn-editor" style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin:0;"><input type="checkbox" id="gridCheck" onchange="window.toggleGrid()"> 📏 Gitter</label>
                             </div>
                             <div id="centerSettings" style="margin-top:5px; display:none; font-size:0.85em; background:#444; padding:5px; border-radius:4px;">
                                 <label><input type="checkbox" id="useContentAlign"> Am Inhalt</label>
-                                <label><input type="checkbox" id="useFixedY" onchange="window.toggleYInput()"> Y: <input type="number" id="fixedYVal" value="10" style="width:30px" disabled></label>
+                                <label><input type="checkbox" id="useFixedY" onchange="window.toggleYInput()"> Y: <input type="number" id="fixedYVal" value="10" style="width:50px; display:inline-block;" disabled></label>
                             </div>
-                            <div id="brushSettings" style="margin-top: 5px;">
-                                <label style="font-size:0.8em">Größe: <span id="sizeVal">1</span>px</label>
+                            <div id="brushSettings" style="margin-top: 10px; margin-bottom: 10px;">
+                                <label style="font-size:0.8em">Pinsel-Größe: <span id="sizeVal">1</span>px</label>
                                 <input type="range" id="brushSize" min="1" max="10" value="1" oninput="document.getElementById('sizeVal').innerText = this.value" style="width:100%">
                             </div>
                         </div>
@@ -308,12 +310,15 @@
                         </div>
                     </div>
             
-                    <div class="canvas-wrapper" id="canvasWrapper">
-                        <canvas id="pixelCanvas" width="256" height="256"></canvas>
-                        <img id="refOverlay" class="editor-ref-overlay"> 
-                        <div id="gridOverlay" class="editor-grid-overlay"></div>
-                        <div id="centerLine" class="editor-center-line"></div>
+                    <div class="scroll-box-editor">
+                        <div class="editor-canvas-wrapper" id="canvasWrapper">
+                            <canvas id="pixelCanvas" width="256" height="256"></canvas>
+                            <img id="refOverlay" class="editor-ref-overlay"> 
+                            <div id="gridOverlay" class="editor-grid-overlay"></div>
+                            <div id="centerLine" class="editor-center-line"></div>
+                        </div>
                     </div>
+
                 </div>
                 <div id="editor-toast">Nachricht</div>
             </section>
@@ -321,12 +326,15 @@
             <section id="plugins" class="category-section">
                 <h2>Server Plugins</h2>
                 <div class="form-card">
-                    <h3>Neues Plugin hinzufügen</h3>
+                    <h3 id="plugin-form-title">Neues Plugin hinzufügen</h3>
                     <div class="input-group">
                         <input type="text" id="plugin-name" placeholder="Plugin Name (z.B. EssentialsX)" style="width: 100%;">
                     </div>
                     <textarea id="plugin-info" placeholder="Info Text / Notizen / Commands..." rows="4"></textarea>
-                    <div class="button-group" style="margin-top: 15px;"><button id="btn-save-plugin" class="btn btn-primary">Plugin speichern</button></div>
+                    <div class="button-group" style="margin-top: 15px;">
+                        <button id="btn-save-plugin" class="btn btn-primary">Plugin speichern</button>
+                        <button id="btn-cancel-plugin" class="btn btn-secondary" style="display: none;">Abbrechen</button>
+                    </div>
                     <p id="plugin-status" class="status-text"></p>
                 </div>
                 <div class="table-container">
@@ -359,15 +367,26 @@
             <input type="hidden" id="modal-edit-item-id">
             
             <div class="input-group" style="flex-direction: column; gap: 10px; margin-top: 15px;">
-                <input type="text" id="modal-item-name" placeholder="Item Name (z.B. Diamant)" style="width:100%;">
-                <input type="number" id="modal-item-quantity" placeholder="Menge (z.B. 1 oder 64)" min="1" value="1" style="width:100%;">
-                <input type="number" id="modal-item-chance" placeholder="Wahrscheinlichkeit in %" min="0" max="100" style="width:100%;">
-                <input type="file" id="modal-item-image" accept="image/png, image/jpeg" title="Item Bild" style="width:100%;">
                 
-                <div style="border-top: 1px solid var(--border-color); margin-top: 10px; padding-top: 10px;">
+                <select id="modal-item-type" onchange="window.changeCrateItemType()" style="width:100%; padding: 6px; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
+                    <option value="item">📦 Normales Item</option>
+                    <option value="money">💰 Geld (Economy)</option>
+                    <option value="perk">🌟 Perk (Platzhalter)</option>
+                    <option value="special">✨ Spezial (Platzhalter)</option>
+                </select>
+
+                <input type="text" id="modal-item-name" placeholder="Item Name (z.B. Diamant)" style="width:100%;">
+                
+                <div style="display: flex; gap: 10px; width: 100%;">
+                    <input type="number" id="modal-item-quantity" placeholder="Menge (z.B. 1 oder 64)" min="1" value="1" style="flex: 1;">
+                    <input type="number" id="modal-item-chance" placeholder="Wahrscheinlichkeit %" min="0" max="100" style="flex: 1;">
+                </div>
+                
+                <input type="file" id="modal-item-image" accept="image/png, image/jpeg" title="Optionales Icon" style="width:100%;">
+                
+                <div id="enchantment-section" style="border-top: 1px solid var(--border-color); margin-top: 10px; padding-top: 10px;">
                     <h4 style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;">Verzauberungen (Optional)</h4>
-                    <div id="enchantments-container" style="display: flex; flex-direction: column; gap: 5px;">
-                        </div>
+                    <div id="enchantments-container" style="display: flex; flex-direction: column; gap: 5px;"></div>
                     <button type="button" class="btn btn-secondary btn-sm" onclick="window.addEnchantmentField()" style="margin-top: 8px;">+ Verzauberung hinzufügen</button>
                 </div>
             </div>

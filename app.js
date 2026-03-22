@@ -18,7 +18,7 @@ const storage = getStorage(app);
 const auth = getAuth(app);
 
 let allRanks = [], allGUIs = [], allCrates = [], allShop = [], allAds = [], allPlugins = [];
-let editingRankId = null; 
+let editingRankId = null, editingPluginId = null;
 let listenersActive = false; 
 
 // ==========================================
@@ -122,21 +122,37 @@ function startRealtimeListeners() {
     onSnapshot(collection(db, "plugins"), (snap) => {
         allPlugins = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const list = document.getElementById('plugin-list'); list.innerHTML = '';
-        allPlugins.forEach(plugin => { list.innerHTML += `<tr><td><strong>${plugin.name}</strong></td><td style="white-space: pre-wrap; font-size: 13px;">${plugin.info || '-'}</td><td style="text-align: right;"><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('plugins', '${plugin.id}')">Löschen</button></td></tr>`; });
+        allPlugins.forEach(plugin => { 
+            list.innerHTML += `<tr>
+                <td><strong>${plugin.name}</strong></td>
+                <td style="white-space: pre-wrap; font-size: 13px;">${plugin.info || '-'}</td>
+                <td style="text-align: right;">
+                    <button class="btn btn-secondary btn-sm" onclick="window.editPlugin('${plugin.id}')">✏️ Bearbeiten</button>
+                    <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('plugins', '${plugin.id}')">Löschen</button>
+                </td>
+            </tr>`; 
+        });
         updateDashboard();
     });
 
-    // KISTEN RENDER UPDATE (Mit Verzauberungen & Bearbeiten Button)
     onSnapshot(collection(db, "crates"), (snap) => {
         allCrates = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const container = document.getElementById('crates-container'); container.innerHTML = '';
         allCrates.forEach(crate => {
             let items = crate.items || []; let crateImgHtml = crate.image_url ? `<img src="${crate.image_url}" class="thumbnail" style="width:50px;height:50px;">` : `<div class="thumbnail" style="width:50px;height:50px;"></div>`;
-            
             let itemsHtml = items.map(item => {
+                
+                // NEU: Anzeige je nach Typ (Geld, Item, Perk, Spezial)
+                let typeIcon = '📦';
+                if(item.type === 'money') typeIcon = '<span style="font-size:20px;">💰</span>';
+                if(item.type === 'perk') typeIcon = '<span style="font-size:20px;">🌟</span>';
+                if(item.type === 'special') typeIcon = '<span style="font-size:20px;">✨</span>';
+                
+                let imgContent = item.image_url ? `<img src="${item.image_url}" class="thumbnail" style="width:30px;height:30px;">` : typeIcon;
                 let enchHtml = (item.enchantments && item.enchantments.length > 0) ? `<div style="font-size: 11px; color: #a855f7; margin-top: 4px;">🪄 ${item.enchantments.join(', ')}</div>` : '';
+                
                 return `<tr>
-                    <td>${item.image_url ? `<img src="${item.image_url}" class="thumbnail" style="width:30px;height:30px;">` : '-'}</td>
+                    <td style="text-align: center;">${imgContent}</td>
                     <td><strong>${item.name}</strong>${enchHtml}</td>
                     <td>${item.quantity || 1}x</td>
                     <td>${item.chance}%</td>
@@ -146,8 +162,7 @@ function startRealtimeListeners() {
                     </td>
                 </tr>`;
             }).join('');
-            
-            container.innerHTML += `<div class="crate-box"><div class="crate-header"><div class="crate-header-left">${crateImgHtml}<h3 style="font-size: 18px;">${crate.name || 'Unbenannte Kiste'}</h3></div><div class="button-group"><button class="btn btn-primary btn-sm" onclick="window.openItemModal('${crate.id}')">+ Item hinzufügen</button><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('crates', '${crate.id}')">Kiste löschen</button></div></div>${items.length > 0 ? `<table class="crate-items-table"><thead><tr><th>Bild</th><th>Item Name</th><th>Menge</th><th>Chance</th><th style="text-align: right;">Aktion</th></tr></thead><tbody>${itemsHtml}</tbody></table>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Items in dieser Kiste. Klicke auf "+ Item hinzufügen".</p>'}</div>`;
+            container.innerHTML += `<div class="crate-box"><div class="crate-header"><div class="crate-header-left">${crateImgHtml}<h3 style="font-size: 18px;">${crate.name || 'Unbenannte Kiste'}</h3></div><div class="button-group"><button class="btn btn-primary btn-sm" onclick="window.openItemModal('${crate.id}')">+ Item hinzufügen</button><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('crates', '${crate.id}')">Kiste löschen</button></div></div>${items.length > 0 ? `<table class="crate-items-table"><thead><tr><th style="width: 50px;">Art</th><th>Item Name</th><th>Menge</th><th>Chance</th><th style="text-align: right;">Aktion</th></tr></thead><tbody>${itemsHtml}</tbody></table>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Items in dieser Kiste. Klicke auf "+ Item hinzufügen".</p>'}</div>`;
         });
         updateDashboard();
     });
@@ -256,20 +271,116 @@ window.deleteEntry = async (collectionName, id) => {
 };
 
 // ==========================================
-// 4. SPEICHERN LOGIK (Ränge, Kisten etc.)
+// 4. SPEICHERN LOGIK (Ränge, Kisten, Plugins etc.)
 // ==========================================
 
-document.getElementById('btn-save-plugin').addEventListener('click', async () => { try { const name = document.getElementById('plugin-name').value; const info = document.getElementById('plugin-info').value; const status = document.getElementById('plugin-status'); if(!name) return alert("Bitte gib einen Plugin-Namen ein!"); status.innerText = "Speichere..."; await addDoc(collection(db, "plugins"), { name: name, info: info }); status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('plugin-name').value = ''; document.getElementById('plugin-info').value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
-document.getElementById('btn-save-rank').addEventListener('click', async () => { const name = document.getElementById('rank-name').value; const perms = document.getElementById('rank-perms').value.split('\n').map(p => p.trim()).filter(p => p !== ""); const inherits = document.getElementById('rank-inherit').value; const file = document.getElementById('rank-image').files[0]; const status = document.getElementById('rank-status'); if(!name) return alert("Name fehlt!"); status.innerText = "Speichere..."; const rankData = { name: name, permissions: perms, inherits_from: inherits || null }; if (file) { rankData.image_url = await uploadImage(file, 'ranks'); } if (editingRankId) { await updateDoc(doc(db, "ranks", editingRankId), rankData); } else { await addDoc(collection(db, "ranks"), rankData); } status.innerText = "Gespeichert!"; setTimeout(() => status.innerText = "", 2000); editingRankId = null; document.getElementById('rank-form-title').innerText = "Neuen Rang erstellen"; document.getElementById('btn-save-rank').innerText = "Rang speichern"; document.getElementById('btn-cancel-rank').style.display = "none"; document.getElementById('rank-name').value = ''; document.getElementById('rank-perms').value = ''; document.getElementById('rank-inherit').value = ''; if(document.getElementById('rank-image')) document.getElementById('rank-image').value = ''; });
+// --- PLUGINS ---
+function resetPluginForm() {
+    editingPluginId = null;
+    document.getElementById('plugin-form-title').innerText = "Neues Plugin hinzufügen";
+    document.getElementById('btn-save-plugin').innerText = "Plugin speichern";
+    document.getElementById('btn-cancel-plugin').style.display = "none";
+    document.getElementById('plugin-name').value = '';
+    document.getElementById('plugin-info').value = '';
+}
+
+window.editPlugin = (id) => {
+    const plugin = allPlugins.find(p => p.id === id);
+    if(!plugin) return;
+    editingPluginId = id;
+    document.getElementById('plugin-name').value = plugin.name;
+    document.getElementById('plugin-info').value = plugin.info || '';
+    
+    document.getElementById('plugin-form-title').innerText = "Plugin bearbeiten: " + plugin.name;
+    document.getElementById('btn-save-plugin').innerText = "Änderungen speichern";
+    document.getElementById('btn-cancel-plugin').style.display = "inline-block";
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+document.getElementById('btn-cancel-plugin').addEventListener('click', resetPluginForm);
+
+document.getElementById('btn-save-plugin').addEventListener('click', async () => {
+    try { 
+        const name = document.getElementById('plugin-name').value; 
+        const info = document.getElementById('plugin-info').value; 
+        const status = document.getElementById('plugin-status'); 
+        if(!name) return alert("Bitte gib einen Plugin-Namen ein!"); 
+        status.innerText = "Speichere..."; 
+        
+        if (editingPluginId) {
+            await updateDoc(doc(db, "plugins", editingPluginId), { name: name, info: info });
+        } else {
+            await addDoc(collection(db, "plugins"), { name: name, info: info }); 
+        }
+        
+        status.innerText = "Erfolgreich!"; 
+        setTimeout(() => status.innerText = "", 2000); 
+        resetPluginForm();
+    } catch (error) { console.error(error); alert("Fehler: " + error.message); }
+});
+
+// --- RÄNGE ---
+document.getElementById('btn-save-rank').addEventListener('click', async () => {
+    const name = document.getElementById('rank-name').value; const perms = document.getElementById('rank-perms').value.split('\n').map(p => p.trim()).filter(p => p !== ""); const inherits = document.getElementById('rank-inherit').value; const file = document.getElementById('rank-image').files[0]; const status = document.getElementById('rank-status');
+    if(!name) return alert("Name fehlt!"); status.innerText = "Speichere..."; const rankData = { name: name, permissions: perms, inherits_from: inherits || null }; if (file) { rankData.image_url = await uploadImage(file, 'ranks'); }
+    if (editingRankId) { await updateDoc(doc(db, "ranks", editingRankId), rankData); } else { await addDoc(collection(db, "ranks"), rankData); }
+    status.innerText = "Gespeichert!"; setTimeout(() => status.innerText = "", 2000);
+    editingRankId = null; document.getElementById('rank-form-title').innerText = "Neuen Rang erstellen"; document.getElementById('btn-save-rank').innerText = "Rang speichern"; document.getElementById('btn-cancel-rank').style.display = "none"; document.getElementById('rank-name').value = ''; document.getElementById('rank-perms').value = ''; document.getElementById('rank-inherit').value = ''; if(document.getElementById('rank-image')) document.getElementById('rank-image').value = '';
+});
+
 window.editRank = (id) => { const rank = allRanks.find(r => r.id === id); if (!rank) return; editingRankId = id; document.getElementById('rank-name').value = rank.name; document.getElementById('rank-perms').value = (rank.permissions || []).join('\n'); document.getElementById('rank-inherit').value = rank.inherits_from || ''; document.getElementById('rank-form-title').innerText = "Rang bearbeiten: " + rank.name; document.getElementById('btn-save-rank').innerText = "Änderungen speichern"; document.getElementById('btn-cancel-rank').style.display = "inline-block"; window.scrollTo({ top: 0, behavior: 'smooth' }); };
 document.getElementById('btn-cancel-rank').addEventListener('click', () => { editingRankId = null; document.getElementById('rank-form-title').innerText = "Neuen Rang erstellen"; document.getElementById('btn-save-rank').innerText = "Rang speichern"; document.getElementById('btn-cancel-rank').style.display = "none"; document.getElementById('rank-name').value = ''; document.getElementById('rank-perms').value = ''; document.getElementById('rank-inherit').value = ''; if(document.getElementById('rank-image')) document.getElementById('rank-image').value = '';});
+
 document.getElementById('btn-export-ranks').addEventListener('click', () => { if(allRanks.length === 0) return alert("Keine Ränge!"); let yamlContent = "groups:\n"; allRanks.forEach(rank => { const safeName = rank.name.toLowerCase().replace(/[^a-z0-9_-]/g, ''); yamlContent += `  ${safeName}:\n`; if (rank.permissions && rank.permissions.length > 0) { yamlContent += `    permissions:\n`; rank.permissions.forEach(p => { yamlContent += `      - ${p}: true\n`; }); } if (rank.inherits_from) { const safeInherit = rank.inherits_from.toLowerCase().replace(/[^a-z0-9_-]/g, ''); yamlContent += `    parents:\n`; yamlContent += `      - ${safeInherit}\n`; } }); const blob = new Blob([yamlContent], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'luckperms_ranks.yml'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); });
-document.getElementById('btn-save-shop').addEventListener('click', async () => { try { const name = document.getElementById('shop-item').value; const price = document.getElementById('shop-price').value; const file = document.getElementById('shop-image').files[0]; if(!name || !price) return alert("Name und Preis fehlen!"); document.getElementById('shop-status').innerText = "Speichere..."; const imageUrl = await uploadImage(file, 'shop') || null; await addDoc(collection(db, "shop"), { name, price: Number(price), image_url: imageUrl }); document.getElementById('shop-status').innerText = ""; document.getElementById('shop-item').value = ''; document.getElementById('shop-price').value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
-document.getElementById('btn-save-ad').addEventListener('click', async () => { try { const file = document.getElementById('ad-image').files[0]; if(!file || !document.getElementById('ad-title').value) return alert("Bild und Titel fehlen!"); const imageUrl = await uploadImage(file, 'ads'); await addDoc(collection(db, "ads"), { title: document.getElementById('ad-title').value, link: document.getElementById('ad-link').value, image_url: imageUrl }); document.getElementById('ad-title').value = ''; document.getElementById('ad-link').value = ''; document.getElementById('ad-image').value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
 
+// NEU: Funktion um Plugin-Infos als Perms einzulesen
+window.importPluginPerms = () => {
+    if(allPlugins.length === 0) return alert("Es sind noch keine Plugins gespeichert!");
+    
+    // Aktuelle Permissions aus dem Feld holen
+    let currentPerms = document.getElementById('rank-perms').value.split('\n').map(p => p.trim()).filter(p => p !== "");
+    
+    // Alle Infos aus den Plugins sammeln
+    allPlugins.forEach(pl => {
+        if(pl.info) {
+            let pluginLines = pl.info.split('\n').map(p => p.trim()).filter(p => p !== "");
+            currentPerms = currentPerms.concat(pluginLines);
+        }
+    });
+    
+    // Doppelte Einträge entfernen
+    let uniquePerms = [...new Set(currentPerms)];
+    
+    document.getElementById('rank-perms').value = uniquePerms.join('\n');
+    alert("Permissions aus allen Plugins wurden erfolgreich importiert und doppelte Zeilen entfernt!");
+};
 
-// --- KISTEN UPDATE (VERZAUBERUNGEN & BEARBEITEN) ---
+// --- KISTEN ---
 document.getElementById('btn-save-crate').addEventListener('click', async () => { try { const crate_name = document.getElementById('crate-name').value; const fileInput = document.getElementById('crate-image'); const file = fileInput ? fileInput.files[0] : null; const status = document.getElementById('crate-status'); if(!crate_name) return alert("Name fehlt!"); status.innerText = "Erstelle Kiste..."; let imageUrl = null; if (file) imageUrl = await uploadImage(file, 'crates'); await addDoc(collection(db, "crates"), { name: crate_name, image_url: imageUrl, items: [] }); status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('crate-name').value = ''; if(fileInput) fileInput.value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
+
+window.changeCrateItemType = () => {
+    const type = document.getElementById('modal-item-type').value;
+    const nameInput = document.getElementById('modal-item-name');
+    const enchSection = document.getElementById('enchantment-section');
+    
+    if(type === 'money') { 
+        nameInput.placeholder = "Geld-Betrag (z.B. 1000)"; 
+        nameInput.value = ""; 
+        enchSection.style.display = 'none'; // Bei Geld keine Verzauberungen
+    }
+    else if(type === 'perk') { 
+        nameInput.value = "Platzhalter Perk"; 
+        enchSection.style.display = 'none';
+    }
+    else if(type === 'special') { 
+        nameInput.value = "Platzhalter Spezial"; 
+        enchSection.style.display = 'none';
+    }
+    else { 
+        nameInput.placeholder = "Item Name (z.B. Diamant)"; 
+        nameInput.value = ""; 
+        enchSection.style.display = 'block'; // Bei Item Verzauberungen anzeigen
+    }
+};
 
 window.addEnchantmentField = (val = '') => {
     const container = document.getElementById('enchantments-container');
@@ -286,10 +397,12 @@ window.openItemModal = (crateId) => {
     document.getElementById('item-modal-title').innerText = "Neues Item hinzufügen";
     document.getElementById('modal-crate-id').value = crateId; 
     document.getElementById('modal-edit-item-id').value = ''; 
+    document.getElementById('modal-item-type').value = 'item';
     document.getElementById('modal-item-name').value = ''; 
     document.getElementById('modal-item-quantity').value = '1'; 
     document.getElementById('modal-item-chance').value = ''; 
-    document.getElementById('enchantments-container').innerHTML = ''; // Leeren
+    document.getElementById('enchantments-container').innerHTML = ''; 
+    window.changeCrateItemType(); // UI refreshen
     document.getElementById('item-modal').classList.add('active'); 
 };
 
@@ -300,9 +413,12 @@ window.editCrateItem = (crateId, itemId) => {
     document.getElementById('item-modal-title').innerText = "Item bearbeiten";
     document.getElementById('modal-crate-id').value = crateId;
     document.getElementById('modal-edit-item-id').value = item.id;
+    document.getElementById('modal-item-type').value = item.type || 'item';
     document.getElementById('modal-item-name').value = item.name || '';
     document.getElementById('modal-item-quantity').value = item.quantity || 1;
     document.getElementById('modal-item-chance').value = item.chance || '';
+
+    window.changeCrateItemType();
 
     const enchContainer = document.getElementById('enchantments-container');
     enchContainer.innerHTML = '';
@@ -317,16 +433,17 @@ document.getElementById('btn-save-item').addEventListener('click', async () => {
     try {
         const crateId = document.getElementById('modal-crate-id').value; 
         const editItemId = document.getElementById('modal-edit-item-id').value; 
+        const type = document.getElementById('modal-item-type').value;
         const name = document.getElementById('modal-item-name').value; 
         const quantity = document.getElementById('modal-item-quantity').value; 
         const chance = document.getElementById('modal-item-chance').value; 
         const file = document.getElementById('modal-item-image').files[0]; 
         const status = document.getElementById('modal-status');
         
-        if(!name || !chance || !quantity) return alert("Item-Name, Menge und Chance fehlen!"); 
+        if(!name || !chance || !quantity) return alert("Pflichtfelder (Name, Menge, Chance) fehlen!"); 
         status.innerText = "Speichere Item...";
 
-        // Verzauberungen sammeln
+        // Verzauberungen auslesen
         const enchInputs = document.querySelectorAll('.ench-input');
         const enchantments = Array.from(enchInputs).map(input => input.value.trim()).filter(v => v !== '');
 
@@ -340,22 +457,23 @@ document.getElementById('btn-save-item').addEventListener('click', async () => {
         if(editItemId) {
             const idx = updatedItems.findIndex(i => i.id === editItemId);
             if(idx > -1) {
+                updatedItems[idx].type = type;
                 updatedItems[idx].name = name;
                 updatedItems[idx].quantity = Number(quantity);
                 updatedItems[idx].chance = Number(chance);
                 updatedItems[idx].enchantments = enchantments;
-                if(imageUrl) updatedItems[idx].image_url = imageUrl;
+                if(file) updatedItems[idx].image_url = imageUrl; // Nur updaten wenn neues Bild gewählt
             }
         } else {
-            const newItem = { 
+            updatedItems.push({ 
                 id: Date.now().toString(), 
+                type: type,
                 name: name, 
                 quantity: Number(quantity), 
                 chance: Number(chance), 
                 enchantments: enchantments,
                 image_url: imageUrl 
-            };
-            updatedItems.push(newItem);
+            });
         }
 
         await updateDoc(crateRef, { items: updatedItems });
@@ -369,6 +487,10 @@ document.getElementById('btn-save-item').addEventListener('click', async () => {
 });
 
 window.deleteCrateItem = async (crateId, itemId) => { if(confirm("Item entfernen?")) { try { const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId); await updateDoc(crateRef, { items: (crate.items || []).filter(i => i.id !== itemId) }); } catch (error) { console.error(error); } } };
+
+// --- SHOP & WERBUNG ---
+document.getElementById('btn-save-shop').addEventListener('click', async () => { try { const name = document.getElementById('shop-item').value; const price = document.getElementById('shop-price').value; const file = document.getElementById('shop-image').files[0]; if(!name || !price) return alert("Name und Preis fehlen!"); document.getElementById('shop-status').innerText = "Speichere..."; const imageUrl = await uploadImage(file, 'shop') || null; await addDoc(collection(db, "shop"), { name, price: Number(price), image_url: imageUrl }); document.getElementById('shop-status').innerText = ""; document.getElementById('shop-item').value = ''; document.getElementById('shop-price').value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
+document.getElementById('btn-save-ad').addEventListener('click', async () => { try { const file = document.getElementById('ad-image').files[0]; if(!file || !document.getElementById('ad-title').value) return alert("Bild und Titel fehlen!"); const imageUrl = await uploadImage(file, 'ads'); await addDoc(collection(db, "ads"), { title: document.getElementById('ad-title').value, link: document.getElementById('ad-link').value, image_url: imageUrl }); document.getElementById('ad-title').value = ''; document.getElementById('ad-link').value = ''; document.getElementById('ad-image').value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
 
 
 // ==========================================
@@ -637,7 +759,6 @@ function initEditor() {
     if (editorInitialized) return;
     editorInitialized = true;
 
-    // --- FONT DATA ---
     const fontMap={A:[[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],Ä:[[1,0,0,1],[0,0,0,0],[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],B:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,1],[1,1,1,0]],C:[[0,1,1,1],[1,0,0,0],[1,0,0,0],[1,0,0,0],[0,1,1,1]],D:[[1,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,0]],E:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,1,1,1]],F:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,0,0,0]],G:[[0,1,1,1],[1,0,0,0],[1,0,1,1],[1,0,0,1],[0,1,1,1]],H:[[1,0,0,1],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],I:[[1,1,1],[0,1,0],[0,1,0],[0,1,0],[1,1,1]],J:[[0,0,1,1],[0,0,0,1],[0,0,0,1],[1,0,0,1],[0,1,1,0]],K:[[1,0,0,1],[1,0,1,0],[1,1,0,0],[1,0,1,0],[1,0,0,1]],L:[[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,1,1,1]],M:[[1,0,0,0,1],[1,1,0,1,1],[1,0,1,0,1],[1,0,0,0,1],[1,0,0,0,1]],N:[[1,0,0,1],[1,1,0,1],[1,0,1,1],[1,0,0,1],[1,0,0,1]],O:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],Ö:[[1,0,0,1],[0,0,0,0],[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],P:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,0],[1,0,0,0]],Q:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,1,1],[0,1,1,1]],R:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,1,0],[1,0,0,1]],S:[[0,1,1,1],[1,0,0,0],[0,1,1,0],[0,0,0,1],[1,1,1,0]],T:[[1,1,1],[0,1,0],[0,1,0],[0,1,0],[0,1,0]],U:[[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],Ü:[[1,0,0,1],[0,0,0,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],V:[[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0],[0,0,1,0]],W:[[1,0,0,0,1],[1,0,0,0,1],[1,0,1,0,1],[1,1,0,1,1],[1,0,0,0,1]],X:[[1,0,0,1],[0,1,1,0],[0,1,1,0],[1,0,0,1]],Y:[[1,0,0,1],[0,1,1,0],[0,0,1,0],[0,0,1,0],[0,0,1,0]],Z:[[1,1,1,1],[0,0,0,1],[0,1,1,0],[1,0,0,0],[1,1,1,1]],0:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],1:[[0,1,0],[1,1,0],[0,1,0],[0,1,0],[1,1,1]],2:[[1,1,1,0],[0,0,0,1],[0,1,1,0],[1,0,0,0],[1,1,1,1]],3:[[1,1,1,0],[0,0,0,1],[0,1,1,0],[0,0,0,1],[1,1,1,0]],4:[[1,0,0,1],[1,0,0,1],[1,1,1,1],[0,0,0,1],[0,0,0,1]],5:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[0,0,0,1],[1,1,1,0]],6:[[0,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,1],[0,1,1,0]],7:[[1,1,1,1],[0,0,0,1],[0,0,1,0],[0,1,0,0],[0,1,0,0]],8:[[0,1,1,0],[1,0,0,1],[0,1,1,0],[1,0,0,1],[0,1,1,0]],9:[[0,1,1,0],[1,0,0,1],[0,1,1,1],[0,0,0,1],[0,1,1,0]],' ':[[0],[0],[0],[0],[0]],'.':[[0],[0],[0],[0],[1]],'ß':[[0,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,1],[1,1,1,0]]};
 
     const canvas = document.getElementById('pixelCanvas');
