@@ -3,6 +3,7 @@ import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from
 import { getFirestore, collection, addDoc, doc, deleteDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
 
+// DEINE FIREBASE CONFIG
 const firebaseConfig = {
   apiKey: "AIzaSyBZXXBcEnn5YjURWupDLZt4p0ljGZvsKb0",
   authDomain: "mc-server-planer.firebaseapp.com",
@@ -22,7 +23,7 @@ let editingRankId = null;
 let listenersActive = false; 
 
 // ==========================================
-// HILFSFUNKTIONEN & AUTH
+// 1. HILFSFUNKTIONEN
 // ==========================================
 
 async function uploadImage(file, folderPath) {
@@ -38,6 +39,29 @@ function dataURLtoFile(dataurl, filename) {
     while(n--){ u8arr[n] = bstr.charCodeAt(n); }
     return new File([u8arr], filename, {type:mime});
 }
+
+function updateDashboard() {
+    document.getElementById('stat-ranks').innerText = allRanks.length;
+    document.getElementById('stat-crates').innerText = allCrates.length;
+    document.getElementById('stat-plugins').innerText = allPlugins.length;
+    document.getElementById('stat-shop').innerText = allShop.length;
+    document.getElementById('stat-guis').innerText = allGUIs.length; 
+}
+
+function sortRanksHierarchically(ranks) {
+    let sorted = [], visited = new Set(), baseRanks = ranks.filter(r => !r.inherits_from);
+    function addChildren(parentName) {
+        let children = ranks.filter(r => r.inherits_from === parentName);
+        children.forEach(child => { if (!visited.has(child.id)) { visited.add(child.id); sorted.push(child); addChildren(child.name); } });
+    }
+    baseRanks.forEach(baseRank => { if (!visited.has(baseRank.id)) { visited.add(baseRank.id); sorted.push(baseRank); addChildren(baseRank.name); } });
+    ranks.forEach(r => { if (!visited.has(r.id)) sorted.push(r); });
+    return sorted;
+}
+
+// ==========================================
+// 2. AUTHENTIFIZIERUNG & NAVIGATION
+// ==========================================
 
 onAuthStateChanged(auth, (user) => {
     if (user) {
@@ -63,6 +87,7 @@ document.getElementById('btn-login').addEventListener('click', async () => {
     try { await signInWithEmailAndPassword(auth, email, password); errorText.innerText = ""; } 
     catch (error) { errorText.style.color = "var(--danger)"; errorText.innerText = "Falsche E-Mail oder Passwort!"; }
 });
+
 document.getElementById('btn-logout').addEventListener('click', () => { signOut(auth); });
 
 document.querySelectorAll('.nav-item:not(#btn-logout)').forEach(item => {
@@ -79,28 +104,13 @@ document.querySelectorAll('.nav-item:not(#btn-logout)').forEach(item => {
     });
 });
 
-function updateDashboard() {
-    document.getElementById('stat-ranks').innerText = allRanks.length;
-    document.getElementById('stat-crates').innerText = allCrates.length;
-    document.getElementById('stat-plugins').innerText = allPlugins.length;
-    document.getElementById('stat-shop').innerText = allShop.length;
-    document.getElementById('stat-guis').innerText = allGUIs.length; 
-}
-
-function sortRanksHierarchically(ranks) {
-    let sorted = [], visited = new Set(), baseRanks = ranks.filter(r => !r.inherits_from);
-    function addChildren(parentName) { let children = ranks.filter(r => r.inherits_from === parentName); children.forEach(child => { if (!visited.has(child.id)) { visited.add(child.id); sorted.push(child); addChildren(child.name); } }); }
-    baseRanks.forEach(baseRank => { if (!visited.has(baseRank.id)) { visited.add(baseRank.id); sorted.push(baseRank); addChildren(baseRank.name); } });
-    ranks.forEach(r => { if (!visited.has(r.id)) sorted.push(r); });
-    return sorted;
-}
-
-
 // ==========================================
-// DATEN LADEN (REALTIME LISTENER)
+// 3. DATEN LADEN (LIVE-UPDATES)
 // ==========================================
 
 function startRealtimeListeners() {
+    
+    // RÄNGE
     onSnapshot(collection(db, "ranks"), (snap) => {
         allRanks = sortRanksHierarchically(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         const list = document.getElementById('rank-list'); list.innerHTML = '';
@@ -117,6 +127,7 @@ function startRealtimeListeners() {
         updateDashboard();
     });
 
+    // PLUGINS
     onSnapshot(collection(db, "plugins"), (snap) => {
         allPlugins = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const list = document.getElementById('plugin-list'); list.innerHTML = '';
@@ -124,17 +135,19 @@ function startRealtimeListeners() {
         updateDashboard();
     });
 
+    // KISTEN
     onSnapshot(collection(db, "crates"), (snap) => {
         allCrates = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const container = document.getElementById('crates-container'); container.innerHTML = '';
         allCrates.forEach(crate => {
             let items = crate.items || []; let crateImgHtml = crate.image_url ? `<img src="${crate.image_url}" class="thumbnail" style="width:50px;height:50px;">` : `<div class="thumbnail" style="width:50px;height:50px;"></div>`;
             let itemsHtml = items.map(item => `<tr><td>${item.image_url ? `<img src="${item.image_url}" class="thumbnail" style="width:30px;height:30px;">` : '-'}</td><td><strong>${item.name}</strong></td><td>${item.quantity || 1}x</td><td>${item.chance}%</td><td style="text-align: right;"><button class="btn btn-danger btn-sm" onclick="window.deleteCrateItem('${crate.id}', '${item.id}')">Entfernen</button></td></tr>`).join('');
-            container.innerHTML += `<div class="crate-box"><div class="crate-header"><div class="crate-header-left">${crateImgHtml}<h3 style="font-size: 18px;">${crate.name || 'Unbenannte Kiste'}</h3></div><div class="button-group"><button class="btn btn-primary btn-sm" onclick="window.openItemModal('${crate.id}')">+ Item hinzufügen</button><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('crates', '${crate.id}')">Kiste löschen</button></div></div>${items.length > 0 ? `<table class="crate-items-table"><thead><tr><th>Bild</th><th>Item Name</th><th>Menge</th><th>Chance</th><th style="text-align: right;">Aktion</th></tr></thead><tbody>${itemsHtml}</tbody></table>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Items in dieser Kiste. Klicke auf "+ Item hinzufügen".</p>'}</div>`;
+            container.innerHTML += `<div class="crate-box"><div class="crate-header"><div class="crate-header-left">${crateImgHtml}<h3 style="font-size: 18px;">${crate.name || 'Unbenannte Kiste'}</h3></div><div class="button-group"><button class="btn btn-primary btn-sm" onclick="window.openItemModal('${crate.id}')">+ Item hinzufügen</button><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('crates', '${crate.id}')">Kiste löschen</button></div></div>${items.length > 0 ? `<table class="crate-items-table"><thead><tr><th>Bild</th><th>Item Name</th><th>Menge</th><th>Chance</th><th style="text-align: right;">Aktion</th></tr></thead><tbody>${itemsHtml}</tbody></table>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Items in dieser Kiste.</p>'}</div>`;
         });
         updateDashboard();
     });
 
+    // SHOP
     onSnapshot(collection(db, "shop"), (snap) => {
         allShop = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const list = document.getElementById('shop-list'); list.innerHTML = '';
@@ -142,6 +155,7 @@ function startRealtimeListeners() {
         updateDashboard();
     });
 
+    // GUI PAKETE
     onSnapshot(collection(db, "guis"), (snap) => {
         allGUIs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const container = document.getElementById('gui-packages-container');
@@ -188,6 +202,7 @@ function startRealtimeListeners() {
         updateDashboard();
     });
 
+    // ADS
     onSnapshot(collection(db, "ads"), (snap) => {
         allAds = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const list = document.getElementById('ad-list'); list.innerHTML = '';
@@ -195,40 +210,158 @@ function startRealtimeListeners() {
     });
 }
 
+// Globale Löschfunktion
+window.deleteEntry = async (collectionName, id) => {
+    if(confirm('Wirklich komplett löschen?')) {
+        await deleteDoc(doc(db, collectionName, id));
+    }
+};
 
 // ==========================================
-// STANDARD SPEICHERN LOGIK (Ränge, Kisten etc.)
+// 4. SPEICHERN LOGIK (SAUBER GETRENNT)
 // ==========================================
 
-document.getElementById('btn-save-plugin').addEventListener('click', async () => { try { const name = document.getElementById('plugin-name').value; const info = document.getElementById('plugin-info').value; const status = document.getElementById('plugin-status'); if(!name) return alert("Bitte gib einen Plugin-Namen ein!"); status.innerText = "Speichere..."; await addDoc(collection(db, "plugins"), { name: name, info: info }); status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('plugin-name').value = ''; document.getElementById('plugin-info').value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
-document.getElementById('btn-save-rank').addEventListener('click', async () => { const name = document.getElementById('rank-name').value; const perms = document.getElementById('rank-perms').value.split('\n').map(p => p.trim()).filter(p => p !== ""); const inherits = document.getElementById('rank-inherit').value; const file = document.getElementById('rank-image').files[0]; const status = document.getElementById('rank-status'); if(!name) return alert("Name fehlt!"); status.innerText = "Speichere..."; const rankData = { name: name, permissions: perms, inherits_from: inherits || null }; if (file) { rankData.image_url = await uploadImage(file, 'ranks'); } if (editingRankId) { await updateDoc(doc(db, "ranks", editingRankId), rankData); } else { await addDoc(collection(db, "ranks"), rankData); } status.innerText = "Gespeichert!"; setTimeout(() => status.innerText = "", 2000); editingRankId = null; document.getElementById('rank-form-title').innerText = "Neuen Rang erstellen"; document.getElementById('btn-save-rank').innerText = "Rang speichern"; document.getElementById('btn-cancel-rank').style.display = "none"; document.getElementById('rank-name').value = ''; document.getElementById('rank-perms').value = ''; document.getElementById('rank-inherit').value = ''; if(document.getElementById('rank-image')) document.getElementById('rank-image').value = ''; });
+// --- PLUGINS ---
+document.getElementById('btn-save-plugin').addEventListener('click', async () => {
+    try { 
+        const name = document.getElementById('plugin-name').value; 
+        const info = document.getElementById('plugin-info').value; 
+        const status = document.getElementById('plugin-status'); 
+        if(!name) return alert("Bitte gib einen Plugin-Namen ein!"); 
+        status.innerText = "Speichere..."; 
+        await addDoc(collection(db, "plugins"), { name: name, info: info }); 
+        status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); 
+        document.getElementById('plugin-name').value = ''; document.getElementById('plugin-info').value = ''; 
+    } catch (error) { console.error(error); alert("Fehler: " + error.message); }
+});
+
+// --- RÄNGE ---
+document.getElementById('btn-save-rank').addEventListener('click', async () => {
+    try {
+        const name = document.getElementById('rank-name').value; 
+        const perms = document.getElementById('rank-perms').value.split('\n').map(p => p.trim()).filter(p => p !== ""); 
+        const inherits = document.getElementById('rank-inherit').value; 
+        const file = document.getElementById('rank-image').files[0]; 
+        const status = document.getElementById('rank-status');
+        if(!name) return alert("Name fehlt!"); 
+        status.innerText = "Speichere..."; 
+        const rankData = { name: name, permissions: perms, inherits_from: inherits || null }; 
+        if (file) { rankData.image_url = await uploadImage(file, 'ranks'); }
+        if (editingRankId) { await updateDoc(doc(db, "ranks", editingRankId), rankData); } else { await addDoc(collection(db, "ranks"), rankData); }
+        status.innerText = "Gespeichert!"; setTimeout(() => status.innerText = "", 2000);
+        editingRankId = null; document.getElementById('rank-form-title').innerText = "Neuen Rang erstellen"; document.getElementById('btn-save-rank').innerText = "Rang speichern"; document.getElementById('btn-cancel-rank').style.display = "none"; document.getElementById('rank-name').value = ''; document.getElementById('rank-perms').value = ''; document.getElementById('rank-inherit').value = ''; if(document.getElementById('rank-image')) document.getElementById('rank-image').value = '';
+    } catch (error) { console.error(error); alert("Fehler: " + error.message); }
+});
+
 window.editRank = (id) => { const rank = allRanks.find(r => r.id === id); if (!rank) return; editingRankId = id; document.getElementById('rank-name').value = rank.name; document.getElementById('rank-perms').value = (rank.permissions || []).join('\n'); document.getElementById('rank-inherit').value = rank.inherits_from || ''; document.getElementById('rank-form-title').innerText = "Rang bearbeiten: " + rank.name; document.getElementById('btn-save-rank').innerText = "Änderungen speichern"; document.getElementById('btn-cancel-rank').style.display = "inline-block"; window.scrollTo({ top: 0, behavior: 'smooth' }); };
 document.getElementById('btn-cancel-rank').addEventListener('click', () => { editingRankId = null; document.getElementById('rank-form-title').innerText = "Neuen Rang erstellen"; document.getElementById('btn-save-rank').innerText = "Rang speichern"; document.getElementById('btn-cancel-rank').style.display = "none"; document.getElementById('rank-name').value = ''; document.getElementById('rank-perms').value = ''; document.getElementById('rank-inherit').value = ''; if(document.getElementById('rank-image')) document.getElementById('rank-image').value = '';});
+
 document.getElementById('btn-export-ranks').addEventListener('click', () => { if(allRanks.length === 0) return alert("Keine Ränge!"); let yamlContent = "groups:\n"; allRanks.forEach(rank => { const safeName = rank.name.toLowerCase().replace(/[^a-z0-9_-]/g, ''); yamlContent += `  ${safeName}:\n`; if (rank.permissions && rank.permissions.length > 0) { yamlContent += `    permissions:\n`; rank.permissions.forEach(p => { yamlContent += `      - ${p}: true\n`; }); } if (rank.inherits_from) { const safeInherit = rank.inherits_from.toLowerCase().replace(/[^a-z0-9_-]/g, ''); yamlContent += `    parents:\n`; yamlContent += `      - ${safeInherit}\n`; } }); const blob = new Blob([yamlContent], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'luckperms_ranks.yml'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); });
-document.getElementById('btn-save-crate').addEventListener('click', async () => { const crate_name = document.getElementById('crate-name').value; const fileInput = document.getElementById('crate-image'); const file = fileInput ? fileInput.files[0] : null; const status = document.getElementById('crate-status'); if(!crate_name) return alert("Name fehlt!"); status.innerText = "Erstelle Kiste..."; let imageUrl = null; if (file) imageUrl = await uploadImage(file, 'crates'); await addDoc(collection(db, "crates"), { name: crate_name, image_url: imageUrl, items: [] }); status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('crate-name').value = ''; if(fileInput) fileInput.value = ''; });
-document.getElementById('btn-save-shop').addEventListener('click', async () => { const name = document.getElementById('shop-item').value; const price = document.getElementById('shop-price').value; const file = document.getElementById('shop-image').files[0]; if(!name || !price) return alert("Name und Preis fehlen!"); document.getElementById('shop-status').innerText = "Speichere..."; const imageUrl = await uploadImage(file, 'shop') || null; await addDoc(collection(db, "shop"), { name, price: Number(price), image_url: imageUrl }); document.getElementById('shop-status').innerText = ""; document.getElementById('shop-item').value = ''; document.getElementById('shop-price').value = ''; });
-document.getElementById('btn-save-ad').addEventListener('click', async () => { const file = document.getElementById('ad-image').files[0]; if(!file || !document.getElementById('ad-title').value) return alert("Bild und Titel fehlen!"); const imageUrl = await uploadImage(file, 'ads'); await addDoc(collection(db, "ads"), { title: document.getElementById('ad-title').value, link: document.getElementById('ad-link').value, image_url: imageUrl }); document.getElementById('ad-title').value = ''; document.getElementById('ad-link').value = ''; document.getElementById('ad-image').value = ''; });
-window.openItemModal = (crateId) => { document.getElementById('modal-crate-id').value = crateId; document.getElementById('item-modal').classList.add('active'); };
-document.getElementById('btn-save-item').addEventListener('click', async () => { try { const crateId = document.getElementById('modal-crate-id').value; const name = document.getElementById('modal-item-name').value; const quantity = document.getElementById('modal-item-quantity').value; const chance = document.getElementById('modal-item-chance').value; const file = document.getElementById('modal-item-image').files[0]; const status = document.getElementById('modal-status'); if(!name || !chance || !quantity) return alert("Item-Name, Menge und Chance fehlen!"); status.innerText = "Speichere Item in Kiste..."; const imageUrl = await uploadImage(file, 'crates/items') || null; const newItem = { id: Date.now().toString(), name: name, quantity: Number(quantity), chance: Number(chance), image_url: imageUrl }; const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId); const updatedItems = [...(crate.items || []), newItem]; await updateDoc(crateRef, { items: updatedItems }); status.innerText = ""; document.getElementById('modal-item-name').value = ''; document.getElementById('modal-item-quantity').value = '1'; document.getElementById('modal-item-chance').value = ''; if(document.getElementById('modal-item-image')) document.getElementById('modal-item-image').value = ''; document.getElementById('item-modal').classList.remove('active'); } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
-window.deleteCrateItem = async (crateId, itemId) => { if(confirm("Möchtest du dieses Item wirklich aus der Kiste entfernen?")) { try { const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId); const updatedItems = (crate.items || []).filter(i => i.id !== itemId); await updateDoc(crateRef, { items: updatedItems }); } catch (error) { console.error(error); } } };
-window.deleteEntry = async (collectionName, id) => { if(confirm('Wirklich löschen?')) { await deleteDoc(doc(db, collectionName, id)); } };
+
+// --- KISTEN (PAKETE ERSTELLEN) ---
+document.getElementById('btn-save-crate').addEventListener('click', async () => {
+    try {
+        const crate_name = document.getElementById('crate-name').value;
+        const fileInput = document.getElementById('crate-image');
+        const file = fileInput ? fileInput.files[0] : null;
+        const status = document.getElementById('crate-status');
+        if(!crate_name) return alert("Bitte gib einen Namen für die Kiste ein!");
+        status.innerText = "Erstelle Kiste...";
+        let imageUrl = null;
+        if (file) imageUrl = await uploadImage(file, 'crates');
+        await addDoc(collection(db, "crates"), { name: crate_name, image_url: imageUrl, items: [] });
+        status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000);
+        document.getElementById('crate-name').value = ''; if(fileInput) fileInput.value = '';
+    } catch (error) { console.error(error); alert("Fehler: " + error.message); }
+});
+
+// --- KISTEN (ITEMS HINZUFÜGEN) ---
+window.openItemModal = (crateId) => { 
+    document.getElementById('modal-crate-id').value = crateId; 
+    document.getElementById('item-modal').classList.add('active'); 
+};
+document.getElementById('btn-save-item').addEventListener('click', async () => {
+    try {
+        const crateId = document.getElementById('modal-crate-id').value;
+        const name = document.getElementById('modal-item-name').value;
+        const quantity = document.getElementById('modal-item-quantity').value;
+        const chance = document.getElementById('modal-item-chance').value;
+        const file = document.getElementById('modal-item-image').files[0];
+        const status = document.getElementById('modal-status');
+
+        if(!name || !chance || !quantity) return alert("Item-Name, Menge und Chance fehlen!");
+        status.innerText = "Speichere Item in Kiste...";
+
+        const imageUrl = await uploadImage(file, 'crates/items') || null;
+        const newItem = { id: Date.now().toString(), name: name, quantity: Number(quantity), chance: Number(chance), image_url: imageUrl };
+        
+        const crateRef = doc(db, "crates", crateId);
+        const crate = allCrates.find(c => c.id === crateId);
+        if(!crate) throw new Error("Kiste nicht gefunden");
+        
+        const updatedItems = [...(crate.items || []), newItem];
+        await updateDoc(crateRef, { items: updatedItems });
+
+        status.innerText = "Erfolgreich!";
+        setTimeout(() => {
+            status.innerText = "";
+            document.getElementById('modal-item-name').value = ''; 
+            document.getElementById('modal-item-quantity').value = '1'; 
+            document.getElementById('modal-item-chance').value = '';
+            if(document.getElementById('modal-item-image')) document.getElementById('modal-item-image').value = '';
+            document.getElementById('item-modal').classList.remove('active');
+        }, 1000);
+    } catch (error) { console.error(error); alert("Fehler: " + error.message); }
+});
+window.deleteCrateItem = async (crateId, itemId) => {
+    if(confirm("Möchtest du dieses Item wirklich aus der Kiste entfernen?")) {
+        try {
+            const crateRef = doc(db, "crates", crateId);
+            const crate = allCrates.find(c => c.id === crateId);
+            const updatedItems = (crate.items || []).filter(i => i.id !== itemId);
+            await updateDoc(crateRef, { items: updatedItems });
+        } catch (error) { console.error(error); }
+    }
+};
+
+// --- SHOP ---
+document.getElementById('btn-save-shop').addEventListener('click', async () => {
+    try {
+        const name = document.getElementById('shop-item').value; const price = document.getElementById('shop-price').value; const file = document.getElementById('shop-image').files[0];
+        if(!name || !price) return alert("Name und Preis fehlen!");
+        document.getElementById('shop-status').innerText = "Speichere...";
+        const imageUrl = await uploadImage(file, 'shop') || null;
+        await addDoc(collection(db, "shop"), { name, price: Number(price), image_url: imageUrl });
+        document.getElementById('shop-status').innerText = ""; document.getElementById('shop-item').value = ''; document.getElementById('shop-price').value = '';
+    } catch (error) { console.error(error); alert("Fehler: " + error.message); }
+});
+
+// --- WERBUNG ---
+document.getElementById('btn-save-ad').addEventListener('click', async () => {
+    try {
+        const file = document.getElementById('ad-image').files[0]; if(!file || !document.getElementById('ad-title').value) return alert("Bild und Titel fehlen!");
+        const imageUrl = await uploadImage(file, 'ads');
+        await addDoc(collection(db, "ads"), { title: document.getElementById('ad-title').value, link: document.getElementById('ad-link').value, image_url: imageUrl });
+        document.getElementById('ad-title').value = ''; document.getElementById('ad-link').value = ''; document.getElementById('ad-image').value = '';
+    } catch (error) { console.error(error); alert("Fehler: " + error.message); }
+});
 
 
 // ==========================================
-// GUI PAKETE SPEICHER LOGIK (GESICHERT)
+// 5. GUI PAKETE & UPLOAD LOGIK
 // ==========================================
 
 document.getElementById('btn-save-gui-package').addEventListener('click', async () => {
-    const pkgName = document.getElementById('gui-package-name').value;
-    const status = document.getElementById('gui-package-status');
-    if(!pkgName) return alert("Bitte gib dem GUI Paket einen Namen!");
-    
-    status.innerText = "Erstelle Paket...";
     try {
+        const pkgName = document.getElementById('gui-package-name').value;
+        const status = document.getElementById('gui-package-status');
+        if(!pkgName) return alert("Bitte gib dem GUI Paket einen Namen!");
+        
+        status.innerText = "Erstelle Paket...";
         await addDoc(collection(db, "guis"), { name: pkgName, items: [] });
         status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000);
         document.getElementById('gui-package-name').value = '';
-    } catch (e) { console.error(e); status.innerText = "Fehler!"; alert("Fehler: " + e.message); }
+    } catch (e) { console.error(e); alert("Fehler: " + e.message); }
 });
 
 window.openGuiUploadModal = (pkgId) => {
@@ -236,17 +369,21 @@ window.openGuiUploadModal = (pkgId) => {
     document.getElementById('gui-upload-modal').classList.add('active');
 };
 
+// MANUELLER UPLOAD IN GUI PAKET
 document.getElementById('btn-save-gui-upload').addEventListener('click', async () => {
-    const pkgId = document.getElementById('modal-gui-package-id').value;
-    const name = document.getElementById('modal-gui-name').value;
-    const file = document.getElementById('modal-gui-image').files[0];
     const status = document.getElementById('modal-gui-status');
-
-    if(!name || !file) return alert("Bitte Name und Bild angeben!");
-    status.innerText = "Lade hoch...";
-
     try {
+        const pkgId = document.getElementById('modal-gui-package-id').value;
+        const name = document.getElementById('modal-gui-name').value;
+        const file = document.getElementById('modal-gui-image').files[0];
+
+        if(!name || !file) return alert("Bitte Name und Bild angeben!");
+        status.innerText = "Lade hoch (Bitte warten)...";
+
         const imageUrl = await uploadImage(file, 'guis/images');
+        if(!imageUrl) throw new Error("Upload fehlgeschlagen.");
+        
+        status.innerText = "Speichere in Paket...";
         const newItem = { id: Date.now().toString(), name: name, image_url: imageUrl };
         
         const pkgRef = doc(db, "guis", pkgId);
@@ -262,16 +399,16 @@ document.getElementById('btn-save-gui-upload').addEventListener('click', async (
             document.getElementById('modal-gui-name').value = '';
             document.getElementById('modal-gui-image').value = '';
             document.getElementById('gui-upload-modal').classList.remove('active');
-        }, 1000);
+        }, 1500);
     } catch (e) { 
-        console.error(e); 
+        console.error("Upload Error:", e); 
         status.innerText = "Fehler!"; 
         alert("Fehler beim Hochladen: " + e.message); 
     }
 });
 
 window.deleteGuiItem = async (pkgId, itemId) => {
-    if(confirm("Möchtest du dieses GUI wirklich löschen?")) {
+    if(confirm("Möchtest du dieses GUI wirklich aus dem Paket löschen?")) {
         try {
             const pkgRef = doc(db, "guis", pkgId);
             const pkg = allGUIs.find(g => g.id === pkgId);
@@ -302,7 +439,7 @@ window.editGuiItemInEditor = (pkgId, itemId) => {
     
     if(item.image_url) {
         const img = new Image();
-        img.crossOrigin = "Anonymous"; // SEHR WICHTIG GEGEN DEN CORS FEHLER!
+        img.crossOrigin = "Anonymous"; // Behebt CORS Probleme
         img.onload = () => {
             if(window.clearCanvasSilent) window.clearCanvasSilent();
             const canvas = document.getElementById('pixelCanvas');
@@ -311,9 +448,7 @@ window.editGuiItemInEditor = (pkgId, itemId) => {
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             if(window.triggerSaveState) window.triggerSaveState();
         };
-        img.onerror = () => {
-            alert("Das Bild konnte aufgrund von Browser-Sicherheitsrichtlinien (CORS) nicht ins Canvas geladen werden. Bitte lade das Bild manuell hoch.");
-        };
+        img.onerror = () => { alert("Sicherheitsblockade (CORS): Das Bild kann nicht in den Editor geladen werden."); };
         img.src = item.image_url;
     } else {
         if(window.clearCanvasSilent) window.clearCanvasSilent();
@@ -322,7 +457,7 @@ window.editGuiItemInEditor = (pkgId, itemId) => {
 
 
 // ==========================================
-// 1:1 GUI EDITOR LOGIK (MIT ZOOM SLIDER)
+// 6. GUI EDITOR LOGIK (ISOLIERT)
 // ==========================================
 let editorInitialized = false;
 
@@ -330,6 +465,7 @@ function initEditor() {
     if (editorInitialized) return;
     editorInitialized = true;
 
+    // --- FONT DATA ---
     const fontMap={A:[[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],Ä:[[1,0,0,1],[0,0,0,0],[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],B:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,1],[1,1,1,0]],C:[[0,1,1,1],[1,0,0,0],[1,0,0,0],[1,0,0,0],[0,1,1,1]],D:[[1,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,0]],E:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,1,1,1]],F:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,0,0,0]],G:[[0,1,1,1],[1,0,0,0],[1,0,1,1],[1,0,0,1],[0,1,1,1]],H:[[1,0,0,1],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],I:[[1,1,1],[0,1,0],[0,1,0],[0,1,0],[1,1,1]],J:[[0,0,1,1],[0,0,0,1],[0,0,0,1],[1,0,0,1],[0,1,1,0]],K:[[1,0,0,1],[1,0,1,0],[1,1,0,0],[1,0,1,0],[1,0,0,1]],L:[[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,1,1,1]],M:[[1,0,0,0,1],[1,1,0,1,1],[1,0,1,0,1],[1,0,0,0,1],[1,0,0,0,1]],N:[[1,0,0,1],[1,1,0,1],[1,0,1,1],[1,0,0,1],[1,0,0,1]],O:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],Ö:[[1,0,0,1],[0,0,0,0],[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],P:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,0],[1,0,0,0]],Q:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,1,1],[0,1,1,1]],R:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,1,0],[1,0,0,1]],S:[[0,1,1,1],[1,0,0,0],[0,1,1,0],[0,0,0,1],[1,1,1,0]],T:[[1,1,1],[0,1,0],[0,1,0],[0,1,0],[0,1,0]],U:[[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],Ü:[[1,0,0,1],[0,0,0,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],V:[[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0],[0,0,1,0]],W:[[1,0,0,0,1],[1,0,0,0,1],[1,0,1,0,1],[1,1,0,1,1],[1,0,0,0,1]],X:[[1,0,0,1],[0,1,1,0],[0,1,1,0],[1,0,0,1]],Y:[[1,0,0,1],[0,1,1,0],[0,0,1,0],[0,0,1,0],[0,0,1,0]],Z:[[1,1,1,1],[0,0,0,1],[0,1,1,0],[1,0,0,0],[1,1,1,1]],0:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],1:[[0,1,0],[1,1,0],[0,1,0],[0,1,0],[1,1,1]],2:[[1,1,1,0],[0,0,0,1],[0,1,1,0],[1,0,0,0],[1,1,1,1]],3:[[1,1,1,0],[0,0,0,1],[0,1,1,0],[0,0,0,1],[1,1,1,0]],4:[[1,0,0,1],[1,0,0,1],[1,1,1,1],[0,0,0,1],[0,0,0,1]],5:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[0,0,0,1],[1,1,1,0]],6:[[0,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,1],[0,1,1,0]],7:[[1,1,1,1],[0,0,0,1],[0,0,1,0],[0,1,0,0],[0,1,0,0]],8:[[0,1,1,0],[1,0,0,1],[0,1,1,0],[1,0,0,1],[0,1,1,0]],9:[[0,1,1,0],[1,0,0,1],[0,1,1,1],[0,0,0,1],[0,1,1,0]],' ':[[0],[0],[0],[0],[0]],'.':[[0],[0],[0],[0],[1]],'ß':[[0,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,1],[1,1,1,0]]};
 
     const canvas = document.getElementById('pixelCanvas');
@@ -353,7 +489,6 @@ function initEditor() {
     window.undo = function() { if (undoStack.length > 0) { const data = undoStack.pop(); ctx.putImageData(data, 0, 0); refreshSnapshot(); isDrawing = false; selectionBuffer = null; window.updateGuides(); } }
     document.addEventListener('keydown', e => { if((e.ctrlKey||e.metaKey)&&e.key==='z') window.undo(); });
 
-    // --- NEU: ZOOM SLIDER LOGIK ---
     window.changeZoom = function(val) {
         currentZoom = parseInt(val);
         document.getElementById('zoomVal').innerText = currentZoom;
@@ -362,19 +497,12 @@ function initEditor() {
         window.updateGuides();
     }
 
-    // --- NEU: DROP DOWN LEINWAND GRÖSSE ---
     window.resizeCanvas = function() {
         saveState(); 
-        const s = document.getElementById('canvas-resolution').value; 
+        const s = document.querySelector('#gui-editor input[name="size"]:checked').value; 
         const tempCanvas = document.createElement('canvas'); tempCanvas.width = canvas.width; tempCanvas.height = canvas.height; 
         tempCanvas.getContext('2d').putImageData(ctx.getImageData(0,0,canvas.width, canvas.height), 0, 0);
-        
-        if (s === 'square') { canvas.width = 256; canvas.height = 256; } 
-        else if (s === 'rect') { canvas.width = 256; canvas.height = 128; } 
-        else if (s === 'tall') { canvas.width = 192; canvas.height = 256; } 
-        else if (s === 'mid') { canvas.width = 50; canvas.height = 50; } 
-        else if (s === 'icon') { canvas.width = 16; canvas.height = 16; }
-        
+        if (s === 'square') { canvas.width = 256; canvas.height = 256; } else if (s === 'rect') { canvas.width = 256; canvas.height = 128; } else if (s === 'tall') { canvas.width = 192; canvas.height = 256; } else if (s === 'mid') { canvas.width = 50; canvas.height = 50; } else if (s === 'icon') { canvas.width = 16; canvas.height = 16; }
         canvas.style.width = (canvas.width * currentZoom) + 'px'; canvas.style.height = (canvas.height * currentZoom) + 'px';
         window.updateGuides(); ctx.imageSmoothingEnabled = false; ctx.drawImage(tempCanvas, 0, 0); saveState();
     }
@@ -477,7 +605,7 @@ function initEditor() {
     
     function floodFill(x,y,erase){ const startPixel=ctx.getImageData(x,y,1,1).data; const startR=startPixel[0],startG=startPixel[1],startB=startPixel[2],startA=startPixel[3]; const f=window.hexToRgb(selectedColor); if(erase){ if(startA===0) return; } else { if(startR===f.r&&startG===f.g&&startB===f.b&&startA===255) return; } const img=ctx.getImageData(0,0,canvas.width,canvas.height); const d=img.data; const s=[[x,y]]; const w=canvas.width,h=canvas.height; while(s.length){ const[cx,cy]=s.pop(); if(cx<0||cx>=w||cy<0||cy>=h)continue; const i=(cy*w+cx)*4; if(d[i]===startR&&d[i+1]===startG&&d[i+2]===startB&&d[i+3]===startA){ if(erase) d[i+3]=0; else { d[i]=f.r; d[i+1]=f.g; d[i+2]=f.b; d[i+3]=255; } s.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]); } } ctx.putImageData(img,0,0); }
 
-    // IN FIREBASE SPEICHERN (SICHER MIT FEHLERMELDUNG!)
+    // IN FIREBASE (ZUM PAKET) SPEICHERN
     window.saveEditorToFirebase = async function() {
         const pkgId = document.getElementById('editor-pkg-select').value;
         const guiName = document.getElementById('editor-gui-name').value;
@@ -489,14 +617,11 @@ function initEditor() {
         showToast("Speichere in Datenbank...");
         
         try {
-            // Das Canvas in ein Bild umwandeln (kann fehlschlagen, wenn CORS greift)
             const dataUrl = canvas.toDataURL('image/png');
             const file = dataURLtoFile(dataUrl, `gui_${Date.now()}.png`);
             
-            // Bild bei Firebase Storage hochladen
             const imageUrl = await uploadImage(file, 'guis/images');
             
-            // Datenbank-Eintrag aktualisieren
             const pkgRef = doc(db, "guis", pkgId);
             const pkg = allGUIs.find(g => g.id === pkgId);
             if(!pkg) throw new Error("Das ausgewählte Paket wurde nicht in der Datenbank gefunden.");
@@ -504,7 +629,6 @@ function initEditor() {
             let updatedItems = [...(pkg.items || [])];
 
             if (editItemId) {
-                // Bestehendes Bild überschreiben
                 const idx = updatedItems.findIndex(i => i.id === editItemId);
                 if(idx > -1) {
                     updatedItems[idx].name = guiName;
@@ -513,7 +637,6 @@ function initEditor() {
                     updatedItems.push({ id: editItemId, name: guiName, image_url: imageUrl });
                 }
             } else {
-                // Neues Bild hinzufügen
                 updatedItems.push({ id: Date.now().toString(), name: guiName, image_url: imageUrl });
             }
 
@@ -521,7 +644,6 @@ function initEditor() {
 
             showToast("Erfolgreich gespeichert!");
             
-            // Alles zurücksetzen & Tab wechseln
             document.getElementById('editor-gui-name').value = '';
             document.getElementById('editor-gui-item-id').value = '';
             ctx.clearRect(0,0,canvas.width,canvas.height); 
