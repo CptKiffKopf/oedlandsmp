@@ -134,38 +134,70 @@
             
             <section id="menu-planner" class="category-section" style="background: #2c2c2c; color: #fff; padding: 20px; border-radius: 8px;">
                 <h1>📋 Custom Menü Planer</h1>
-                <p style="color: #aaa; margin-bottom: 20px;">Ziehe die vorgefertigten Items in das Inventar, um dein Layout zu planen.</p>
+                <p style="color: #aaa; margin-bottom: 20px;">Wähle einen GUI-Hintergrund und platziere deine Buttons passgenau in die Slots.</p>
 
                 <div style="display: flex; gap: 20px; align-items: flex-start;">
                     
                     <div class="panel-editor" style="width: 250px; flex-shrink: 0;">
                         <h3 style="color: #00BCD4; border-bottom: 1px solid #00BCD4;">Vorgefertigte Items</h3>
-                        <div id="palette-items" style="display: flex; flex-direction: column; gap: 8px; margin-top: 15px;"></div>
+                        <div id="palette-items" style="display: flex; flex-direction: column; gap: 8px; margin-top: 15px;">
+                            </div>
                         <p style="font-size: 11px; color: #888; margin-top: 15px; text-align: center;">Tipp: Klicke auf ein Item im Inventar, um es wieder zu löschen.</p>
                     </div>
 
-                    <div class="panel-editor" style="flex-grow: 1; display: flex; flex-direction: column; align-items: center;">
-                        <div style="margin-bottom: 15px; width: 100%; text-align: center;">
-                            <label style="color: #aaa; margin-right: 10px;">Inventar Größe:</label>
-                            <select id="menu-rows" onchange="window.updateMenuGrid()" style="padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;">
-                                <option value="3">3 Reihen (27 Slots)</option>
-                                <option value="4">4 Reihen (36 Slots)</option>
-                                <option value="5">5 Reihen (45 Slots)</option>
-                                <option value="6" selected>6 Reihen (54 Slots)</option>
-                            </select>
+                    <div class="panel-editor" style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; background: #1e1e1e;">
+                        
+                        <div style="width: 100%; display: flex; gap: 10px; margin-bottom: 15px; background: #3c3c3c; padding: 10px; border-radius: 6px; flex-wrap: wrap;">
+                            <div style="flex: 1;">
+                                <label style="color: #aaa; font-size: 12px; display: block; margin-bottom: 4px;">Hintergrund GUI:</label>
+                                <select id="planner-bg-select" onchange="window.updateMenuGrid()" style="width: 100%; padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;">
+                                    <option value="">Kein Bild (Nur Grid)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="color: #aaa; font-size: 12px; display: block; margin-bottom: 4px;">Grid Reihen:</label>
+                                <select id="menu-rows" onchange="window.updateMenuGrid()" style="width: 120px; padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;">
+                                    <option value="3">3 (27 Slots)</option>
+                                    <option value="4">4 (36 Slots)</option>
+                                    <option value="5">5 (45 Slots)</option>
+                                    <option value="6" selected>6 (54 Slots)</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; gap: 5px;">
+                                <div>
+                                    <label style="color: #aaa; font-size: 12px; display: block; margin-bottom: 4px;">Verschieben X:</label>
+                                    <input type="number" id="planner-offset-x" value="47" onchange="window.updateMenuGrid()" style="width: 60px; padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;">
+                                </div>
+                                <div>
+                                    <label style="color: #aaa; font-size: 12px; display: block; margin-bottom: 4px;">Verschieben Y:</label>
+                                    <input type="number" id="planner-offset-y" value="22" onchange="window.updateMenuGrid()" style="width: 60px; padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;">
+                                </div>
+                            </div>
                         </div>
-                        <div id="mc-inventory" class="mc-inventory"></div>
+                        
+                        <div class="planner-canvas-outer">
+                            <div class="planner-canvas-inner" id="planner-inner-canvas">
+                                <div id="mc-inventory" class="mc-inventory-overlay">
+                                    </div>
+                            </div>
+                        </div>
+
                     </div>
 
                     <div class="panel-editor" style="width: 250px; flex-shrink: 0; border: 2px solid #4CAF50;">
                         <h3 style="color: #4CAF50; border-bottom: 1px solid #4CAF50;">Speichern & Export</h3>
+                        
                         <select id="planner-pkg-select" style="width: 100%; margin-bottom: 10px; padding: 8px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;">
                             <option value="">Ziel-Paket wählen...</option>
                         </select>
+                        
                         <input type="text" id="planner-menu-name" placeholder="Name des Menüs" style="width: 100%; margin-bottom: 15px; padding: 8px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;">
                         <input type="hidden" id="planner-menu-id">
+                        
                         <button class="btn btn-action" onclick="window.saveMenuLayout()" style="width: 100%; margin-bottom: 10px; background: #4CAF50; color: white; border: none; padding: 10px; font-weight: bold; border-radius: 4px; cursor: pointer;">💾 In Paket speichern</button>
+                        
                         <hr style="border:0; border-top:1px solid #555; margin:15px 0;">
+                        
                         <button class="btn" onclick="window.exportMenuYaml()" style="width: 100%; background: transparent; border: 1px solid #00BCD4; color: #00BCD4; padding: 10px; border-radius: 4px; cursor: pointer; transition: 0.2s;">📥 YAML Exportieren</button>
                         <p style="font-size: 11px; color: #aaa; margin-top: 8px; text-align: center;">Generiert fertigen GUI Code</p>
                     </div>
@@ -318,7 +350,6 @@
                             <div id="centerLine" class="editor-center-line"></div>
                         </div>
                     </div>
-
                 </div>
                 <div id="editor-toast">Nachricht</div>
             </section>
