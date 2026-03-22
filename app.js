@@ -46,7 +46,7 @@ onAuthStateChanged(auth, (user) => {
         if (!listenersActive) { 
             startRealtimeListeners(); 
             initEditor(); 
-            initMenuPlanner(); 
+            if(window.initMenuPlanner) window.initMenuPlanner(); // Menü-Planer starten
             listenersActive = true; 
         }
     } else {
@@ -75,7 +75,9 @@ document.querySelectorAll('.nav-item:not(#btn-logout)').forEach(item => {
         document.querySelectorAll('.category-section').forEach(sec => sec.classList.remove('active'));
         document.getElementById(targetId).classList.add('active');
         
-        if(targetId === 'gui-editor') { setTimeout(() => { if(window.resizeCanvas) window.resizeCanvas(); }, 50); }
+        if(targetId === 'gui-editor') {
+            setTimeout(() => { if(window.resizeCanvas) window.resizeCanvas(); }, 50);
+        }
     });
 });
 
@@ -176,18 +178,18 @@ function startRealtimeListeners() {
         
         const editorSelect = document.getElementById('editor-pkg-select');
         const plannerSelect = document.getElementById('planner-pkg-select'); 
-        const plannerBgSelect = document.getElementById('planner-bg-select'); // NEU: Menü Hintergrund
+        const plannerBgSelect = document.getElementById('planner-bg-select');
         
         if(!container) return;
         container.innerHTML = '';
         
         const currentEditorVal = editorSelect.value;
         const currentPlannerVal = plannerSelect.value;
-        const currentBgVal = plannerBgSelect.value;
+        const currentBgVal = plannerBgSelect ? plannerBgSelect.value : '';
         
         editorSelect.innerHTML = '<option value="">Ziel-Paket wählen...</option>';
         plannerSelect.innerHTML = '<option value="">Ziel-Paket wählen...</option>';
-        plannerBgSelect.innerHTML = '<option value="">Standard (Kein Bild)</option>';
+        if(plannerBgSelect) plannerBgSelect.innerHTML = '<option value="">Kein Bild (Nur Grid)</option>';
 
         allGUIs.forEach(pkg => {
             editorSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`;
@@ -196,8 +198,8 @@ function startRealtimeListeners() {
             let items = pkg.items || [];
             let itemsHtml = items.map(item => {
                 
-                // Füge das Bild zum Dropdown hinzu
-                if (item.type !== 'layout' && item.image_url) {
+                // Populiert das Hintergrund-Dropdown im Menüplaner
+                if (plannerBgSelect && item.type !== 'layout' && item.image_url) {
                     plannerBgSelect.innerHTML += `<option value="${item.image_url}">${pkg.name} - ${item.name}</option>`;
                 }
 
@@ -254,7 +256,7 @@ function startRealtimeListeners() {
         
         if(currentEditorVal) editorSelect.value = currentEditorVal;
         if(currentPlannerVal) plannerSelect.value = currentPlannerVal;
-        if(currentBgVal) plannerBgSelect.value = currentBgVal;
+        if(currentBgVal && plannerBgSelect) plannerBgSelect.value = currentBgVal;
         updateDashboard();
     });
 
@@ -276,6 +278,7 @@ window.deleteEntry = async (collectionName, id) => {
     if(confirm('Wirklich komplett löschen?')) { await deleteDoc(doc(db, collectionName, id)); }
 };
 
+
 // ==========================================
 // 4. SPEICHERN LOGIK (Ränge, Kisten, Plugins etc.)
 // ==========================================
@@ -296,7 +299,6 @@ window.editPlugin = (id) => {
     editingPluginId = id;
     document.getElementById('plugin-name').value = plugin.name;
     document.getElementById('plugin-info').value = plugin.info || '';
-    
     document.getElementById('plugin-form-title').innerText = "Plugin bearbeiten: " + plugin.name;
     document.getElementById('btn-save-plugin').innerText = "Änderungen speichern";
     document.getElementById('btn-cancel-plugin').style.display = "inline-block";
@@ -312,15 +314,10 @@ document.getElementById('btn-save-plugin').addEventListener('click', async () =>
         if(!name) return alert("Bitte gib einen Plugin-Namen ein!"); 
         status.innerText = "Speichere..."; 
         
-        if (editingPluginId) {
-            await updateDoc(doc(db, "plugins", editingPluginId), { name: name, info: info });
-        } else {
-            await addDoc(collection(db, "plugins"), { name: name, info: info }); 
-        }
+        if (editingPluginId) { await updateDoc(doc(db, "plugins", editingPluginId), { name: name, info: info }); } 
+        else { await addDoc(collection(db, "plugins"), { name: name, info: info }); }
         
-        status.innerText = "Erfolgreich!"; 
-        setTimeout(() => status.innerText = "", 2000); 
-        resetPluginForm();
+        status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); resetPluginForm();
     } catch (error) { console.error(error); alert("Fehler: " + error.message); }
 });
 
@@ -407,6 +404,7 @@ document.getElementById('btn-save-item').addEventListener('click', async () => {
 
 window.deleteCrateItem = async (crateId, itemId) => { if(confirm("Item entfernen?")) { try { const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId); await updateDoc(crateRef, { items: (crate.items || []).filter(i => i.id !== itemId) }); } catch (error) { console.error(error); } } };
 
+// --- SHOP & WERBUNG ---
 document.getElementById('btn-save-shop').addEventListener('click', async () => { try { const name = document.getElementById('shop-item').value; const price = document.getElementById('shop-price').value; const file = document.getElementById('shop-image').files[0]; if(!name || !price) return alert("Name und Preis fehlen!"); document.getElementById('shop-status').innerText = "Speichere..."; const imageUrl = await uploadImage(file, 'shop') || null; await addDoc(collection(db, "shop"), { name, price: Number(price), image_url: imageUrl }); document.getElementById('shop-status').innerText = ""; document.getElementById('shop-item').value = ''; document.getElementById('shop-price').value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
 document.getElementById('btn-save-ad').addEventListener('click', async () => { try { const file = document.getElementById('ad-image').files[0]; if(!file || !document.getElementById('ad-title').value) return alert("Bild und Titel fehlen!"); const imageUrl = await uploadImage(file, 'ads'); await addDoc(collection(db, "ads"), { title: document.getElementById('ad-title').value, link: document.getElementById('ad-link').value, image_url: imageUrl }); document.getElementById('ad-title').value = ''; document.getElementById('ad-link').value = ''; document.getElementById('ad-image').value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
 
@@ -454,8 +452,9 @@ window.deleteGuiItem = async (pkgId, itemId) => {
     }
 };
 
+
 // ==========================================
-// 6. MENÜ PLANER (PIXEL PERFECT DRAG & DROP)
+// 6. MENÜ PLANER LOGIK (DIE WIEDERHERGESTELLTE!)
 // ==========================================
 
 const plannerPresets = [
@@ -470,8 +469,9 @@ const plannerPresets = [
 let currentMenuLayout = {}; 
 let plannerBgImage = null;
 
-function initMenuPlanner() {
+window.initMenuPlanner = function() {
     const palette = document.getElementById('palette-items');
+    if(!palette) return; // Sicherheits-Check falls nicht geladen
     palette.innerHTML = '';
     
     plannerPresets.forEach(item => {
@@ -486,7 +486,10 @@ function initMenuPlanner() {
 }
 
 window.updateMenuGrid = function() {
-    const rows = parseInt(document.getElementById('menu-rows').value);
+    const rowsElem = document.getElementById('menu-rows');
+    if(!rowsElem) return;
+    
+    const rows = parseInt(rowsElem.value);
     const bgUrl = document.getElementById('planner-bg-select').value;
     const grid = document.getElementById('mc-inventory');
     const canvasInner = document.getElementById('planner-inner-canvas');
@@ -496,18 +499,15 @@ window.updateMenuGrid = function() {
     
     grid.innerHTML = '';
 
-    // Hintergrundbild setzen
     if (bgUrl) {
         canvasInner.style.backgroundImage = `url(${bgUrl})`;
         
-        // Dynamische Anpassung an 256x256 vs 192x256
         if (!plannerBgImage || plannerBgImage.src !== bgUrl) {
             plannerBgImage = new Image();
             plannerBgImage.onload = () => {
                 canvasInner.style.width = plannerBgImage.naturalWidth + 'px';
                 canvasInner.style.height = plannerBgImage.naturalHeight + 'px';
                 
-                // Setze Standard Offsets basierend auf Bildbreite
                 if(plannerBgImage.naturalWidth === 192) {
                     inputX.value = 8; 
                 } else {
@@ -523,7 +523,6 @@ window.updateMenuGrid = function() {
         canvasInner.style.height = '256px';
     }
 
-    // X/Y manuelles Update
     grid.style.left = inputX.value + 'px';
     grid.style.top = inputY.value + 'px';
     
@@ -731,88 +730,23 @@ function initEditor() {
     if (editorInitialized) return;
     editorInitialized = true;
 
+    // --- FONT DATA ---
     const fontMap={A:[[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],Ä:[[1,0,0,1],[0,0,0,0],[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],B:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,1],[1,1,1,0]],C:[[0,1,1,1],[1,0,0,0],[1,0,0,0],[1,0,0,0],[0,1,1,1]],D:[[1,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,0]],E:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,1,1,1]],F:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,0,0,0]],G:[[0,1,1,1],[1,0,0,0],[1,0,1,1],[1,0,0,1],[0,1,1,1]],H:[[1,0,0,1],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],I:[[1,1,1],[0,1,0],[0,1,0],[0,1,0],[1,1,1]],J:[[0,0,1,1],[0,0,0,1],[0,0,0,1],[1,0,0,1],[0,1,1,0]],K:[[1,0,0,1],[1,0,1,0],[1,1,0,0],[1,0,1,0],[1,0,0,1]],L:[[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,1,1,1]],M:[[1,0,0,0,1],[1,1,0,1,1],[1,0,1,0,1],[1,0,0,0,1],[1,0,0,0,1]],N:[[1,0,0,1],[1,1,0,1],[1,0,1,1],[1,0,0,1],[1,0,0,1]],O:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],Ö:[[1,0,0,1],[0,0,0,0],[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],P:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,0],[1,0,0,0]],Q:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,1,1],[0,1,1,1]],R:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,1,0],[1,0,0,1]],S:[[0,1,1,1],[1,0,0,0],[0,1,1,0],[0,0,0,1],[1,1,1,0]],T:[[1,1,1],[0,1,0],[0,1,0],[0,1,0],[0,1,0]],U:[[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],Ü:[[1,0,0,1],[0,0,0,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],V:[[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0],[0,0,1,0]],W:[[1,0,0,0,1],[1,0,0,0,1],[1,0,1,0,1],[1,1,0,1,1],[1,0,0,0,1]],X:[[1,0,0,1],[0,1,1,0],[0,1,1,0],[1,0,0,1]],Y:[[1,0,0,1],[0,1,1,0],[0,0,1,0],[0,0,1,0],[0,0,1,0]],Z:[[1,1,1,1],[0,0,0,1],[0,1,1,0],[1,0,0,0],[1,1,1,1]],0:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],1:[[0,1,0],[1,1,0],[0,1,0],[0,1,0],[1,1,1]],2:[[1,1,1,0],[0,0,0,1],[0,1,1,0],[1,0,0,0],[1,1,1,1]],3:[[1,1,1,0],[0,0,0,1],[0,1,1,0],[0,0,0,1],[1,1,1,0]],4:[[1,0,0,1],[1,0,0,1],[1,1,1,1],[0,0,0,1],[0,0,0,1]],5:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[0,0,0,1],[1,1,1,0]],6:[[0,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,1],[0,1,1,0]],7:[[1,1,1,1],[0,0,0,1],[0,0,1,0],[0,1,0,0],[0,1,0,0]],8:[[0,1,1,0],[1,0,0,1],[0,1,1,0],[1,0,0,1],[0,1,1,0]],9:[[0,1,1,0],[1,0,0,1],[0,1,1,1],[0,0,0,1],[0,1,1,0]],' ':[[0],[0],[0],[0],[0]],'.':[[0],[0],[0],[0],[1]],'ß':[[0,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,1],[1,1,1,0]]};
 
     const canvas = document.getElementById('pixelCanvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     
-    let currentZoom = 2; 
-    let currentTool = 'brush'; 
-    let selectedColor = '#a49e95'; 
-    let currentStamp = 'slot'; 
-    let autoCenter = false;
-    let isDrawing = false; 
-    let isEraseMode = false;
-    let startPos = {x:0, y:0}; 
-    let currentFilename = 'minecraft_gui.png';
-    let canvasSnapshot; 
-    let selectionBuffer = null; 
-    let clipboardData = { img: null, x: 0, y: 0 };
-    let importedImage = null; 
-
+    let currentZoom = 2; let currentTool = 'brush'; let selectedColor = '#a49e95'; window.currentStamp = 'slot'; 
+    let autoCenter = false; let isDrawing = false; let isEraseMode = false; let startPos = {x:0, y:0}; 
+    let canvasSnapshot; let selectionBuffer = null; let clipboardData = { img: null, x: 0, y: 0 }; let importedImage = null; 
     const undoStack = []; const maxUndoSteps = 30;
 
-    const myColors = ['#a49e95', '#766f6a', '#483f46', '#231c2c', '#1e1829', '#539d33', '#ffffff', '#000000'];
-    myColors.forEach(c => window.createPaletteSwatch(c));
-    window.resizeCanvas(); saveState(); refreshSnapshot();
-
-    function showToast(msg) {
-        const t = document.getElementById('editor-toast');
-        t.innerText = msg; t.style.opacity = 1;
-        setTimeout(() => t.style.opacity = 0, 2000);
-    }
-
-    window.loadReference = function(input) {
-        if(input.files && input.files[0]) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const img = document.getElementById('refOverlay');
-                img.src = e.target.result;
-                img.style.display = 'block';
-                img.style.width = (canvas.width * currentZoom) + 'px';
-                img.style.height = (canvas.height * currentZoom) + 'px';
-                showToast("👻 Referenzbild geladen!");
-            };
-            reader.readAsDataURL(input.files[0]);
-        }
-    }
+    function showToast(msg) { const t = document.getElementById('editor-toast'); t.innerText = msg; t.style.opacity = 1; setTimeout(() => t.style.opacity = 0, 2000); }
     
-    window.clearReference = function() {
-        const img = document.getElementById('refOverlay');
-        img.style.display = 'none';
-        img.src = '';
-        document.getElementById('refInput').value = '';
-        showToast("🚫 Referenz entfernt");
-    }
-
-    window.deleteSelectedColor = function() {
-        if(confirm("Farbe " + selectedColor + " löschen?")) {
-            saveState();
-            const targetRgb = window.hexToRgb(selectedColor);
-            if (!targetRgb) return;
-            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const d = imgData.data; let deletedCount = 0;
-            for(let i = 0; i < d.length; i += 4) {
-                if(d[i+3] > 0 && d[i] === targetRgb.r && d[i+1] === targetRgb.g && d[i+2] === targetRgb.b) {
-                    d[i+3] = 0; deletedCount++;
-                }
-            }
-            if (deletedCount > 0) { ctx.putImageData(imgData, 0, 0); refreshSnapshot(); showToast("🧹 Pixel gelöscht!"); } 
-            else { undoStack.pop(); showToast("ℹ️ Farbe nicht gefunden."); }
-        }
-    }
-
-    window.handleImport = function(input) {
-        if(input.files && input.files[0]) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const img = new Image();
-                img.onload = function() { importedImage = img; window.setTool('import'); showToast("🖼️ Bild geladen! Klicke zum Platzieren."); };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(input.files[0]);
-        }
-    }
+    window.loadReference = function(input) { if(input.files && input.files[0]) { const reader = new FileReader(); reader.onload = function(e) { const img = document.getElementById('refOverlay'); img.src = e.target.result; img.style.display = 'block'; img.style.width = (canvas.width * currentZoom) + 'px'; img.style.height = (canvas.height * currentZoom) + 'px'; showToast("👻 Referenzbild geladen!"); }; reader.readAsDataURL(input.files[0]); } }
+    window.clearReference = function() { const img = document.getElementById('refOverlay'); img.style.display = 'none'; img.src = ''; document.getElementById('refInput').value = ''; showToast("🚫 Referenz entfernt"); }
+    window.deleteSelectedColor = function() { if(confirm("Farbe " + selectedColor + " löschen?")) { saveState(); const targetRgb = window.hexToRgb(selectedColor); if (!targetRgb) return; const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height); const d = imgData.data; let deletedCount = 0; for(let i = 0; i < d.length; i += 4) { if(d[i+3] > 0 && d[i] === targetRgb.r && d[i+1] === targetRgb.g && d[i+2] === targetRgb.b) { d[i+3] = 0; deletedCount++; } } if (deletedCount > 0) { ctx.putImageData(imgData, 0, 0); refreshSnapshot(); showToast("🧹 Pixel gelöscht!"); } else { undoStack.pop(); showToast("ℹ️ Farbe nicht gefunden."); } } }
+    window.handleImport = function(input) { if(input.files && input.files[0]) { const reader = new FileReader(); reader.onload = function(e) { const img = new Image(); img.onload = function() { importedImage = img; window.setTool('import'); showToast("🖼️ Bild geladen! Klicke zum Platzieren."); }; img.src = e.target.result; }; reader.readAsDataURL(input.files[0]); } }
 
     function saveState() { undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height)); if (undoStack.length > maxUndoSteps) undoStack.shift(); refreshSnapshot(); }
     window.triggerSaveState = saveState;
@@ -820,120 +754,6 @@ function initEditor() {
     window.undo = function() { if (undoStack.length > 0) { const data = undoStack.pop(); ctx.putImageData(data, 0, 0); refreshSnapshot(); isDrawing = false; selectionBuffer = null; window.updateGuides(); } }
     document.addEventListener('keydown', e => { if((e.ctrlKey||e.metaKey)&&e.key==='z') window.undo(); });
 
-    window.resizeCanvas = function() {
-        saveState();
-        const s = document.querySelector('#gui-editor input[name="size"]:checked').value;
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = canvas.width; tempCanvas.height = canvas.height;
-        tempCanvas.getContext('2d').putImageData(ctx.getImageData(0,0,canvas.width, canvas.height), 0, 0);
-        
-        if (s === 'square') { canvas.width = 256; canvas.height = 256; }
-        else if (s === 'rect') { canvas.width = 256; canvas.height = 128; }
-        else if (s === 'tall') { canvas.width = 192; canvas.height = 256; }
-        else if (s === 'mid') { canvas.width = 50; canvas.height = 50; } 
-        else if (s === 'icon') { canvas.width = 16; canvas.height = 16; }
-        
-        canvas.style.width = (canvas.width * currentZoom) + 'px'; canvas.style.height = (canvas.height * currentZoom) + 'px';
-        window.updateGuides(); ctx.imageSmoothingEnabled = false; ctx.drawImage(tempCanvas, 0, 0); saveState();
-    }
-
-    document.getElementById('uploadInput').addEventListener('change', e => {
-        if(e.target.files[0]){ saveState(); currentFilename = e.target.files[0].name; const r = new FileReader(); r.onload = ev => { const i = new Image(); i.onload = () => { ctx.imageSmoothingEnabled = false; ctx.drawImage(i, 0, 0, canvas.width, canvas.height); saveState(); }; i.src = ev.target.result; }; r.readAsDataURL(e.target.files[0]); }
-    });
-
-    window.setTool = function(tool) {
-        currentTool = tool;
-        document.querySelectorAll('#gui-editor .tool-grid .btn-editor').forEach(b => b.classList.remove('active'));
-        const btn = document.getElementById('tool' + tool.charAt(0).toUpperCase() + tool.slice(1));
-        if(btn) btn.classList.add('active');
-        if(tool === 'import' && !importedImage) document.getElementById('toolImport')?.classList.remove('active');
-
-        document.getElementById('stampOptions').style.display = (tool === 'stamp') ? 'block' : 'none';
-        document.getElementById('textOptions').style.display = (tool === 'text') ? 'block' : 'none';
-        
-        if (tool !== 'select') selectionBuffer = null;
-        if(canvasSnapshot) ctx.putImageData(canvasSnapshot, 0, 0);
-        refreshSnapshot();
-    }
-
-    window.toggleEraseMode = function() {
-        isEraseMode = !isEraseMode; const btn = document.getElementById('btnEraseMode');
-        if (isEraseMode) { btn.classList.add('active'); btn.innerText = "🧽 Radier-Modus (AN)"; showToast("🧽 Alles ist jetzt ein Radierer!"); } 
-        else { btn.classList.remove('active'); btn.innerText = "🧽 Radier-Modus (AUS)"; }
-    }
-
-    window.pasteFromClipboard = function() { if (!clipboardData.img) { showToast("⚠️ Leer!"); return; } saveState(); ctx.putImageData(clipboardData.img, clipboardData.x, clipboardData.y); refreshSnapshot(); showToast("📋 Am Original-Ort eingefügt"); }
-    window.pasteClipboardMove = function() { if (!clipboardData.img) { showToast("⚠️ Leer!"); return; } window.setTool('select'); selectionBuffer = clipboardData.img; showToast("🖱️ Klicke zum Platzieren"); }
-
-    function getMousePos(evt) { const r = canvas.getBoundingClientRect(); return { x: Math.floor((evt.clientX - r.left)/currentZoom), y: Math.floor((evt.clientY - r.top)/currentZoom) }; }
-
-    canvas.addEventListener('mousedown', function(e) {
-        if(canvasSnapshot) ctx.putImageData(canvasSnapshot, 0, 0);
-        if(currentTool !== 'select' || !selectionBuffer) saveState();
-        const pos = getMousePos(e);
-        
-        if (currentTool === 'picker') { const p = ctx.getImageData(pos.x, pos.y, 1, 1).data; const hex = "#" + ((1 << 24) + (p[0] << 16) + (p[1] << 8) + p[2]).toString(16).slice(1); selectedColor = hex; document.getElementById('colorPicker').value = hex; window.setTool('brush'); }
-        else if (currentTool === 'fill') { floodFill(pos.x, pos.y, isEraseMode); refreshSnapshot(); }
-        else if (currentTool === 'text') { if(!document.getElementById('textInput').value) showToast("⚠️ Kein Text eingegeben!"); window.drawPixelText(document.getElementById('textInput').value, window.getAutoX(pos, 'text'), window.getAutoY(pos), false); refreshSnapshot(); }
-        else if (currentTool === 'stamp') { window.drawStamp(window.currentStamp, window.getAutoX(pos), window.getAutoY(pos), false); refreshSnapshot(); }
-        else if (currentTool === 'import' && importedImage) { const w = importedImage.width; const h = importedImage.height; ctx.drawImage(importedImage, Math.floor(pos.x - w/2), Math.floor(pos.y - h/2)); refreshSnapshot(); }
-        else if (currentTool === 'select' && selectionBuffer) { ctx.putImageData(selectionBuffer, pos.x, pos.y); selectionBuffer = null; saveState(); } 
-        else { isDrawing = true; startPos = pos; if(isEraseMode) ctx.globalCompositeOperation = 'destination-out'; if (currentTool === 'brush') { drawBrush(pos.x, pos.y); refreshSnapshot(); } else if (currentTool === 'eraser') { drawEraser(pos.x, pos.y); refreshSnapshot(); } else if (currentTool === 'lighten' || currentTool === 'darken') { shadingBrush(pos.x, pos.y, currentTool==='lighten'); refreshSnapshot(); } if(isEraseMode) ctx.globalCompositeOperation = 'source-over'; }
-    });
-
-    canvas.addEventListener('mousemove', function(e) {
-        const pos = getMousePos(e);
-        if(canvasSnapshot) ctx.putImageData(canvasSnapshot, 0, 0);
-
-        if (isDrawing) {
-            if(isEraseMode) ctx.globalCompositeOperation = 'destination-out';
-            if (currentTool === 'brush') { drawBrush(pos.x, pos.y); refreshSnapshot(); } 
-            else if (currentTool === 'eraser') { drawEraser(pos.x, pos.y); refreshSnapshot(); }
-            else if (currentTool === 'lighten' || currentTool === 'darken') { shadingBrush(pos.x, pos.y, currentTool==='lighten'); refreshSnapshot(); }
-            else if (currentTool === 'line') drawLine(startPos.x, startPos.y, pos.x, pos.y);
-            else if (currentTool === 'rect') drawRectShape(startPos.x, startPos.y, pos.x, pos.y, false);
-            else if (currentTool === 'rectFill') drawRectShape(startPos.x, startPos.y, pos.x, pos.y, true);
-            else if (currentTool === 'select' && !selectionBuffer) drawSelectionBox(startPos.x, startPos.y, pos.x, pos.y);
-            else if (currentTool === 'copy') drawSelectionBox(startPos.x, startPos.y, pos.x, pos.y);
-            if(isEraseMode) ctx.globalCompositeOperation = 'source-over';
-        } else {
-            if (['rect', 'rectFill', 'line', 'select', 'copy', 'picker', 'fill'].includes(currentTool)) drawPixelCursor(pos.x, pos.y);
-            else if (['brush', 'lighten', 'darken'].includes(currentTool)) drawBrushPreview(pos.x, pos.y);
-            else if (currentTool === 'eraser') drawBrushPreview(pos.x, pos.y, true);
-            else if (currentTool === 'stamp') window.drawStamp(window.currentStamp, window.getAutoX(pos), window.getAutoY(pos), true); 
-            else if (currentTool === 'text') window.drawPixelText(document.getElementById('textInput').value, window.getAutoX(pos, 'text'), window.getAutoY(pos), true);
-            else if (currentTool === 'select' && selectionBuffer) ctx.putImageData(selectionBuffer, pos.x, pos.y); 
-            else if (currentTool === 'import' && importedImage) { const w = importedImage.width; const h = importedImage.height; ctx.globalAlpha = 0.6; ctx.drawImage(importedImage, Math.floor(pos.x - w/2), Math.floor(pos.y - h/2)); ctx.globalAlpha = 1.0; }
-        }
-    });
-
-    canvas.addEventListener('mouseout', function() { if(canvasSnapshot) ctx.putImageData(canvasSnapshot, 0, 0); isDrawing = false; });
-    window.addEventListener('mouseup', function(e) {
-        if (!isDrawing) return; const pos = getMousePos(e);
-        if(isEraseMode) ctx.globalCompositeOperation = 'destination-out';
-        if (currentTool === 'line') { drawLine(startPos.x, startPos.y, pos.x, pos.y); }
-        else if (currentTool === 'rect') { drawRectShape(startPos.x, startPos.y, pos.x, pos.y, false); }
-        else if (currentTool === 'rectFill') { drawRectShape(startPos.x, startPos.y, pos.x, pos.y, true); }
-        if(isEraseMode) ctx.globalCompositeOperation = 'source-over';
-
-        if (currentTool === 'select' && !selectionBuffer) { const x = Math.min(startPos.x, pos.x), y = Math.min(startPos.y, pos.y); const w = Math.abs(pos.x - startPos.x) + 1, h = Math.abs(pos.y - startPos.y) + 1; if (w > 0 && h > 0) { selectionBuffer = ctx.getImageData(x, y, w, h); ctx.clearRect(x, y, w, h); } }
-        else if (currentTool === 'copy') { ctx.putImageData(canvasSnapshot, 0, 0); const x = Math.min(startPos.x, pos.x), y = Math.min(startPos.y, pos.y); const w = Math.abs(pos.x - startPos.x) + 1, h = Math.abs(pos.y - startPos.y) + 1; if (w > 0 && h > 0) { const data = ctx.getImageData(x, y, w, h); clipboardData = { img: data, x: x, y: y }; showToast("✅ Kopiert!"); } }
-        isDrawing = false; refreshSnapshot(); window.updateGuides();
-    });
-
-    // --- HELPER FUNCS ---
-    window.toggleGrid = function() { document.getElementById('gridOverlay').style.display = document.getElementById('gridCheck').checked ? 'block' : 'none'; window.updateGuides(); }
-    window.toggleAutoCenter = function() { autoCenter = !autoCenter; document.getElementById('btnAutoCenter').classList.toggle('active'); document.getElementById('btnAutoCenter').innerText = autoCenter ? "🧲 Auto-Zentrierung (AN)" : "🧲 Auto-Zentrierung (Aus)"; document.getElementById('centerSettings').style.display = autoCenter ? 'block' : 'none'; window.updateGuides(); }
-    window.toggleYInput = function() { const el = document.getElementById('fixedYVal'); const active = document.getElementById('useFixedY').checked; el.disabled = !active; el.style.opacity = active ? "1" : "0.5"; }
-    window.addToPalette = function(){window.createPaletteSwatch(document.getElementById('colorPicker').value);}
-    window.createPaletteSwatch = function(c){const d=document.createElement('div');d.className='color-swatch';d.style.backgroundColor=c;d.onclick=()=>{selectedColor=c;document.getElementById('colorPicker').value=c;document.querySelectorAll('.color-swatch').forEach(e=>e.classList.remove('active'));d.classList.add('active'); window.setTool('brush');};document.getElementById('paletteGrid').appendChild(d);}
-    window.clearCanvasSilent = function() { ctx.clearRect(0,0,canvas.width,canvas.height); saveState(); }
-    window.clearCanvas = function(){if(confirm("Löschen?")){window.clearCanvasSilent();}}
-    window.hexToRgb = function(h){const r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h);return r?{r:parseInt(r[1],16),g:parseInt(r[2],16),b:parseInt(r[3],16)}:null;}
-    window.getAutoY = function(p){if(autoCenter&&document.getElementById('useFixedY').checked)return parseInt(document.getElementById('fixedYVal').value)||0;return p.y;}
-    window.getAutoX = function(p,t){if(!autoCenter)return p.x;let cx=canvas.width/2;if(document.getElementById('useContentAlign').checked)cx=window.getContentBounds().centerX;if(t==='text'){const txt=document.getElementById('textInput').value;const s=parseInt(document.getElementById('textScale').value)||1;let w=0;for(let c of txt.toUpperCase()){const m=fontMap[c]||fontMap[' '];w+=((m[0]?.length||3)*s)+s;}w-=s;return Math.floor(cx-(w/2));}else{const w=(t.startsWith('job')?45:(window.currentStamp==='slot')?18:16);return Math.floor(cx-(w/2));}}
-    window.getContentBounds = function() {const w=canvas.width, h=canvas.height, d=ctx.getImageData(0,0,w,h).data;let minX=w, maxX=0, found=false;for(let y=0;y<h;y++) for(let x=0;x<w;x++) if(d[(y*w+x)*4+3]>0) { if(x<minX)minX=x; if(x>maxX)maxX=x; found=true; }return found ? {minX, maxX, centerX:Math.floor(minX+(maxX-minX)/2), found:true} : {minX:0, maxX:w, centerX:w/2, found:false};}
-    
     window.changeZoom = function(val) {
         currentZoom = parseInt(val);
         document.getElementById('zoomVal').innerText = currentZoom;
@@ -942,12 +762,84 @@ function initEditor() {
         window.updateGuides();
     }
 
-    window.updateGuides = function() {
-        const ga=document.getElementById('gridCheck').checked, ca=autoCenter, uc=document.getElementById('useContentAlign').checked;
-        const cl=document.getElementById('centerLine'); cl.style.display='none';
-        const grid = document.getElementById('gridOverlay'); const gridSize = 18 * currentZoom; grid.style.backgroundSize = `${gridSize}px ${gridSize}px`;
-        const refImg = document.getElementById('refOverlay'); if (refImg && refImg.style.display === 'block') { refImg.style.width = (canvas.width * currentZoom) + 'px'; refImg.style.height = (canvas.height * currentZoom) + 'px'; }
-        if (ca) { let cp = canvas.width / 2; if (ca && uc) { const b = window.getContentBounds(); if(b.found) { cp=b.centerX; } } cl.style.left = (cp * currentZoom) + 'px'; cl.style.display = 'block'; }
+    window.resizeCanvas = function() {
+        saveState(); const s = document.querySelector('#gui-editor input[name="size"]:checked').value; const tempCanvas = document.createElement('canvas'); tempCanvas.width = canvas.width; tempCanvas.height = canvas.height; tempCanvas.getContext('2d').putImageData(ctx.getImageData(0,0,canvas.width, canvas.height), 0, 0);
+        if (s === 'square') { canvas.width = 256; canvas.height = 256; } else if (s === 'rect') { canvas.width = 256; canvas.height = 128; } else if (s === 'tall') { canvas.width = 192; canvas.height = 256; } else if (s === 'mid') { canvas.width = 50; canvas.height = 50; } else if (s === 'icon') { canvas.width = 16; canvas.height = 16; }
+        canvas.style.width = (canvas.width * currentZoom) + 'px'; canvas.style.height = (canvas.height * currentZoom) + 'px';
+        window.updateGuides(); ctx.imageSmoothingEnabled = false; ctx.drawImage(tempCanvas, 0, 0); saveState();
+    }
+
+    document.getElementById('uploadInput').addEventListener('change', e => { if(e.target.files[0]){ saveState(); const r = new FileReader(); r.onload = ev => { const i = new Image(); i.onload = () => { ctx.imageSmoothingEnabled = false; ctx.drawImage(i, 0, 0, canvas.width, canvas.height); saveState(); }; i.src = ev.target.result; }; r.readAsDataURL(e.target.files[0]); } });
+
+    window.setTool = function(tool) {
+        currentTool = tool; document.querySelectorAll('#gui-editor .tool-grid .btn-editor').forEach(b => b.classList.remove('active')); const btn = document.getElementById('tool' + tool.charAt(0).toUpperCase() + tool.slice(1)); if(btn) btn.classList.add('active');
+        if(tool === 'import' && !importedImage) document.getElementById('toolImport')?.classList.remove('active');
+        document.getElementById('stampOptions').style.display = (tool === 'stamp') ? 'block' : 'none'; document.getElementById('textOptions').style.display = (tool === 'text') ? 'block' : 'none';
+        if (tool !== 'select') selectionBuffer = null; if(canvasSnapshot) ctx.putImageData(canvasSnapshot, 0, 0); refreshSnapshot();
+    }
+
+    window.toggleEraseMode = function() { isEraseMode = !isEraseMode; const btn = document.getElementById('btnEraseMode'); if (isEraseMode) { btn.classList.add('active'); btn.innerText = "🧽 Radier-Modus (AN)"; showToast("🧽 Alles ist Radierer!"); } else { btn.classList.remove('active'); btn.innerText = "🧽 Radier-Modus (AUS)"; } }
+    window.pasteFromClipboard = function() { if (!clipboardData.img) { showToast("⚠️ Leer!"); return; } saveState(); ctx.putImageData(clipboardData.img, clipboardData.x, clipboardData.y); refreshSnapshot(); showToast("📋 Eingefügt"); }
+    window.pasteClipboardMove = function() { if (!clipboardData.img) { showToast("⚠️ Leer!"); return; } window.setTool('select'); selectionBuffer = clipboardData.img; showToast("🖱️ Klicke zum Platzieren"); }
+    
+    function getMousePos(evt) { const r = canvas.getBoundingClientRect(); return { x: Math.floor((evt.clientX - r.left)/currentZoom), y: Math.floor((evt.clientY - r.top)/currentZoom) }; }
+
+    canvas.addEventListener('mousedown', function(e) {
+        if(canvasSnapshot) ctx.putImageData(canvasSnapshot, 0, 0);
+        if(currentTool !== 'select' || !selectionBuffer) saveState();
+        const pos = getMousePos(e);
+        if (currentTool === 'picker') { const p = ctx.getImageData(pos.x, pos.y, 1, 1).data; const hex = "#" + ((1 << 24) + (p[0] << 16) + (p[1] << 8) + p[2]).toString(16).slice(1); selectedColor = hex; document.getElementById('colorPicker').value = hex; window.setTool('brush'); }
+        else if (currentTool === 'fill') { floodFill(pos.x, pos.y, isEraseMode); refreshSnapshot(); }
+        else if (currentTool === 'text') { if(!document.getElementById('textInput').value) showToast("⚠️ Kein Text!"); drawPixelText(document.getElementById('textInput').value, window.getAutoX(pos, 'text'), window.getAutoY(pos), false); refreshSnapshot(); }
+        else if (currentTool === 'stamp') { drawStamp(window.currentStamp, window.getAutoX(pos), window.getAutoY(pos), false); refreshSnapshot(); }
+        else if (currentTool === 'import' && importedImage) { const w = importedImage.width; const h = importedImage.height; ctx.drawImage(importedImage, Math.floor(pos.x - w/2), Math.floor(pos.y - h/2)); refreshSnapshot(); }
+        else if (currentTool === 'select' && selectionBuffer) { ctx.putImageData(selectionBuffer, pos.x, pos.y); selectionBuffer = null; saveState(); } 
+        else { isDrawing = true; startPos = pos; if(isEraseMode) ctx.globalCompositeOperation = 'destination-out'; if (currentTool === 'brush') { drawBrush(pos.x, pos.y); refreshSnapshot(); } else if (currentTool === 'eraser') { drawEraser(pos.x, pos.y); refreshSnapshot(); } else if (currentTool === 'lighten' || currentTool === 'darken') { shadingBrush(pos.x, pos.y, currentTool==='lighten'); refreshSnapshot(); } if(isEraseMode) ctx.globalCompositeOperation = 'source-over'; }
+    });
+
+    canvas.addEventListener('mousemove', function(e) {
+        const pos = getMousePos(e); if(canvasSnapshot) ctx.putImageData(canvasSnapshot, 0, 0);
+        if (isDrawing) {
+            if(isEraseMode) ctx.globalCompositeOperation = 'destination-out';
+            if (currentTool === 'brush') { drawBrush(pos.x, pos.y); refreshSnapshot(); } else if (currentTool === 'eraser') { drawEraser(pos.x, pos.y); refreshSnapshot(); } else if (currentTool === 'lighten' || currentTool === 'darken') { shadingBrush(pos.x, pos.y, currentTool==='lighten'); refreshSnapshot(); } else if (currentTool === 'line') drawLine(startPos.x, startPos.y, pos.x, pos.y); else if (currentTool === 'rect') drawRectShape(startPos.x, startPos.y, pos.x, pos.y, false); else if (currentTool === 'rectFill') drawRectShape(startPos.x, startPos.y, pos.x, pos.y, true); else if (currentTool === 'select' && !selectionBuffer) drawSelectionBox(startPos.x, startPos.y, pos.x, pos.y); else if (currentTool === 'copy') drawSelectionBox(startPos.x, startPos.y, pos.x, pos.y);
+            if(isEraseMode) ctx.globalCompositeOperation = 'source-over';
+        } else {
+            if (['rect', 'rectFill', 'line', 'select', 'copy', 'picker', 'fill'].includes(currentTool)) drawPixelCursor(pos.x, pos.y); else if (['brush', 'lighten', 'darken'].includes(currentTool)) drawBrushPreview(pos.x, pos.y); else if (currentTool === 'eraser') drawBrushPreview(pos.x, pos.y, true); else if (currentTool === 'stamp') drawStamp(window.currentStamp, window.getAutoX(pos), window.getAutoY(pos), true); else if (currentTool === 'text') drawPixelText(document.getElementById('textInput').value, window.getAutoX(pos, 'text'), window.getAutoY(pos), true); else if (currentTool === 'select' && selectionBuffer) ctx.putImageData(selectionBuffer, pos.x, pos.y); else if (currentTool === 'import' && importedImage) { const w = importedImage.width; const h = importedImage.height; ctx.globalAlpha = 0.6; ctx.drawImage(importedImage, Math.floor(pos.x - w/2), Math.floor(pos.y - h/2)); ctx.globalAlpha = 1.0; }
+        }
+    });
+    canvas.addEventListener('mouseout', function() { if(canvasSnapshot) ctx.putImageData(canvasSnapshot, 0, 0); isDrawing = false; });
+    window.addEventListener('mouseup', function(e) {
+        if (!isDrawing) return; const pos = getMousePos(e);
+        if(isEraseMode) ctx.globalCompositeOperation = 'destination-out';
+        if (currentTool === 'line') { drawLine(startPos.x, startPos.y, pos.x, pos.y); } else if (currentTool === 'rect') { drawRectShape(startPos.x, startPos.y, pos.x, pos.y, false); } else if (currentTool === 'rectFill') { drawRectShape(startPos.x, startPos.y, pos.x, pos.y, true); }
+        if(isEraseMode) ctx.globalCompositeOperation = 'source-over';
+        if (currentTool === 'select' && !selectionBuffer) { const x = Math.min(startPos.x, pos.x), y = Math.min(startPos.y, pos.y); const w = Math.abs(pos.x - startPos.x) + 1, h = Math.abs(pos.y - startPos.y) + 1; if (w > 0 && h > 0) { selectionBuffer = ctx.getImageData(x, y, w, h); ctx.clearRect(x, y, w, h); } }
+        else if (currentTool === 'copy') { ctx.putImageData(canvasSnapshot, 0, 0); const x = Math.min(startPos.x, pos.x), y = Math.min(startPos.y, pos.y); const w = Math.abs(pos.x - startPos.x) + 1, h = Math.abs(pos.y - startPos.y) + 1; if (w > 0 && h > 0) { const data = ctx.getImageData(x, y, w, h); clipboardData = { img: data, x: x, y: y }; showToast("✅ Kopiert!"); } }
+        isDrawing = false; refreshSnapshot(); window.updateGuides();
+    });
+
+    window.toggleGrid = function() { document.getElementById('gridOverlay').style.display = document.getElementById('gridCheck').checked ? 'block' : 'none'; window.updateGuides(); }
+    window.toggleAutoCenter = function() { autoCenter = !autoCenter; document.getElementById('btnAutoCenter').classList.toggle('active'); document.getElementById('btnAutoCenter').innerText = autoCenter ? "🧲 Zentrieren (AN)" : "🧲 Zentrieren (Aus)"; document.getElementById('centerSettings').style.display = autoCenter ? 'block' : 'none'; window.updateGuides(); }
+    window.toggleYInput = function() { const el = document.getElementById('fixedYVal'); const active = document.getElementById('useFixedY').checked; el.disabled = !active; el.style.opacity = active ? "1" : "0.5"; }
+    
+    window.addToPalette = function(){window.createPaletteSwatch(document.getElementById('colorPicker').value);}
+    window.createPaletteSwatch = function(c){const d=document.createElement('div');d.className='color-swatch';d.style.backgroundColor=c;d.onclick=()=>{selectedColor=c;document.getElementById('colorPicker').value=c;document.querySelectorAll('#gui-editor .color-swatch').forEach(e=>e.classList.remove('active'));d.classList.add('active'); window.setTool('brush');};document.getElementById('paletteGrid').appendChild(d);}
+    
+    window.clearCanvasSilent = function() { ctx.clearRect(0,0,canvas.width,canvas.height); saveState(); }
+    window.clearCanvas = function(){if(confirm("Löschen?")){window.clearCanvasSilent();}}
+    
+    window.hexToRgb = function(h){const r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h);return r?{r:parseInt(r[1],16),g:parseInt(r[2],16),b:parseInt(r[3],16)}:null;}
+    window.getAutoY = function(p){if(autoCenter&&document.getElementById('useFixedY').checked)return parseInt(document.getElementById('fixedYVal').value)||0;return p.y;}
+    window.getAutoX = function(p,t){if(!autoCenter)return p.x;let cx=canvas.width/2;if(document.getElementById('useContentAlign').checked)cx=window.getContentBounds().centerX;if(t==='text'){const txt=document.getElementById('textInput').value;const s=parseInt(document.getElementById('textScale').value)||1;let w=0;for(let c of txt.toUpperCase()){const m=fontMap[c]||fontMap[' '];w+=((m[0]?.length||3)*s)+s;}w-=s;return Math.floor(cx-(w/2));}else{const w=(t.startsWith('job')?45:(window.currentStamp==='slot')?18:16);return Math.floor(cx-(w/2));}}
+    window.getContentBounds = function() {const w=canvas.width, h=canvas.height, d=ctx.getImageData(0,0,w,h).data;let minX=w, maxX=0, found=false;for(let y=0;y<h;y++) for(let x=0;x<w;x++) if(d[(y*w+x)*4+3]>0) { if(x<minX)minX=x; if(x>maxX)maxX=x; found=true; }return found ? {minX, maxX, centerX:Math.floor(minX+(maxX-minX)/2), found:true} : {minX:0, maxX:w, centerX:w/2, found:false};}
+    
+    window.updateGuides = function() { 
+        const cl=document.getElementById('centerLine'); cl.style.display='none'; 
+        const grid = document.getElementById('gridOverlay'); const gridSize = 18 * currentZoom; grid.style.backgroundSize = `${gridSize}px ${gridSize}px`; 
+        const refImg = document.getElementById('refOverlay'); 
+        if (refImg && refImg.style.display === 'block') { refImg.style.width = (canvas.width * currentZoom) + 'px'; refImg.style.height = (canvas.height * currentZoom) + 'px'; } 
+        grid.style.width = (canvas.width * currentZoom) + 'px'; grid.style.height = (canvas.height * currentZoom) + 'px';
+        if (autoCenter) { let cp = canvas.width / 2; if (document.getElementById('useContentAlign').checked) { const b = window.getContentBounds(); if(b.found) { cp=b.centerX; } } cl.style.left = (cp * currentZoom) + 'px'; cl.style.display = 'block'; } 
     }
 
     function drawBrush(x, y) { ctx.fillStyle = selectedColor; const s = parseInt(document.getElementById('brushSize').value); ctx.fillRect(x - Math.floor(s/2), y - Math.floor(s/2), s, s); }
@@ -959,59 +851,30 @@ function initEditor() {
     function drawRectShape(x0,y0,x1,y1,f){const x=Math.min(x0,x1),y=Math.min(y0,y1);const w=Math.abs(x1-x0)+1,h=Math.abs(y1-y0)+1;ctx.fillStyle=selectedColor;if(f){ctx.fillRect(x,y,w,h);}else{const s=parseInt(document.getElementById('brushSize').value);ctx.fillRect(x,y,w,s);ctx.fillRect(x,y+h-s,w,s);ctx.fillRect(x,y,s,h);ctx.fillRect(x+w-s,y,s,h);}}
     function drawSelectionBox(x0,y0,x1,y1){const x=Math.min(x0,x1),y=Math.min(y0,y1);const w=Math.abs(x1-x0),h=Math.abs(y1-y0);ctx.strokeStyle='#fff';ctx.setLineDash([4,2]);ctx.strokeRect(x+0.5,y+0.5,w,h);ctx.setLineDash([]);}
     
-    window.drawStamp = function(t,x,y,p){
+    function drawStamp(t,x,y,p){
         if(p)ctx.globalAlpha=0.5;
         if(t==='slot'){drawRect(x,y,18,18,'#8b8b8b');drawRect(x,y,17,1,'#373737');drawRect(x,y,1,18,'#373737');drawRect(x,y+17,18,1,'#ffffff');drawRect(x+17,y,1,18,'#ffffff');drawRect(x+1,y+1,16,16,'#8b8b8b');}
         else if(t.startsWith('job')) { drawJobIcon(t, x, y); }
         else {
             ctx.fillStyle=selectedColor;let m=[];
-            if(t==='sArrowR')m=["00100","00110","11111","00110","00100"];
-            else if(t==='iconExclam')m=["0000001111000000","0000001111000000","0000001111000000","0000001111000000","0000001111000000","0000001111000000","0000001111000000","0000001111000000","0000001111000000","0000000000000000","0000000000000000","0000001111000000","0000001111000000","0000001111000000","0000000000000000","0000000000000000"];
-            else if(t==='iconWarn')m=["0000000000000000","0000000110000000","0000001111000000","0000001111000000","0000011111100000","0000011111100000","0000111111110000","0000111111110000","0001100110011000","0001100110011000","0011100110011100","0011100000011100","0111100110011110","0111111111111110","1111111111111111","0000000000000000"];
-            else if(t==='iconGear')m=["0000001111000000","0000111111110000","0011100110011100","0011000000001100","0011000000001100","0110000000000110","1100000000000011","1100000000000011","1100000000000011","1100000000000011","0110000000000110","0011000000001100","0011000000001100","0011100110011100","0000111111110000","0000001111000000"];
-            else if(t==='iconPlus')m=["0000000000000000","0000000110000000","0000000110000000","0000000110000000","0000000110000000","0000000110000000","0000000110000000","1111111111111111","1111111111111111","0000000110000000","0000000110000000","0000000110000000","0000000110000000","0000000110000000","0000000110000000","0000000000000000"];
-            else if(t==='iconMinus')m=["0000000000000000","0000000000000000","0000000000000000","0000000000000000","0000000000000000","0000000000000000","0000000000000000","1111111111111111","1111111111111111","0000000000000000","0000000000000000","0000000000000000","0000000000000000","0000000000000000","0000000000000000","0000000000000000"];
-            else if(t==='lArrowR')m=["0000000010000000","0000000011000000","0000000011100000","0000000011110000","0000000011111000","1111111111111100","1111111111111110","1111111111111111","1111111111111111","1111111111111110","1111111111111100","0000000011111000","0000000011110000","0000000011100000","0000000011000000","0000000010000000"];
-            else if(t==='lArrowL')m=["0000000100000000","0000001100000000","0000011100000000","0000111100000000","0001111100000000","0011111111111111","0111111111111111","1111111111111111","1111111111111111","0111111111111111","0011111111111111","0001111100000000","0000111100000000","0000011100000000","0000001100000000","0000000100000000"];
-            else if(t==='lArrowU')m=["0000000110000000","0000001111000000","0000011111100000","0000111111110000","0001111111111000","0011111111111100","0111111111111110","1111111111111111","0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000"];
-            else if(t==='lArrowD')m=["0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000","1111111111111111","0111111111111110","0011111111111100","0001111111111000","0000111111110000","0000011111100000","0000001111000000","0000000110000000"];
-            
+            if(t==='sArrowR')m=["00100","00110","11111","00110","00100"]; else if(t==='iconExclam')m=["0000001111000000","0000001111000000","0000001111000000","0000001111000000","0000001111000000","0000001111000000","0000001111000000","0000001111000000","0000001111000000","0000000000000000","0000000000000000","0000001111000000","0000001111000000","0000001111000000","0000000000000000","0000000000000000"]; else if(t==='iconWarn')m=["0000000000000000","0000000110000000","0000001111000000","0000001111000000","0000011111100000","0000011111100000","0000111111110000","0000111111110000","0001100110011000","0001100110011000","0011100110011100","0011100000011100","0111100110011110","0111111111111110","1111111111111111","0000000000000000"]; else if(t==='iconGear')m=["0000001111000000","0000111111110000","0011100110011100","0011000000001100","0011000000001100","0110000000000110","1100000000000011","1100000000000011","1100000000000011","1100000000000011","0110000000000110","0011000000001100","0011000000001100","0011100110011100","0000111111110000","0000001111000000"]; else if(t==='iconPlus')m=["0000000000000000","0000000110000000","0000000110000000","0000000110000000","0000000110000000","0000000110000000","0000000110000000","1111111111111111","1111111111111111","0000000110000000","0000000110000000","0000000110000000","0000000110000000","0000000110000000","0000000110000000","0000000000000000"]; else if(t==='iconMinus')m=["0000000000000000","0000000000000000","0000000000000000","0000000000000000","0000000000000000","0000000000000000","0000000000000000","1111111111111111","1111111111111111","0000000000000000","0000000000000000","0000000000000000","0000000000000000","0000000000000000","0000000000000000","0000000000000000"]; else if(t==='lArrowR')m=["0000000010000000","0000000011000000","0000000011100000","0000000011110000","0000000011111000","1111111111111100","1111111111111110","1111111111111111","1111111111111111","1111111111111110","1111111111111100","0000000011111000","0000000011110000","0000000011100000","0000000011000000","0000000010000000"]; else if(t==='lArrowL')m=["0000000100000000","0000001100000000","0000011100000000","0000111100000000","0001111100000000","0011111111111111","0111111111111111","1111111111111111","1111111111111111","0111111111111111","0011111111111111","0001111100000000","0000111100000000","0000011100000000","0000001100000000","0000000100000000"]; else if(t==='lArrowU')m=["0000000110000000","0000001111000000","0000011111100000","0000111111110000","0001111111111000","0011111111111100","0111111111111110","1111111111111111","0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000"]; else if(t==='lArrowD')m=["0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000","1111111111111111","0111111111111110","0011111111111100","0001111111111000","0000111111110000","0000011111100000","0000001111000000","0000000110000000"];
             for(let r=0;r<m.length;r++)for(let c=0;c<m[r].length;c++)if(m[r][c]==='1')ctx.fillRect(x+c,y+r,1,1);
         }
         if(p)ctx.globalAlpha=1.0;
     }
 
-    window.drawPixelText = function(t, x, y, preview) {
-        if(!t) return;
-        if(preview) ctx.globalAlpha = 0.5;
-        t = t.toUpperCase(); const s = parseInt(document.getElementById('textScale').value)||1; const shad = document.getElementById('textShadow').checked;
-        function dC(ch, dx, dy, col) { ctx.fillStyle = col; const m = fontMap[ch]||fontMap[' ']; if(!m) return 4*s; for(let r=0;r<m.length;r++) for(let c=0;c<m[r].length;c++) if(m[r][c]) ctx.fillRect(dx+(c*s), dy+(r*s), s, s); return ((m[0]?.length||3)*s)+s; }
-        if(shad) { let sx=x+s; for(let c of t) sx+=dC(c, sx, y+s, "#1a1a1a"); }
-        let cx=x; for(let c of t) cx+=dC(c, cx, y, selectedColor);
-        if(preview) ctx.globalAlpha = 1.0;
-    }
-
+    function drawJobIcon(t, x, y) { ctx.fillStyle = selectedColor; if(t==='jobMiner') { for(let i=0;i<30;i++) ctx.fillRect(x+10+i, y+10+i, 3, 3); for(let i=0;i<15;i++) { ctx.fillRect(x+5+i, y+5+15-i, 4, 4); ctx.fillRect(x+35+i, y+5+i, 4, 4); } } else if(t==='jobDigger') { ctx.fillRect(x+20, y+15, 5, 25); ctx.fillRect(x+15, y+5, 15, 12); ctx.fillRect(x+17, y+17, 11, 2); } else if(t==='jobLumber') { for(let i=0;i<30;i++) ctx.fillRect(x+35-i, y+10+i, 3, 3); ctx.fillRect(x+5, y+5, 15, 15); ctx.fillRect(x+20, y+10, 5, 5); } else if(t==='jobHunter') { ctx.fillRect(x+10, y+5, 5, 35); ctx.fillRect(x+15, y+5, 15, 2); ctx.fillRect(x+30, y+7, 2, 31); ctx.fillRect(x+15, y+38, 15, 2); } else if(t==='jobCrafter') { ctx.fillRect(x+5, y+5, 35, 35); ctx.clearRect(x+15, y+5, 2, 35); ctx.clearRect(x+28, y+5, 2, 35); ctx.clearRect(x+5, y+15, 35, 2); ctx.clearRect(x+5, y+28, 35, 2); } else if(t==='jobSmith') { ctx.fillRect(x+5, y+10, 35, 10); ctx.fillRect(x+15, y+20, 15, 15); ctx.fillRect(x+5, y+35, 35, 5); } }
+    function drawPixelText(t, x, y, preview) { if(!t) return; if(preview) ctx.globalAlpha = 0.5; t = t.toUpperCase(); const s = parseInt(document.getElementById('textScale').value)||1; const shad = document.getElementById('textShadow').checked; function dC(ch, dx, dy, col) { ctx.fillStyle = col; const m = fontMap[ch]||fontMap[' ']; if(!m) return 4*s; for(let r=0;r<m.length;r++) for(let c=0;c<m[r].length;c++) if(m[r][c]) ctx.fillRect(dx+(c*s), dy+(r*s), s, s); return ((m[0]?.length||3)*s)+s; } if(shad) { let sx=x+s; for(let c of t) sx+=dC(c, sx, y+s, "#1a1a1a"); } let cx=x; for(let c of t) cx+=dC(c, cx, y, selectedColor); if(preview) ctx.globalAlpha = 1.0; }
+    function drawRect(x,y,w,h,col){ctx.fillStyle=col;ctx.fillRect(x,y,w,h);}
+    function drawGuiBase(x,y,w,h){ctx.fillStyle='#c6c6c6';ctx.fillRect(x,y,w,h);ctx.fillStyle='#ffffff';ctx.fillRect(x,y,w,2);ctx.fillRect(x,y,2,h);ctx.fillStyle='#555555';ctx.fillRect(x+2,y+h-2,w-2,2);ctx.fillRect(x+w-2,y+2,2,h-2);}
+    
     window.applyTemplate = function(type) { 
         saveState(); const w=canvas.width; const cx=Math.floor((w-176)/2); 
-        if(type==='chest'){ const sy=10; drawGuiBase(cx,sy,176,166); for(let r=0;r<3;r++)for(let c=0;c<9;c++) window.drawStamp('slot',cx+7+c*18,sy+17+r*18,false); for(let r=0;r<3;r++)for(let c=0;c<9;c++) window.drawStamp('slot',cx+7+c*18,sy+83+r*18,false); for(let c=0;c<9;c++) window.drawStamp('slot',cx+7+c*18,sy+141,false); } 
-        else if(type==='double'){ const sy=5; drawGuiBase(cx,sy,176,222); for(let r=0;r<6;r++)for(let c=0;c<9;c++) window.drawStamp('slot',cx+7+c*18,sy+17+r*18,false); for(let r=0;r<3;r++)for(let c=0;c<9;c++) window.drawStamp('slot',cx+7+c*18,sy+139+r*18,false); for(let c=0;c<9;c++) window.drawStamp('slot',cx+7+c*18,sy+197,false); } 
-        else if(type==='inv'){ const sy=80; for(let r=0;r<3;r++)for(let c=0;c<9;c++) window.drawStamp('slot',cx+7+c*18,sy+r*18,false); for(let c=0;c<9;c++) window.drawStamp('slot',cx+7+c*18,sy+58,false); } 
+        if(type==='chest'){ const sy=10; drawGuiBase(cx,sy,176,166); for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+17+r*18,false); for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+83+r*18,false); for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+141,false); } else if(type==='double'){ const sy=5; drawGuiBase(cx,sy,176,222); for(let r=0;r<6;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+17+r*18,false); for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+139+r*18,false); for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+197,false); } else if(type==='inv'){ const sy=80; for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+r*18,false); for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+58,false); } 
         refreshSnapshot(); 
     }
     
-    function floodFill(x,y,erase){
-        const startPixel=ctx.getImageData(x,y,1,1).data;
-        const startR=startPixel[0],startG=startPixel[1],startB=startPixel[2],startA=startPixel[3];
-        const f=window.hexToRgb(selectedColor);
-        if(erase){ if(startA===0) return; } else { if(startR===f.r&&startG===f.g&&startB===f.b&&startA===255) return; }
-        const img=ctx.getImageData(0,0,canvas.width,canvas.height); const d=img.data; const s=[[x,y]]; const w=canvas.width,h=canvas.height;
-        while(s.length){ const[cx,cy]=s.pop(); if(cx<0||cx>=w||cy<0||cy>=h)continue; const i=(cy*w+cx)*4;
-            if(d[i]===startR&&d[i+1]===startG&&d[i+2]===startB&&d[i+3]===startA){
-                if(erase) d[i+3]=0; else { d[i]=f.r; d[i+1]=f.g; d[i+2]=f.b; d[i+3]=255; }
-                s.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]);
-            }
-        } ctx.putImageData(img,0,0);
-    }
+    function floodFill(x,y,erase){ const startPixel=ctx.getImageData(x,y,1,1).data; const startR=startPixel[0],startG=startPixel[1],startB=startPixel[2],startA=startPixel[3]; const f=window.hexToRgb(selectedColor); if(erase){ if(startA===0) return; } else { if(startR===f.r&&startG===f.g&&startB===f.b&&startA===255) return; } const img=ctx.getImageData(0,0,canvas.width,canvas.height); const d=img.data; const s=[[x,y]]; const w=canvas.width,h=canvas.height; while(s.length){ const[cx,cy]=s.pop(); if(cx<0||cx>=w||cy<0||cy>=h)continue; const i=(cy*w+cx)*4; if(d[i]===startR&&d[i+1]===startG&&d[i+2]===startB&&d[i+3]===startA){ if(erase) d[i+3]=0; else { d[i]=f.r; d[i+1]=f.g; d[i+2]=f.b; d[i+3]=255; } s.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]); } } ctx.putImageData(img,0,0); }
 
     window.saveEditorToFirebase = async function() {
         const pkgId = document.getElementById('editor-pkg-select').value;
@@ -1068,4 +931,8 @@ function initEditor() {
             alert("FEHLER BEIM SPEICHERN:\n" + error.message);
         }
     }
+
+    const myColors = ['#a49e95', '#766f6a', '#483f46', '#231c2c', '#1e1829', '#539d33', '#ffffff', '#000000'];
+    myColors.forEach(c => window.createPaletteSwatch(c));
+    window.resizeCanvas(); saveState(); refreshSnapshot();
 }
