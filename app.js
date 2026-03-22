@@ -1,7 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, doc, deleteDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-import { getStorage, ref, uploadBytes, getDownloadURL, uploadString } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
+// NEU: 'getBlob' hinzugefügt für den CORS-Fix!
+import { getStorage, ref, uploadBytes, getDownloadURL, uploadString, getBlob } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBZXXBcEnn5YjURWupDLZt4p0ljGZvsKb0",
@@ -126,7 +127,7 @@ function startRealtimeListeners() {
         allCrates.forEach(crate => {
             let items = crate.items || []; let crateImgHtml = crate.image_url ? `<img src="${crate.image_url}" class="thumbnail" style="width:50px;height:50px;">` : `<div class="thumbnail" style="width:50px;height:50px;"></div>`;
             let itemsHtml = items.map(item => `<tr><td>${item.image_url ? `<img src="${item.image_url}" class="thumbnail" style="width:30px;height:30px;">` : '-'}</td><td><strong>${item.name}</strong></td><td>${item.quantity || 1}x</td><td>${item.chance}%</td><td style="text-align: right;"><button class="btn btn-danger btn-sm" onclick="window.deleteCrateItem('${crate.id}', '${item.id}')">Entfernen</button></td></tr>`).join('');
-            container.innerHTML += `<div class="crate-box"><div class="crate-header"><div class="crate-header-left">${crateImgHtml}<h3 style="font-size: 18px;">${crate.name || 'Unbenannte Kiste'}</h3></div><div class="button-group"><button class="btn btn-primary btn-sm" onclick="window.openItemModal('${crate.id}')">+ Item hinzufügen</button><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('crates', '${crate.id}')">Kiste löschen</button></div></div>${items.length > 0 ? `<table class="crate-items-table"><thead><tr><th>Bild</th><th>Item Name</th><th>Menge</th><th>Chance</th><th style="text-align: right;">Aktion</th></tr></thead><tbody>${itemsHtml}</tbody></table>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Items in dieser Kiste.</p>'}</div>`;
+            container.innerHTML += `<div class="crate-box"><div class="crate-header"><div class="crate-header-left">${crateImgHtml}<h3 style="font-size: 18px;">${crate.name || 'Unbenannte Kiste'}</h3></div><div class="button-group"><button class="btn btn-primary btn-sm" onclick="window.openItemModal('${crate.id}')">+ Item hinzufügen</button><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('crates', '${crate.id}')">Kiste löschen</button></div></div>${items.length > 0 ? `<table class="crate-items-table"><thead><tr><th>Bild</th><th>Item Name</th><th>Menge</th><th>Chance</th><th style="text-align: right;">Aktion</th></tr></thead><tbody>${itemsHtml}</tbody></table>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Items in dieser Kiste. Klicke auf "+ Item hinzufügen".</p>'}</div>`;
         });
         updateDashboard();
     });
@@ -163,17 +164,24 @@ function startRealtimeListeners() {
                 </div>
             `).join('');
 
+            // NEU: Einklappbare GUI Pakete
+            // Der Header ist nun klickbar und hat eine onClick-Funktion für das Auf/Zuklappen
             container.innerHTML += `
                 <div class="crate-box">
-                    <div class="crate-header">
-                        <div class="crate-header-left"><h3 style="font-size: 18px;">${pkg.name}</h3></div>
-                        <div class="button-group">
+                    <div class="crate-header" style="cursor: pointer;" onclick="window.toggleGuiPackage('${pkg.id}')">
+                        <div class="crate-header-left">
+                            <span id="icon-${pkg.id}" style="margin-right: 8px; font-size: 14px;">🔽</span>
+                            <h3 style="font-size: 18px; margin: 0;">${pkg.name}</h3>
+                        </div>
+                        <div class="button-group" onclick="event.stopPropagation()">
                             <button class="btn btn-primary btn-sm" onclick="window.openGuiUploadModal('${pkg.id}')">🖼️ Bild hochladen</button>
                             <button class="btn btn-secondary btn-sm" onclick="window.openGuiEditorForPkg('${pkg.id}')">✏️ Neues GUI zeichnen</button>
                             <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('guis', '${pkg.id}')">Paket löschen</button>
                         </div>
                     </div>
-                    ${items.length > 0 ? `<div class="gui-grid">${itemsHtml}</div>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine GUIs in diesem Paket.</p>'}
+                    <div id="pkg-content-${pkg.id}" style="display: block; margin-top: 15px;">
+                        ${items.length > 0 ? `<div class="gui-grid">${itemsHtml}</div>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine GUIs in diesem Paket.</p>'}
+                    </div>
                 </div>
             `;
         });
@@ -188,12 +196,25 @@ function startRealtimeListeners() {
     });
 }
 
+// NEU: Funktion zum Ein/Ausklappen von GUI-Paketen
+window.toggleGuiPackage = (pkgId) => {
+    const content = document.getElementById(`pkg-content-${pkgId}`);
+    const icon = document.getElementById(`icon-${pkgId}`);
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        icon.innerText = '🔽';
+    } else {
+        content.style.display = 'none';
+        icon.innerText = '▶️';
+    }
+};
+
 window.deleteEntry = async (collectionName, id) => {
     if(confirm('Wirklich komplett löschen?')) { await deleteDoc(doc(db, collectionName, id)); }
 };
 
 // ==========================================
-// 4. SPEICHERN LOGIK
+// 4. SPEICHERN LOGIK (Ränge, Kisten etc.)
 // ==========================================
 
 document.getElementById('btn-save-plugin').addEventListener('click', async () => {
@@ -306,7 +327,7 @@ window.openGuiEditorForPkg = (pkgId) => {
     if(window.clearCanvasSilent) window.clearCanvasSilent();
 };
 
-window.editGuiItemInEditor = (pkgId, itemId) => {
+window.editGuiItemInEditor = async (pkgId, itemId) => {
     const pkg = allGUIs.find(g => g.id === pkgId); if(!pkg) return;
     const item = (pkg.items || []).find(i => i.id === itemId); if(!item) return;
 
@@ -316,17 +337,29 @@ window.editGuiItemInEditor = (pkgId, itemId) => {
     document.getElementById('editor-gui-item-id').value = item.id; 
     
     if(item.image_url) {
-        const img = new Image(); img.crossOrigin = "Anonymous";
-        img.onload = () => {
-            if(window.clearCanvasSilent) window.clearCanvasSilent();
-            const canvas = document.getElementById('pixelCanvas');
-            const ctx = canvas.getContext('2d');
-            ctx.imageSmoothingEnabled = false;
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            if(window.triggerSaveState) window.triggerSaveState();
-        };
-        img.onerror = () => { alert("CORS Blockade: Das Bild kann leider nicht importiert werden."); };
-        img.src = item.image_url;
+        try {
+            // ===============================================
+            // CORS FIX: Wir laden das Bild über Firebase als lokale Datei herunter
+            // ===============================================
+            const imgRef = ref(storage, item.image_url);
+            const blob = await getBlob(imgRef); // Sichert den Download über Google Server ab
+            const localUrl = URL.createObjectURL(blob);
+            
+            const img = new Image();
+            img.onload = () => {
+                if(window.clearCanvasSilent) window.clearCanvasSilent();
+                const canvas = document.getElementById('pixelCanvas');
+                const ctx = canvas.getContext('2d');
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                URL.revokeObjectURL(localUrl); // Speicher freigeben
+                if(window.triggerSaveState) window.triggerSaveState();
+            };
+            img.src = localUrl;
+        } catch (error) {
+            console.error("Firebase Download Error:", error);
+            alert("Fehler beim Importieren des Bildes in den Editor: " + error.message);
+        }
     } else {
         if(window.clearCanvasSilent) window.clearCanvasSilent();
     }
@@ -334,7 +367,7 @@ window.editGuiItemInEditor = (pkgId, itemId) => {
 
 
 // ==========================================
-// 6. GUI EDITOR LOGIK (MIT ZOOM SLIDER!)
+// 6. GUI EDITOR LOGIK (1 ZU 1 DEIN ORIGINAL)
 // ==========================================
 let editorInitialized = false;
 
@@ -391,7 +424,7 @@ function initEditor() {
     document.getElementById('uploadInput').addEventListener('change', e => { if(e.target.files[0]){ saveState(); const r = new FileReader(); r.onload = ev => { const i = new Image(); i.onload = () => { ctx.imageSmoothingEnabled = false; ctx.drawImage(i, 0, 0, canvas.width, canvas.height); saveState(); }; i.src = ev.target.result; }; r.readAsDataURL(e.target.files[0]); } });
 
     window.setTool = function(tool) {
-        currentTool = tool; document.querySelectorAll('#gui-editor .tool-grid .btn-editor').forEach(b => b.classList.remove('active')); const btn = document.getElementById('tool' + tool.charAt(0).toUpperCase() + tool.slice(1)); if(btn) btn.classList.add('active');
+        currentTool = tool; document.querySelectorAll('#gui-editor .editor-tool-grid .btn-editor').forEach(b => b.classList.remove('active')); const btn = document.getElementById('tool' + tool.charAt(0).toUpperCase() + tool.slice(1)); if(btn) btn.classList.add('active');
         if(tool === 'import' && !importedImage) document.getElementById('toolImport')?.classList.remove('active');
         document.getElementById('stampOptions').style.display = (tool === 'stamp') ? 'block' : 'none'; document.getElementById('textOptions').style.display = (tool === 'text') ? 'block' : 'none';
         if (tool !== 'select') selectionBuffer = null; if(canvasSnapshot) ctx.putImageData(canvasSnapshot, 0, 0); refreshSnapshot();
@@ -458,7 +491,7 @@ function initEditor() {
         const grid = document.getElementById('gridOverlay'); const gridSize = 18 * currentZoom; grid.style.backgroundSize = `${gridSize}px ${gridSize}px`; 
         const refImg = document.getElementById('refOverlay'); 
         if (refImg && refImg.style.display === 'block') { refImg.style.width = (canvas.width * currentZoom) + 'px'; refImg.style.height = (canvas.height * currentZoom) + 'px'; } 
-        // WICHTIG: Overlays müssen die gleiche Größe wie das Canvas annehmen!
+        // WICHTIG: Overlays an Zoom anpassen
         grid.style.width = (canvas.width * currentZoom) + 'px'; grid.style.height = (canvas.height * currentZoom) + 'px';
         if (autoCenter) { let cp = canvas.width / 2; if (document.getElementById('useContentAlign').checked) { const b = window.getContentBounds(); if(b.found) { cp=b.centerX; } } cl.style.left = (cp * currentZoom) + 'px'; cl.style.display = 'block'; } 
     }
@@ -497,7 +530,7 @@ function initEditor() {
     
     function floodFill(x,y,erase){ const startPixel=ctx.getImageData(x,y,1,1).data; const startR=startPixel[0],startG=startPixel[1],startB=startPixel[2],startA=startPixel[3]; const f=window.hexToRgb(selectedColor); if(erase){ if(startA===0) return; } else { if(startR===f.r&&startG===f.g&&startB===f.b&&startA===255) return; } const img=ctx.getImageData(0,0,canvas.width,canvas.height); const d=img.data; const s=[[x,y]]; const w=canvas.width,h=canvas.height; while(s.length){ const[cx,cy]=s.pop(); if(cx<0||cx>=w||cy<0||cy>=h)continue; const i=(cy*w+cx)*4; if(d[i]===startR&&d[i+1]===startG&&d[i+2]===startB&&d[i+3]===startA){ if(erase) d[i+3]=0; else { d[i]=f.r; d[i+1]=f.g; d[i+2]=f.b; d[i+3]=255; } s.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]); } } ctx.putImageData(img,0,0); }
 
-    // IN FIREBASE SPEICHERN (GESICHERT MIT UPLOADSTRING)
+    // IN FIREBASE SPEICHERN (GESICHERT)
     window.saveEditorToFirebase = async function() {
         const pkgId = document.getElementById('editor-pkg-select').value;
         const guiName = document.getElementById('editor-gui-name').value;
@@ -514,13 +547,12 @@ function initEditor() {
             const dataUrl = canvas.toDataURL('image/png');
             const storageRef = ref(storage, `guis/images/gui_${Date.now()}.png`);
             
-            // NEU: Native Firebase Funktion für Base64 Canvas-Bilder
             await uploadString(storageRef, dataUrl, 'data_url');
             const imageUrl = await getDownloadURL(storageRef);
             
             const pkgRef = doc(db, "guis", pkgId);
             const pkg = allGUIs.find(g => g.id === pkgId);
-            if(!pkg) throw new Error("Das ausgewählte Paket wurde nicht in der Datenbank gefunden.");
+            if(!pkg) throw new Error("Paket wurde nicht gefunden.");
 
             let updatedItems = [...(pkg.items || [])];
 
@@ -551,8 +583,7 @@ function initEditor() {
         } catch (error) { 
             console.error(error); 
             btn.innerText = oldText;
-            alert("FEHLER BEIM SPEICHERN:\n" + error.message + "\n\nFalls du ein Bild bearbeitet hast, hat der Browser das Speichern wegen Sicherheitsrichtlinien (CORS) blockiert.");
-            showToast("Fehler beim Speichern!"); 
+            alert("FEHLER BEIM SPEICHERN:\n" + error.message);
         }
     }
 
