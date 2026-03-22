@@ -92,13 +92,14 @@ input[type="file"] { padding: 7px; background: var(--bg-color); font-size: 12px;
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
+
 /* ========================================= */
-/* 1 ZU 1 GUI EDITOR CSS                     */
+/* GUI EDITOR CSS                            */
 /* ========================================= */
 
-#gui-editor { font-family: 'Segoe UI', sans-serif; }
-.main-container-editor { display: flex; gap: 20px; align-items: flex-start; }
-.sidebar-editor { display: flex; flex-direction: column; gap: 10px; width: 300px; max-height: 95vh; overflow-y: auto; padding-right: 5px; }
+#gui-editor { font-family: 'Segoe UI', sans-serif; height: calc(100vh - 80px); overflow: hidden; }
+.main-container-editor { display: flex; gap: 20px; align-items: flex-start; height: 100%; }
+.sidebar-editor { display: flex; flex-direction: column; gap: 10px; width: 300px; height: 100%; overflow-y: auto; padding-right: 5px; flex-shrink: 0; }
 
 .panel-editor { background: #3c3c3c; padding: 12px; border-radius: 8px; border: 1px solid #555; text-align: left; }
 .panel-editor h3 { margin: 0 0 8px 0; font-size: 0.95rem; color: #aaa; border-bottom: 1px solid #555; padding-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
@@ -112,24 +113,35 @@ input[type="file"] { padding: 7px; background: var(--bg-color); font-size: 12px;
 .editor-btn-eraser-mode.active { background: #FF9800; border: 2px solid #E65100; color: #fff; }
 
 .btn-undo { background: #FF9800; width: 100%; margin-bottom: 5px; }
-#gui-editor .btn-danger { background: #d32f2f; color: white;} 
-#gui-editor .btn-danger:hover { background: #b71c1c; }
+.btn-editor.btn-danger { background: #d32f2f; color: white;} 
+.btn-editor.btn-danger:hover { background: #b71c1c; }
 .btn-action { background: #2196F3; margin-top: 5px; width: 100%; padding: 10px; font-weight: bold; color:white; border:none;}
 .editor-btn-template { background: #546E7A; border: 1px solid #455A64; }
 .editor-btn-copy { background: #9C27B0; } 
 .editor-btn-import { background: #009688; }
 
-#gui-editor input[type="number"], #gui-editor input[type="text"], #gui-editor select { padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px; }
-#gui-editor input[type="range"] { cursor: pointer; }
-
-.editor-canvas-wrapper { 
-    position: relative; border: 2px solid #555; 
-    background-image: linear-gradient(45deg, #808080 25%, transparent 25%), linear-gradient(-45deg, #808080 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #808080 75%), linear-gradient(-45deg, transparent 75%, #808080 75%); 
-    background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px; 
-    display: inline-block; cursor: crosshair; 
+/* NEU: Scroll-Box für die gezoomte Leinwand */
+.scroll-box-editor {
+    flex-grow: 1;
+    height: 100%;
+    overflow: auto; /* Erzeugt Scrollbalken wenn Canvas gezoomt wird! */
+    border-radius: 8px;
+    background: #1e1e1e;
+    padding: 10px;
 }
 
-#gui-editor canvas { display: block; image-rendering: pixelated; position: relative; z-index: 1; max-width: none !important; width: auto; height: auto; }
+.editor-canvas-wrapper { 
+    position: relative; 
+    border: 2px solid #555; 
+    background-image: linear-gradient(45deg, #808080 25%, transparent 25%), linear-gradient(-45deg, #808080 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #808080 75%), linear-gradient(-45deg, transparent 75%, #808080 75%); 
+    background-size: 20px 20px; 
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0px; 
+    display: inline-block; 
+    cursor: crosshair; 
+}
+
+/* WICHTIG: Das Canvas wird nur noch in JS skaliert, nicht im CSS! */
+#pixelCanvas { display: block; image-rendering: pixelated; position: relative; z-index: 1; max-width: none !important; width: auto; height: auto; }
 
 .editor-ref-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0.2; pointer-events: none; display: none; image-rendering: pixelated; z-index: 5; max-width: none !important; }
 .editor-grid-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; background-image: linear-gradient(to right, rgba(255, 255, 255, 0.25) 1px, transparent 1px), linear-gradient(to bottom, rgba(255, 255, 255, 0.25) 1px, transparent 1px); display: none; z-index: 10; }

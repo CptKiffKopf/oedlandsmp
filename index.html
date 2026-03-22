@@ -123,7 +123,7 @@
             </section>
 
             <section id="gui-editor" class="category-section" style="background: #2c2c2c; color: #fff; padding: 20px; border-radius: 8px;">
-                <h1>MC GUI Editor <span style="font-size:0.5em; color:#aaa;">V43</span></h1>
+                <h1>MC GUI Editor <span style="font-size:0.5em; color:#aaa;">V44</span></h1>
 
                 <div class="main-container-editor">
                     <div class="sidebar-editor">
@@ -139,25 +139,28 @@
                         </div>
 
                         <div class="panel-editor">
-                            <button class="btn-editor btn-undo" onclick="window.undo()">↩️ Rückgängig (Strg+Z)</button>
-                            <div class="row-editor" style="border-top:1px solid #555; padding-top:10px;">
-                                <label style="font-size:0.9em"><input type="radio" name="size" value="square" checked onchange="window.resizeCanvas()"> 256²</label>
-                                <label style="font-size:0.9em"><input type="radio" name="size" value="tall" onchange="window.resizeCanvas()"> 192x256</label>
+                            <h3>Leinwand & Zoom</h3>
+                            <select id="canvas-resolution" onchange="window.resizeCanvas()" style="margin-bottom: 10px; font-size: 0.9em; width: 100%; padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;">
+                                <option value="square">256x256 (Standard)</option>
+                                <option value="tall">192x256 (Hoch)</option>
+                                <option value="rect">256x128 (Breit)</option>
+                                <option value="mid">50x50 (Mittel)</option>
+                                <option value="icon">16x16 (Icon)</option>
+                            </select>
+                            
+                            <div style="margin-bottom: 5px; display: flex; justify-content: space-between;">
+                                <label style="font-size:0.8em; color: #aaa;">Zoomfaktor</label>
+                                <label style="font-size:0.8em; color: #aaa;"><span id="zoomVal">2</span>x</label>
                             </div>
-                            <div class="row-editor">
-                                <label style="font-size:0.9em"><input type="radio" name="size" value="rect" onchange="window.resizeCanvas()"> 256x128</label>
-                                <label style="font-size:0.9em; color:#FFC107; font-weight:bold;"><input type="radio" name="size" value="mid" onchange="window.resizeCanvas()"> 50x50</label>
-                            </div>
-                            <div class="row-editor">
-                                <label style="font-size:0.9em; color:#4CAF50; font-weight:bold;"><input type="radio" name="size" value="icon" onchange="window.resizeCanvas()"> 16x16</label>
-                            </div>
+                            <input type="range" id="zoomSlider" min="1" max="15" value="2" oninput="window.changeZoom(this.value)" style="width: 100%; margin-bottom: 10px; cursor: pointer;">
+                            
+                            <button class="btn-editor btn-undo" onclick="window.undo()" style="width:100%; margin-bottom:5px;">↩️ Rückgängig (Strg+Z)</button>
+                            <button class="btn-editor btn-danger" style="width:100%; margin-bottom: 10px;" onclick="window.clearCanvas()">🗑️ Leinwand Leeren</button>
                             
                             <hr style="border:0; border-top:1px solid #555; margin:10px 0;">
-            
-                            <label class="btn-editor" style="margin-top:5px; display:block; text-align:center;">
-                                📂 Projekt laden <input type="file" id="uploadInput" accept="image/*" style="display:none">
+                            <label class="btn-editor" style="display:block; text-align: center;">
+                                📂 Lokales Bild öffnen <input type="file" id="uploadInput" accept="image/*" style="display:none">
                             </label>
-                            <button class="btn-editor btn-danger" style="width:100%; margin-top:5px;" onclick="window.clearCanvas()">🗑️ Leinwand Leeren</button>
                             
                             <hr style="border:0; border-top:1px solid #555; margin:10px 0;">
                             
@@ -241,7 +244,7 @@
                             </div>
                             <div id="brushSettings" style="margin-top: 10px; margin-bottom: 10px;">
                                 <label style="font-size:0.8em">Pinsel-Größe: <span id="sizeVal">1</span>px</label>
-                                <input type="range" id="brushSize" min="1" max="10" value="1" oninput="document.getElementById('sizeVal').innerText = this.value" style="width:100%">
+                                <input type="range" id="brushSize" min="1" max="10" value="1" oninput="document.getElementById('sizeVal').innerText = this.value" style="width:100%; cursor: pointer;">
                             </div>
                         </div>
             
@@ -261,12 +264,15 @@
                         </div>
                     </div>
             
-                    <div class="editor-canvas-wrapper" id="canvasWrapper">
-                        <canvas id="pixelCanvas" width="256" height="256"></canvas>
-                        <img id="refOverlay" class="editor-ref-overlay"> 
-                        <div id="gridOverlay" class="editor-grid-overlay"></div>
-                        <div id="centerLine" class="editor-center-line"></div>
+                    <div class="scroll-box-editor">
+                        <div class="editor-canvas-wrapper" id="canvasWrapper">
+                            <canvas id="pixelCanvas" width="256" height="256"></canvas>
+                            <img id="refOverlay" class="editor-ref-overlay"> 
+                            <div id="gridOverlay" class="editor-grid-overlay"></div>
+                            <div id="centerLine" class="editor-center-line"></div>
+                        </div>
                     </div>
+
                 </div>
                 <div id="editor-toast">Nachricht</div>
             </section>

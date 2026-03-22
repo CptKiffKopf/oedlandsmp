@@ -1,7 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, doc, deleteDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-// WICHTIG: uploadString hinzugefügt, um Canvas sicher zu speichern!
 import { getStorage, ref, uploadBytes, getDownloadURL, uploadString } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
 
 const firebaseConfig = {
@@ -33,6 +32,13 @@ async function uploadImage(file, folderPath) {
     return await getDownloadURL(storageRef);
 }
 
+function dataURLtoFile(dataurl, filename) {
+    let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
+        bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+    while(n--){ u8arr[n] = bstr.charCodeAt(n); }
+    return new File([u8arr], filename, {type:mime});
+}
+
 onAuthStateChanged(auth, (user) => {
     if (user) {
         document.getElementById('login-screen').style.display = 'none';
@@ -62,6 +68,10 @@ document.querySelectorAll('.nav-item:not(#btn-logout)').forEach(item => {
         const targetId = e.target.getAttribute('data-target');
         document.querySelectorAll('.category-section').forEach(sec => sec.classList.remove('active'));
         document.getElementById(targetId).classList.add('active');
+        
+        if(targetId === 'gui-editor') {
+            setTimeout(() => { if(window.resizeCanvas) window.resizeCanvas(); }, 50);
+        }
     });
 });
 
@@ -116,7 +126,7 @@ function startRealtimeListeners() {
         allCrates.forEach(crate => {
             let items = crate.items || []; let crateImgHtml = crate.image_url ? `<img src="${crate.image_url}" class="thumbnail" style="width:50px;height:50px;">` : `<div class="thumbnail" style="width:50px;height:50px;"></div>`;
             let itemsHtml = items.map(item => `<tr><td>${item.image_url ? `<img src="${item.image_url}" class="thumbnail" style="width:30px;height:30px;">` : '-'}</td><td><strong>${item.name}</strong></td><td>${item.quantity || 1}x</td><td>${item.chance}%</td><td style="text-align: right;"><button class="btn btn-danger btn-sm" onclick="window.deleteCrateItem('${crate.id}', '${item.id}')">Entfernen</button></td></tr>`).join('');
-            container.innerHTML += `<div class="crate-box"><div class="crate-header"><div class="crate-header-left">${crateImgHtml}<h3 style="font-size: 18px;">${crate.name || 'Unbenannte Kiste'}</h3></div><div class="button-group"><button class="btn btn-primary btn-sm" onclick="window.openItemModal('${crate.id}')">+ Item hinzufügen</button><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('crates', '${crate.id}')">Kiste löschen</button></div></div>${items.length > 0 ? `<table class="crate-items-table"><thead><tr><th>Bild</th><th>Item Name</th><th>Menge</th><th>Chance</th><th style="text-align: right;">Aktion</th></tr></thead><tbody>${itemsHtml}</tbody></table>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Items in dieser Kiste. Klicke auf "+ Item hinzufügen".</p>'}</div>`;
+            container.innerHTML += `<div class="crate-box"><div class="crate-header"><div class="crate-header-left">${crateImgHtml}<h3 style="font-size: 18px;">${crate.name || 'Unbenannte Kiste'}</h3></div><div class="button-group"><button class="btn btn-primary btn-sm" onclick="window.openItemModal('${crate.id}')">+ Item hinzufügen</button><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('crates', '${crate.id}')">Kiste löschen</button></div></div>${items.length > 0 ? `<table class="crate-items-table"><thead><tr><th>Bild</th><th>Item Name</th><th>Menge</th><th>Chance</th><th style="text-align: right;">Aktion</th></tr></thead><tbody>${itemsHtml}</tbody></table>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Items in dieser Kiste.</p>'}</div>`;
         });
         updateDashboard();
     });
@@ -324,7 +334,7 @@ window.editGuiItemInEditor = (pkgId, itemId) => {
 
 
 // ==========================================
-// 6. GUI EDITOR LOGIK (1 ZU 1 DEIN ORIGINAL)
+// 6. GUI EDITOR LOGIK (MIT ZOOM SLIDER!)
 // ==========================================
 let editorInitialized = false;
 
@@ -356,9 +366,24 @@ function initEditor() {
     window.undo = function() { if (undoStack.length > 0) { const data = undoStack.pop(); ctx.putImageData(data, 0, 0); refreshSnapshot(); isDrawing = false; selectionBuffer = null; window.updateGuides(); } }
     document.addEventListener('keydown', e => { if((e.ctrlKey||e.metaKey)&&e.key==='z') window.undo(); });
 
+    // NEU: ZOOM SLIDER LOGIK
+    window.changeZoom = function(val) {
+        currentZoom = parseInt(val);
+        document.getElementById('zoomVal').innerText = currentZoom;
+        canvas.style.width = (canvas.width * currentZoom) + 'px';
+        canvas.style.height = (canvas.height * currentZoom) + 'px';
+        window.updateGuides();
+    }
+
+    // NEU: LEINWAND GRÖSSE VIA DROPDOWN
     window.resizeCanvas = function() {
-        saveState(); const s = document.querySelector('#gui-editor input[name="size"]:checked').value; const tempCanvas = document.createElement('canvas'); tempCanvas.width = canvas.width; tempCanvas.height = canvas.height; tempCanvas.getContext('2d').putImageData(ctx.getImageData(0,0,canvas.width, canvas.height), 0, 0);
-        if (s === 'square') { canvas.width = 256; canvas.height = 256; currentZoom = 2; } else if (s === 'rect') { canvas.width = 256; canvas.height = 128; currentZoom = 2; } else if (s === 'tall') { canvas.width = 192; canvas.height = 256; currentZoom = 2; } else if (s === 'mid') { canvas.width = 50; canvas.height = 50; currentZoom = 10; } else if (s === 'icon') { canvas.width = 16; canvas.height = 16; currentZoom = 25; }
+        saveState(); 
+        const s = document.getElementById('canvas-resolution').value;
+        const tempCanvas = document.createElement('canvas'); tempCanvas.width = canvas.width; tempCanvas.height = canvas.height; 
+        tempCanvas.getContext('2d').putImageData(ctx.getImageData(0,0,canvas.width, canvas.height), 0, 0);
+        
+        if (s === 'square') { canvas.width = 256; canvas.height = 256; } else if (s === 'rect') { canvas.width = 256; canvas.height = 128; } else if (s === 'tall') { canvas.width = 192; canvas.height = 256; } else if (s === 'mid') { canvas.width = 50; canvas.height = 50; } else if (s === 'icon') { canvas.width = 16; canvas.height = 16; }
+        
         canvas.style.width = (canvas.width * currentZoom) + 'px'; canvas.style.height = (canvas.height * currentZoom) + 'px';
         window.updateGuides(); ctx.imageSmoothingEnabled = false; ctx.drawImage(tempCanvas, 0, 0); saveState();
     }
@@ -375,6 +400,8 @@ function initEditor() {
     window.toggleEraseMode = function() { isEraseMode = !isEraseMode; const btn = document.getElementById('btnEraseMode'); if (isEraseMode) { btn.classList.add('active'); btn.innerText = "🧽 Radier-Modus (AN)"; showToast("🧽 Alles ist Radierer!"); } else { btn.classList.remove('active'); btn.innerText = "🧽 Radier-Modus (AUS)"; } }
     window.pasteFromClipboard = function() { if (!clipboardData.img) { showToast("⚠️ Leer!"); return; } saveState(); ctx.putImageData(clipboardData.img, clipboardData.x, clipboardData.y); refreshSnapshot(); showToast("📋 Eingefügt"); }
     window.pasteClipboardMove = function() { if (!clipboardData.img) { showToast("⚠️ Leer!"); return; } window.setTool('select'); selectionBuffer = clipboardData.img; showToast("🖱️ Klicke zum Platzieren"); }
+    
+    // KOORDINATEN BERECHNUNG FUNKTIONIERT AUCH BEIM SCROLLEN PERFEKT!
     function getMousePos(evt) { const r = canvas.getBoundingClientRect(); return { x: Math.floor((evt.clientX - r.left)/currentZoom), y: Math.floor((evt.clientY - r.top)/currentZoom) }; }
 
     canvas.addEventListener('mousedown', function(e) {
@@ -425,7 +452,16 @@ function initEditor() {
     window.getAutoY = function(p){if(autoCenter&&document.getElementById('useFixedY').checked)return parseInt(document.getElementById('fixedYVal').value)||0;return p.y;}
     window.getAutoX = function(p,t){if(!autoCenter)return p.x;let cx=canvas.width/2;if(document.getElementById('useContentAlign').checked)cx=window.getContentBounds().centerX;if(t==='text'){const txt=document.getElementById('textInput').value;const s=parseInt(document.getElementById('textScale').value)||1;let w=0;for(let c of txt.toUpperCase()){const m=fontMap[c]||fontMap[' '];w+=((m[0]?.length||3)*s)+s;}w-=s;return Math.floor(cx-(w/2));}else{const w=(t.startsWith('job')?45:(window.currentStamp==='slot')?18:16);return Math.floor(cx-(w/2));}}
     window.getContentBounds = function() {const w=canvas.width, h=canvas.height, d=ctx.getImageData(0,0,w,h).data;let minX=w, maxX=0, found=false;for(let y=0;y<h;y++) for(let x=0;x<w;x++) if(d[(y*w+x)*4+3]>0) { if(x<minX)minX=x; if(x>maxX)maxX=x; found=true; }return found ? {minX, maxX, centerX:Math.floor(minX+(maxX-minX)/2), found:true} : {minX:0, maxX:w, centerX:w/2, found:false};}
-    window.updateGuides = function() { const cl=document.getElementById('centerLine'); cl.style.display='none'; const grid = document.getElementById('gridOverlay'); const gridSize = 18 * currentZoom; grid.style.backgroundSize = `${gridSize}px ${gridSize}px`; const refImg = document.getElementById('refOverlay'); if (refImg && refImg.style.display === 'block') { refImg.style.width = (canvas.width * currentZoom) + 'px'; refImg.style.height = (canvas.height * currentZoom) + 'px'; } if (autoCenter) { let cp = canvas.width / 2; if (document.getElementById('useContentAlign').checked) { const b = window.getContentBounds(); if(b.found) { cp=b.centerX; } } cl.style.left = (cp * currentZoom) + 'px'; cl.style.display = 'block'; } }
+    
+    window.updateGuides = function() { 
+        const cl=document.getElementById('centerLine'); cl.style.display='none'; 
+        const grid = document.getElementById('gridOverlay'); const gridSize = 18 * currentZoom; grid.style.backgroundSize = `${gridSize}px ${gridSize}px`; 
+        const refImg = document.getElementById('refOverlay'); 
+        if (refImg && refImg.style.display === 'block') { refImg.style.width = (canvas.width * currentZoom) + 'px'; refImg.style.height = (canvas.height * currentZoom) + 'px'; } 
+        // WICHTIG: Overlays müssen die gleiche Größe wie das Canvas annehmen!
+        grid.style.width = (canvas.width * currentZoom) + 'px'; grid.style.height = (canvas.height * currentZoom) + 'px';
+        if (autoCenter) { let cp = canvas.width / 2; if (document.getElementById('useContentAlign').checked) { const b = window.getContentBounds(); if(b.found) { cp=b.centerX; } } cl.style.left = (cp * currentZoom) + 'px'; cl.style.display = 'block'; } 
+    }
 
     function drawBrush(x, y) { ctx.fillStyle = selectedColor; const s = parseInt(document.getElementById('brushSize').value); ctx.fillRect(x - Math.floor(s/2), y - Math.floor(s/2), s, s); }
     function drawEraser(x, y) { const s = parseInt(document.getElementById('brushSize').value); ctx.clearRect(x - Math.floor(s/2), y - Math.floor(s/2), s, s); }
@@ -461,9 +497,7 @@ function initEditor() {
     
     function floodFill(x,y,erase){ const startPixel=ctx.getImageData(x,y,1,1).data; const startR=startPixel[0],startG=startPixel[1],startB=startPixel[2],startA=startPixel[3]; const f=window.hexToRgb(selectedColor); if(erase){ if(startA===0) return; } else { if(startR===f.r&&startG===f.g&&startB===f.b&&startA===255) return; } const img=ctx.getImageData(0,0,canvas.width,canvas.height); const d=img.data; const s=[[x,y]]; const w=canvas.width,h=canvas.height; while(s.length){ const[cx,cy]=s.pop(); if(cx<0||cx>=w||cy<0||cy>=h)continue; const i=(cy*w+cx)*4; if(d[i]===startR&&d[i+1]===startG&&d[i+2]===startB&&d[i+3]===startA){ if(erase) d[i+3]=0; else { d[i]=f.r; d[i+1]=f.g; d[i+2]=f.b; d[i+3]=255; } s.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]); } } ctx.putImageData(img,0,0); }
 
-    // ==========================================
-    // IN FIREBASE (ZUM PAKET) SPEICHERN
-    // ==========================================
+    // IN FIREBASE SPEICHERN (GESICHERT MIT UPLOADSTRING)
     window.saveEditorToFirebase = async function() {
         const pkgId = document.getElementById('editor-pkg-select').value;
         const guiName = document.getElementById('editor-gui-name').value;
@@ -480,7 +514,7 @@ function initEditor() {
             const dataUrl = canvas.toDataURL('image/png');
             const storageRef = ref(storage, `guis/images/gui_${Date.now()}.png`);
             
-            // NEU: Native Firebase Funktion für Base64 Canvas-Bilder (Vermeidet Datei-Umwandlungsfehler)
+            // NEU: Native Firebase Funktion für Base64 Canvas-Bilder
             await uploadString(storageRef, dataUrl, 'data_url');
             const imageUrl = await getDownloadURL(storageRef);
             
