@@ -27,8 +27,13 @@
                 <li class="nav-item" data-target="raenge">Ränge</li>
                 <li class="nav-item" data-target="kisten">Kisten</li>
                 <li class="nav-item" data-target="punkteshop">Punkteshop</li>
+                
+                <li style="margin-top: 10px; font-size: 11px; text-transform: uppercase; color: #555; font-weight: bold; pointer-events: none;">GUI & Design</li>
                 <li class="nav-item" data-target="gui">GUI Pakete</li>
-                <li class="nav-item" data-target="gui-editor" style="color: #4CAF50;">🖌️ GUI Editor</li>
+                <li class="nav-item" data-target="gui-editor" style="color: #4CAF50;">🖌️ Pixel Editor</li>
+                <li class="nav-item" data-target="menu-planner" style="color: #00BCD4;">📋 Menü Planer</li>
+                
+                <li style="margin-top: 10px; font-size: 11px; text-transform: uppercase; color: #555; font-weight: bold; pointer-events: none;">Server</li>
                 <li class="nav-item" data-target="plugins">Plugins</li>
                 <li class="nav-item" data-target="werbung">Werbung</li>
                 <div style="flex-grow: 1;"></div>
@@ -121,13 +126,53 @@
                 </div>
                 <div id="gui-packages-container" class="crates-layout"></div>
             </section>
+            
+            <section id="menu-planner" class="category-section" style="background: #2c2c2c; color: #fff; padding: 20px; border-radius: 8px;">
+                <h1>📋 Custom Menü Planer</h1>
+                <p style="color: #aaa; margin-bottom: 20px;">Ziehe die vorgefertigten Items in das Inventar, um dein Layout zu planen.</p>
+
+                <div style="display: flex; gap: 20px; align-items: flex-start;">
+                    
+                    <div class="panel-editor" style="width: 250px; flex-shrink: 0;">
+                        <h3 style="color: #00BCD4; border-bottom: 1px solid #00BCD4;">Vorgefertigte Items</h3>
+                        <div id="palette-items" style="display: flex; flex-direction: column; gap: 8px; margin-top: 15px;">
+                        </div>
+                        <p style="font-size: 11px; color: #888; margin-top: 15px; text-align: center;">Tipp: Klicke auf ein Item im Inventar, um es wieder zu löschen.</p>
+                    </div>
+
+                    <div class="panel-editor" style="flex-grow: 1; display: flex; flex-direction: column; align-items: center;">
+                        <div style="margin-bottom: 15px; width: 100%; text-align: center;">
+                            <label style="color: #aaa; margin-right: 10px;">Inventar Größe:</label>
+                            <select id="menu-rows" onchange="window.updateMenuGrid()" style="padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;">
+                                <option value="3">3 Reihen (27 Slots)</option>
+                                <option value="4">4 Reihen (36 Slots)</option>
+                                <option value="5">5 Reihen (45 Slots)</option>
+                                <option value="6" selected>6 Reihen (54 Slots)</option>
+                            </select>
+                        </div>
+                        <div id="mc-inventory" class="mc-inventory"></div>
+                    </div>
+
+                    <div class="panel-editor" style="width: 250px; flex-shrink: 0; border: 2px solid #4CAF50;">
+                        <h3 style="color: #4CAF50; border-bottom: 1px solid #4CAF50;">Speichern & Export</h3>
+                        <select id="planner-pkg-select" style="width: 100%; margin-bottom: 10px; padding: 8px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;">
+                            <option value="">Ziel-Paket wählen...</option>
+                        </select>
+                        <input type="text" id="planner-menu-name" placeholder="Name des Menüs" style="width: 100%; margin-bottom: 15px; padding: 8px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;">
+                        <input type="hidden" id="planner-menu-id">
+                        <button class="btn btn-action" onclick="window.saveMenuLayout()" style="width: 100%; margin-bottom: 10px; background: #4CAF50; color: white; border: none; padding: 10px; font-weight: bold; border-radius: 4px; cursor: pointer;">💾 In Paket speichern</button>
+                        <hr style="border:0; border-top:1px solid #555; margin:15px 0;">
+                        <button class="btn" onclick="window.exportMenuYaml()" style="width: 100%; background: transparent; border: 1px solid #00BCD4; color: #00BCD4; padding: 10px; border-radius: 4px; cursor: pointer; transition: 0.2s;">📥 YAML Exportieren</button>
+                        <p style="font-size: 11px; color: #aaa; margin-top: 8px; text-align: center;">Generiert fertigen GUI Code</p>
+                    </div>
+                </div>
+            </section>
 
             <section id="gui-editor" class="category-section" style="background: #2c2c2c; color: #fff; padding: 20px; border-radius: 8px;">
                 <h1>MC GUI Editor <span style="font-size:0.5em; color:#aaa;">V44</span></h1>
 
                 <div class="main-container-editor">
                     <div class="sidebar-editor">
-                        
                         <div class="panel-editor" style="border: 2px solid #4CAF50;">
                             <h3 style="color: #4CAF50; border-bottom: 1px solid #4CAF50;">☁️ Server Speichern</h3>
                             <select id="editor-pkg-select" style="margin-bottom: 8px; font-size: 0.9em;">
@@ -139,28 +184,25 @@
                         </div>
 
                         <div class="panel-editor">
-                            <h3>Leinwand & Zoom</h3>
-                            <select id="canvas-resolution" onchange="window.resizeCanvas()" style="margin-bottom: 10px; font-size: 0.9em; width: 100%; padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;">
-                                <option value="square">256x256 (Standard)</option>
-                                <option value="tall">192x256 (Hoch)</option>
-                                <option value="rect">256x128 (Breit)</option>
-                                <option value="mid">50x50 (Mittel)</option>
-                                <option value="icon">16x16 (Icon)</option>
-                            </select>
-                            
-                            <div style="margin-bottom: 5px; display: flex; justify-content: space-between;">
-                                <label style="font-size:0.8em; color: #aaa;">Zoomfaktor</label>
-                                <label style="font-size:0.8em; color: #aaa;"><span id="zoomVal">2</span>x</label>
+                            <button class="btn-editor btn-undo" onclick="window.undo()">↩️ Rückgängig (Strg+Z)</button>
+                            <div class="row-editor" style="border-top:1px solid #555; padding-top:10px;">
+                                <label style="font-size:0.9em"><input type="radio" name="size" value="square" checked onchange="window.resizeCanvas()"> 256²</label>
+                                <label style="font-size:0.9em"><input type="radio" name="size" value="tall" onchange="window.resizeCanvas()"> 192x256</label>
                             </div>
-                            <input type="range" id="zoomSlider" min="1" max="15" value="2" oninput="window.changeZoom(this.value)" style="width: 100%; margin-bottom: 10px; cursor: pointer;">
-                            
-                            <button class="btn-editor btn-undo" onclick="window.undo()" style="width:100%; margin-bottom:5px;">↩️ Rückgängig (Strg+Z)</button>
-                            <button class="btn-editor btn-danger" style="width:100%; margin-bottom: 10px;" onclick="window.clearCanvas()">🗑️ Leinwand Leeren</button>
+                            <div class="row-editor">
+                                <label style="font-size:0.9em"><input type="radio" name="size" value="rect" onchange="window.resizeCanvas()"> 256x128</label>
+                                <label style="font-size:0.9em; color:#FFC107; font-weight:bold;"><input type="radio" name="size" value="mid" onchange="window.resizeCanvas()"> 50x50</label>
+                            </div>
+                            <div class="row-editor">
+                                <label style="font-size:0.9em; color:#4CAF50; font-weight:bold;"><input type="radio" name="size" value="icon" onchange="window.resizeCanvas()"> 16x16</label>
+                            </div>
                             
                             <hr style="border:0; border-top:1px solid #555; margin:10px 0;">
-                            <label class="btn-editor" style="display:block; text-align: center;">
-                                📂 Lokales Bild öffnen <input type="file" id="uploadInput" accept="image/*" style="display:none">
+            
+                            <label class="btn-editor" style="margin-top:5px; display:block; text-align:center;">
+                                📂 Projekt laden <input type="file" id="uploadInput" accept="image/*" style="display:none">
                             </label>
+                            <button class="btn-editor btn-danger" style="width:100%; margin-top:5px;" onclick="window.clearCanvas()">🗑️ Leinwand Leeren</button>
                             
                             <hr style="border:0; border-top:1px solid #555; margin:10px 0;">
                             
@@ -236,15 +278,17 @@
                             <h3>Hilfen</h3>
                             <div class="tool-grid">
                                 <button class="btn-editor btn-toggle" id="btnAutoCenter" onclick="window.toggleAutoCenter()">🧲 Zentrieren</button>
-                                <label class="btn-editor" style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin:0;"><input type="checkbox" id="gridCheck" onchange="window.toggleGrid()"> 📏 Gitter</label>
+                                <label class="btn-editor" style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin:0;">
+                                    <input type="checkbox" id="gridCheck" onchange="window.toggleGrid()"> 📏 18x18 Gitter
+                                </label>
                             </div>
                             <div id="centerSettings" style="margin-top:5px; display:none; font-size:0.85em; background:#444; padding:5px; border-radius:4px;">
                                 <label><input type="checkbox" id="useContentAlign"> Am Inhalt</label>
-                                <label><input type="checkbox" id="useFixedY" onchange="window.toggleYInput()"> Y: <input type="number" id="fixedYVal" value="10" style="width:50px; display:inline-block;" disabled></label>
+                                <label><input type="checkbox" id="useFixedY" onchange="window.toggleYInput()"> Y: <input type="number" id="fixedYVal" value="10" style="width:30px" disabled></label>
                             </div>
-                            <div id="brushSettings" style="margin-top: 10px; margin-bottom: 10px;">
-                                <label style="font-size:0.8em">Pinsel-Größe: <span id="sizeVal">1</span>px</label>
-                                <input type="range" id="brushSize" min="1" max="10" value="1" oninput="document.getElementById('sizeVal').innerText = this.value" style="width:100%; cursor: pointer;">
+                            <div id="brushSettings" style="margin-top: 5px;">
+                                <label style="font-size:0.8em">Größe: <span id="sizeVal">1</span>px</label>
+                                <input type="range" id="brushSize" min="1" max="10" value="1" oninput="document.getElementById('sizeVal').innerText = this.value" style="width:100%">
                             </div>
                         </div>
             
@@ -264,15 +308,12 @@
                         </div>
                     </div>
             
-                    <div class="scroll-box-editor">
-                        <div class="editor-canvas-wrapper" id="canvasWrapper">
-                            <canvas id="pixelCanvas" width="256" height="256"></canvas>
-                            <img id="refOverlay" class="editor-ref-overlay"> 
-                            <div id="gridOverlay" class="editor-grid-overlay"></div>
-                            <div id="centerLine" class="editor-center-line"></div>
-                        </div>
+                    <div class="canvas-wrapper" id="canvasWrapper">
+                        <canvas id="pixelCanvas" width="256" height="256"></canvas>
+                        <img id="refOverlay" class="editor-ref-overlay"> 
+                        <div id="gridOverlay" class="editor-grid-overlay"></div>
+                        <div id="centerLine" class="editor-center-line"></div>
                     </div>
-
                 </div>
                 <div id="editor-toast">Nachricht</div>
             </section>
@@ -313,14 +354,24 @@
 
     <div id="item-modal" class="modal">
         <div class="modal-content">
-            <h3>Item zur Kiste hinzufügen</h3>
+            <h3 id="item-modal-title">Item zur Kiste hinzufügen</h3>
             <input type="hidden" id="modal-crate-id">
+            <input type="hidden" id="modal-edit-item-id">
+            
             <div class="input-group" style="flex-direction: column; gap: 10px; margin-top: 15px;">
                 <input type="text" id="modal-item-name" placeholder="Item Name (z.B. Diamant)" style="width:100%;">
                 <input type="number" id="modal-item-quantity" placeholder="Menge (z.B. 1 oder 64)" min="1" value="1" style="width:100%;">
                 <input type="number" id="modal-item-chance" placeholder="Wahrscheinlichkeit in %" min="0" max="100" style="width:100%;">
                 <input type="file" id="modal-item-image" accept="image/png, image/jpeg" title="Item Bild" style="width:100%;">
+                
+                <div style="border-top: 1px solid var(--border-color); margin-top: 10px; padding-top: 10px;">
+                    <h4 style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;">Verzauberungen (Optional)</h4>
+                    <div id="enchantments-container" style="display: flex; flex-direction: column; gap: 5px;">
+                        </div>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="window.addEnchantmentField()" style="margin-top: 8px;">+ Verzauberung hinzufügen</button>
+                </div>
             </div>
+            
             <div class="button-group" style="margin-top: 20px;">
                 <button id="btn-save-item" class="btn btn-primary">Item speichern</button>
                 <button onclick="document.getElementById('item-modal').classList.remove('active')" class="btn btn-secondary">Abbrechen</button>

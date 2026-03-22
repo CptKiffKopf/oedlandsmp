@@ -55,6 +55,8 @@ textarea { padding: 10px 12px; border: 1px solid var(--border-color); border-rad
 .btn-sm { padding: 6px 10px; font-size: 12px; border-radius: 4px; }
 .btn-danger { color: var(--danger); background: transparent; border: 1px solid var(--danger); }
 .btn-danger:hover { background: #fef2f2; }
+.btn-info { background: #00BCD4; color: white; }
+.btn-info:hover { background: #00acc1; }
 
 /* Tabellen */
 .table-container { background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 12px; overflow-x: auto; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
@@ -94,6 +96,47 @@ input[type="file"] { padding: 7px; background: var(--bg-color); font-size: 12px;
 
 
 /* ========================================= */
+/* MENÜ PLANER (DRAG & DROP INVENTAR)        */
+/* ========================================= */
+
+.palette-item {
+    display: flex; align-items: center; gap: 10px;
+    background: #2a2a2a; padding: 10px; border-radius: 6px;
+    cursor: grab; border: 1px solid #555;
+    transition: transform 0.1s, background 0.1s;
+}
+.palette-item:hover { background: #444; transform: translateY(-2px); }
+.palette-item:active { cursor: grabbing; }
+
+.mc-inventory {
+    display: grid;
+    grid-template-columns: repeat(9, 44px);
+    gap: 4px;
+    background: #c6c6c6;
+    padding: 12px;
+    border: 3px solid #555;
+    border-top-color: #fff;
+    border-left-color: #fff;
+    border-radius: 4px;
+}
+
+.mc-slot {
+    width: 44px; height: 44px;
+    background: #8b8b8b;
+    border: 2px solid #373737;
+    border-top-color: #373737;
+    border-left-color: #373737;
+    border-bottom-color: #fff;
+    border-right-color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; cursor: pointer;
+    transition: background 0.1s;
+}
+.mc-slot:hover { background: #9e9e9e; }
+.mc-slot.drag-over { background: #b0b0b0; border-color: #4CAF50; }
+
+
+/* ========================================= */
 /* GUI EDITOR CSS                            */
 /* ========================================= */
 
@@ -120,27 +163,15 @@ input[type="file"] { padding: 7px; background: var(--bg-color); font-size: 12px;
 .editor-btn-copy { background: #9C27B0; } 
 .editor-btn-import { background: #009688; }
 
-/* NEU: Scroll-Box für die gezoomte Leinwand */
-.scroll-box-editor {
-    flex-grow: 1;
-    height: 100%;
-    overflow: auto; /* Erzeugt Scrollbalken wenn Canvas gezoomt wird! */
-    border-radius: 8px;
-    background: #1e1e1e;
-    padding: 10px;
-}
+.scroll-box-editor { flex-grow: 1; height: 100%; overflow: auto; border-radius: 8px; background: #1e1e1e; padding: 10px; }
 
 .editor-canvas-wrapper { 
-    position: relative; 
-    border: 2px solid #555; 
+    position: relative; border: 2px solid #555; 
     background-image: linear-gradient(45deg, #808080 25%, transparent 25%), linear-gradient(-45deg, #808080 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #808080 75%), linear-gradient(-45deg, transparent 75%, #808080 75%); 
-    background-size: 20px 20px; 
-    background-position: 0 0, 0 10px, 10px -10px, -10px 0px; 
-    display: inline-block; 
-    cursor: crosshair; 
+    background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px; 
+    display: inline-block; cursor: crosshair; 
 }
 
-/* WICHTIG: Das Canvas wird nur noch in JS skaliert, nicht im CSS! */
 #pixelCanvas { display: block; image-rendering: pixelated; position: relative; z-index: 1; max-width: none !important; width: auto; height: auto; }
 
 .editor-ref-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0.2; pointer-events: none; display: none; image-rendering: pixelated; z-index: 5; max-width: none !important; }
