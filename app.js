@@ -3,7 +3,6 @@ import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from
 import { getFirestore, collection, addDoc, doc, deleteDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
 
-// DEINE FIREBASE CONFIG
 const firebaseConfig = {
   apiKey: "AIzaSyBZXXBcEnn5YjURWupDLZt4p0ljGZvsKb0",
   authDomain: "mc-server-planer.firebaseapp.com",
@@ -74,7 +73,6 @@ document.querySelectorAll('.nav-item:not(#btn-logout)').forEach(item => {
         document.querySelectorAll('.category-section').forEach(sec => sec.classList.remove('active'));
         document.getElementById(targetId).classList.add('active');
         
-        // Canvas Size Update wenn Editor geöffnet wird
         if(targetId === 'gui-editor') {
             setTimeout(() => { if(window.resizeCanvas) window.resizeCanvas(); }, 50);
         }
@@ -91,10 +89,7 @@ function updateDashboard() {
 
 function sortRanksHierarchically(ranks) {
     let sorted = [], visited = new Set(), baseRanks = ranks.filter(r => !r.inherits_from);
-    function addChildren(parentName) {
-        let children = ranks.filter(r => r.inherits_from === parentName);
-        children.forEach(child => { if (!visited.has(child.id)) { visited.add(child.id); sorted.push(child); addChildren(child.name); } });
-    }
+    function addChildren(parentName) { let children = ranks.filter(r => r.inherits_from === parentName); children.forEach(child => { if (!visited.has(child.id)) { visited.add(child.id); sorted.push(child); addChildren(child.name); } }); }
     baseRanks.forEach(baseRank => { if (!visited.has(baseRank.id)) { visited.add(baseRank.id); sorted.push(baseRank); addChildren(baseRank.name); } });
     ranks.forEach(r => { if (!visited.has(r.id)) sorted.push(r); });
     return sorted;
@@ -114,7 +109,7 @@ function startRealtimeListeners() {
             let permsHtml = myPerms.map(p => `<span class="perm-badge">${p}</span>`).join('') + inherited.map(p => `<span class="perm-badge perm-inherited">${p}</span>`).join('');
             let imgHtml = rank.image_url ? `<img src="${rank.image_url}" class="thumbnail">` : '<div class="thumbnail"></div>';
             let indent = rank.inherits_from ? '<span style="color:#9ca3af; margin-right:5px;">↳</span>' : '';
-            list.innerHTML += `<tr><td>${imgHtml}</td><td><strong>${indent}${rank.name}</strong></td><td>${rank.inherits_from || '-'}</td><td>${permsHtml || '-'}</td><td class="action-cell"><button class="btn btn-secondary btn-sm" onclick="editRank('${rank.id}')">Bearbeiten</button><button class="btn btn-danger btn-sm" onclick="deleteEntry('ranks', '${rank.id}')">Löschen</button></td></tr>`;
+            list.innerHTML += `<tr><td>${imgHtml}</td><td><strong>${indent}${rank.name}</strong></td><td>${rank.inherits_from || '-'}</td><td>${permsHtml || '-'}</td><td class="action-cell"><button class="btn btn-secondary btn-sm" onclick="window.editRank('${rank.id}')">Bearbeiten</button><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('ranks', '${rank.id}')">Löschen</button></td></tr>`;
         });
         const dropdown = document.getElementById('rank-inherit'); dropdown.innerHTML = '<option value="">Erbt von... (Keiner)</option>';
         allRanks.forEach(r => { if(r.id !== editingRankId) { dropdown.innerHTML += `<option value="${r.name}">${r.name}</option>`; } });
@@ -125,7 +120,7 @@ function startRealtimeListeners() {
     onSnapshot(collection(db, "plugins"), (snap) => {
         allPlugins = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const list = document.getElementById('plugin-list'); list.innerHTML = '';
-        allPlugins.forEach(plugin => { list.innerHTML += `<tr><td><strong>${plugin.name}</strong></td><td style="white-space: pre-wrap; font-size: 13px;">${plugin.info || '-'}</td><td style="text-align: right;"><button class="btn btn-danger btn-sm" onclick="deleteEntry('plugins', '${plugin.id}')">Löschen</button></td></tr>`; });
+        allPlugins.forEach(plugin => { list.innerHTML += `<tr><td><strong>${plugin.name}</strong></td><td style="white-space: pre-wrap; font-size: 13px;">${plugin.info || '-'}</td><td style="text-align: right;"><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('plugins', '${plugin.id}')">Löschen</button></td></tr>`; });
         updateDashboard();
     });
 
@@ -134,8 +129,8 @@ function startRealtimeListeners() {
         const container = document.getElementById('crates-container'); container.innerHTML = '';
         allCrates.forEach(crate => {
             let items = crate.items || []; let crateImgHtml = crate.image_url ? `<img src="${crate.image_url}" class="thumbnail" style="width:50px;height:50px;">` : `<div class="thumbnail" style="width:50px;height:50px;"></div>`;
-            let itemsHtml = items.map(item => `<tr><td>${item.image_url ? `<img src="${item.image_url}" class="thumbnail" style="width:30px;height:30px;">` : '-'}</td><td><strong>${item.name}</strong></td><td>${item.quantity || 1}x</td><td>${item.chance}%</td><td style="text-align: right;"><button class="btn btn-danger btn-sm" onclick="deleteCrateItem('${crate.id}', '${item.id}')">Entfernen</button></td></tr>`).join('');
-            container.innerHTML += `<div class="crate-box"><div class="crate-header"><div class="crate-header-left">${crateImgHtml}<h3 style="font-size: 18px;">${crate.name || 'Unbenannte Kiste'}</h3></div><div class="button-group"><button class="btn btn-primary btn-sm" onclick="openItemModal('${crate.id}')">+ Item hinzufügen</button><button class="btn btn-danger btn-sm" onclick="deleteEntry('crates', '${crate.id}')">Kiste löschen</button></div></div>${items.length > 0 ? `<table class="crate-items-table"><thead><tr><th>Bild</th><th>Item Name</th><th>Menge</th><th>Chance</th><th style="text-align: right;">Aktion</th></tr></thead><tbody>${itemsHtml}</tbody></table>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Items in dieser Kiste. Klicke auf "+ Item hinzufügen".</p>'}</div>`;
+            let itemsHtml = items.map(item => `<tr><td>${item.image_url ? `<img src="${item.image_url}" class="thumbnail" style="width:30px;height:30px;">` : '-'}</td><td><strong>${item.name}</strong></td><td>${item.quantity || 1}x</td><td>${item.chance}%</td><td style="text-align: right;"><button class="btn btn-danger btn-sm" onclick="window.deleteCrateItem('${crate.id}', '${item.id}')">Entfernen</button></td></tr>`).join('');
+            container.innerHTML += `<div class="crate-box"><div class="crate-header"><div class="crate-header-left">${crateImgHtml}<h3 style="font-size: 18px;">${crate.name || 'Unbenannte Kiste'}</h3></div><div class="button-group"><button class="btn btn-primary btn-sm" onclick="window.openItemModal('${crate.id}')">+ Item hinzufügen</button><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('crates', '${crate.id}')">Kiste löschen</button></div></div>${items.length > 0 ? `<table class="crate-items-table"><thead><tr><th>Bild</th><th>Item Name</th><th>Menge</th><th>Chance</th><th style="text-align: right;">Aktion</th></tr></thead><tbody>${itemsHtml}</tbody></table>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Items in dieser Kiste. Klicke auf "+ Item hinzufügen".</p>'}</div>`;
         });
         updateDashboard();
     });
@@ -143,11 +138,10 @@ function startRealtimeListeners() {
     onSnapshot(collection(db, "shop"), (snap) => {
         allShop = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const list = document.getElementById('shop-list'); list.innerHTML = '';
-        allShop.forEach(item => { let imgHtml = item.image_url ? `<img src="${item.image_url}" class="thumbnail">` : '<div class="thumbnail"></div>'; list.innerHTML += `<tr><td>${imgHtml}</td><td><strong>${item.name}</strong></td><td>${item.price} Pkt.</td><td><button class="btn btn-danger btn-sm" onclick="deleteEntry('shop', '${item.id}')">Löschen</button></td></tr>`; });
+        allShop.forEach(item => { let imgHtml = item.image_url ? `<img src="${item.image_url}" class="thumbnail">` : '<div class="thumbnail"></div>'; list.innerHTML += `<tr><td>${imgHtml}</td><td><strong>${item.name}</strong></td><td>${item.price} Pkt.</td><td><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('shop', '${item.id}')">Löschen</button></td></tr>`; });
         updateDashboard();
     });
 
-    // GUI PAKETE RENDER & Editor Dropdown Update
     onSnapshot(collection(db, "guis"), (snap) => {
         allGUIs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const container = document.getElementById('gui-packages-container');
@@ -155,7 +149,6 @@ function startRealtimeListeners() {
         
         if(!container) return;
         container.innerHTML = '';
-        
         const currentEditorVal = editorSelect.value;
         editorSelect.innerHTML = '<option value="">Ziel-Paket wählen...</option>';
 
@@ -168,8 +161,8 @@ function startRealtimeListeners() {
                     <div class="gui-card-header">
                         <span>${item.name}</span>
                         <div>
-                            <button class="btn btn-secondary btn-sm" onclick="editGuiItemInEditor('${pkg.id}', '${item.id}')" title="Im Editor bearbeiten">✏️</button>
-                            <button class="btn btn-danger btn-sm" onclick="deleteGuiItem('${pkg.id}', '${item.id}')">Löschen</button>
+                            <button class="btn btn-secondary btn-sm" onclick="window.editGuiItemInEditor('${pkg.id}', '${item.id}')" title="Im Editor bearbeiten">✏️</button>
+                            <button class="btn btn-danger btn-sm" onclick="window.deleteGuiItem('${pkg.id}', '${item.id}')">Löschen</button>
                         </div>
                     </div>
                     <img src="${item.image_url}" alt="${item.name}">
@@ -181,9 +174,9 @@ function startRealtimeListeners() {
                     <div class="crate-header">
                         <div class="crate-header-left"><h3 style="font-size: 18px;">${pkg.name}</h3></div>
                         <div class="button-group">
-                            <button class="btn btn-primary btn-sm" onclick="openGuiUploadModal('${pkg.id}')">🖼️ Bild hochladen</button>
-                            <button class="btn btn-secondary btn-sm" onclick="openGuiEditorForPkg('${pkg.id}')">✏️ Neues GUI zeichnen</button>
-                            <button class="btn btn-danger btn-sm" onclick="deleteEntry('guis', '${pkg.id}')">Paket löschen</button>
+                            <button class="btn btn-primary btn-sm" onclick="window.openGuiUploadModal('${pkg.id}')">🖼️ Bild hochladen</button>
+                            <button class="btn btn-secondary btn-sm" onclick="window.openGuiEditorForPkg('${pkg.id}')">✏️ Neues GUI zeichnen</button>
+                            <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('guis', '${pkg.id}')">Paket löschen</button>
                         </div>
                     </div>
                     ${items.length > 0 ? `<div class="gui-grid">${itemsHtml}</div>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine GUIs in diesem Paket.</p>'}
@@ -198,7 +191,7 @@ function startRealtimeListeners() {
     onSnapshot(collection(db, "ads"), (snap) => {
         allAds = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const list = document.getElementById('ad-list'); list.innerHTML = '';
-        allAds.forEach(ad => { let linkHtml = ad.link ? `<a href="${ad.link}" target="_blank" style="font-size:12px; display:block; margin-bottom:10px;">Link öffnen</a>` : ''; list.innerHTML += `<div class="gui-card"><div class="gui-card-header"><span>${ad.title}</span><button class="btn btn-danger btn-sm" onclick="deleteEntry('ads', '${ad.id}')">Löschen</button></div>${linkHtml}<img src="${ad.image_url}"></div>`; });
+        allAds.forEach(ad => { let linkHtml = ad.link ? `<a href="${ad.link}" target="_blank" style="font-size:12px; display:block; margin-bottom:10px;">Link öffnen</a>` : ''; list.innerHTML += `<div class="gui-card"><div class="gui-card-header"><span>${ad.title}</span><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('ads', '${ad.id}')">Löschen</button></div>${linkHtml}<img src="${ad.image_url}"></div>`; });
     });
 }
 
@@ -207,28 +200,14 @@ function startRealtimeListeners() {
 // STANDARD SPEICHERN LOGIK (Ränge, Kisten etc.)
 // ==========================================
 
-document.getElementById('btn-save-plugin').addEventListener('click', async () => {
-    try { const name = document.getElementById('plugin-name').value; const info = document.getElementById('plugin-info').value; const status = document.getElementById('plugin-status'); if(!name) return alert("Bitte gib einen Plugin-Namen ein!"); status.innerText = "Speichere..."; await addDoc(collection(db, "plugins"), { name: name, info: info }); status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('plugin-name').value = ''; document.getElementById('plugin-info').value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); }
-});
-
-document.getElementById('btn-save-rank').addEventListener('click', async () => {
-    const name = document.getElementById('rank-name').value; const perms = document.getElementById('rank-perms').value.split('\n').map(p => p.trim()).filter(p => p !== ""); const inherits = document.getElementById('rank-inherit').value; const file = document.getElementById('rank-image').files[0]; const status = document.getElementById('rank-status');
-    if(!name) return alert("Name fehlt!"); status.innerText = "Speichere..."; const rankData = { name: name, permissions: perms, inherits_from: inherits || null }; if (file) { rankData.image_url = await uploadImage(file, 'ranks'); }
-    if (editingRankId) { await updateDoc(doc(db, "ranks", editingRankId), rankData); } else { await addDoc(collection(db, "ranks"), rankData); }
-    status.innerText = "Gespeichert!"; setTimeout(() => status.innerText = "", 2000);
-    editingRankId = null; document.getElementById('rank-form-title').innerText = "Neuen Rang erstellen"; document.getElementById('btn-save-rank').innerText = "Rang speichern"; document.getElementById('btn-cancel-rank').style.display = "none"; document.getElementById('rank-name').value = ''; document.getElementById('rank-perms').value = ''; document.getElementById('rank-inherit').value = ''; if(document.getElementById('rank-image')) document.getElementById('rank-image').value = '';
-});
-
+document.getElementById('btn-save-plugin').addEventListener('click', async () => { try { const name = document.getElementById('plugin-name').value; const info = document.getElementById('plugin-info').value; const status = document.getElementById('plugin-status'); if(!name) return alert("Bitte gib einen Plugin-Namen ein!"); status.innerText = "Speichere..."; await addDoc(collection(db, "plugins"), { name: name, info: info }); status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('plugin-name').value = ''; document.getElementById('plugin-info').value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
+document.getElementById('btn-save-rank').addEventListener('click', async () => { const name = document.getElementById('rank-name').value; const perms = document.getElementById('rank-perms').value.split('\n').map(p => p.trim()).filter(p => p !== ""); const inherits = document.getElementById('rank-inherit').value; const file = document.getElementById('rank-image').files[0]; const status = document.getElementById('rank-status'); if(!name) return alert("Name fehlt!"); status.innerText = "Speichere..."; const rankData = { name: name, permissions: perms, inherits_from: inherits || null }; if (file) { rankData.image_url = await uploadImage(file, 'ranks'); } if (editingRankId) { await updateDoc(doc(db, "ranks", editingRankId), rankData); } else { await addDoc(collection(db, "ranks"), rankData); } status.innerText = "Gespeichert!"; setTimeout(() => status.innerText = "", 2000); editingRankId = null; document.getElementById('rank-form-title').innerText = "Neuen Rang erstellen"; document.getElementById('btn-save-rank').innerText = "Rang speichern"; document.getElementById('btn-cancel-rank').style.display = "none"; document.getElementById('rank-name').value = ''; document.getElementById('rank-perms').value = ''; document.getElementById('rank-inherit').value = ''; if(document.getElementById('rank-image')) document.getElementById('rank-image').value = ''; });
 window.editRank = (id) => { const rank = allRanks.find(r => r.id === id); if (!rank) return; editingRankId = id; document.getElementById('rank-name').value = rank.name; document.getElementById('rank-perms').value = (rank.permissions || []).join('\n'); document.getElementById('rank-inherit').value = rank.inherits_from || ''; document.getElementById('rank-form-title').innerText = "Rang bearbeiten: " + rank.name; document.getElementById('btn-save-rank').innerText = "Änderungen speichern"; document.getElementById('btn-cancel-rank').style.display = "inline-block"; window.scrollTo({ top: 0, behavior: 'smooth' }); };
 document.getElementById('btn-cancel-rank').addEventListener('click', () => { editingRankId = null; document.getElementById('rank-form-title').innerText = "Neuen Rang erstellen"; document.getElementById('btn-save-rank').innerText = "Rang speichern"; document.getElementById('btn-cancel-rank').style.display = "none"; document.getElementById('rank-name').value = ''; document.getElementById('rank-perms').value = ''; document.getElementById('rank-inherit').value = ''; if(document.getElementById('rank-image')) document.getElementById('rank-image').value = '';});
-
 document.getElementById('btn-export-ranks').addEventListener('click', () => { if(allRanks.length === 0) return alert("Keine Ränge!"); let yamlContent = "groups:\n"; allRanks.forEach(rank => { const safeName = rank.name.toLowerCase().replace(/[^a-z0-9_-]/g, ''); yamlContent += `  ${safeName}:\n`; if (rank.permissions && rank.permissions.length > 0) { yamlContent += `    permissions:\n`; rank.permissions.forEach(p => { yamlContent += `      - ${p}: true\n`; }); } if (rank.inherits_from) { const safeInherit = rank.inherits_from.toLowerCase().replace(/[^a-z0-9_-]/g, ''); yamlContent += `    parents:\n`; yamlContent += `      - ${safeInherit}\n`; } }); const blob = new Blob([yamlContent], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'luckperms_ranks.yml'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); });
-
 document.getElementById('btn-save-crate').addEventListener('click', async () => { const crate_name = document.getElementById('crate-name').value; const fileInput = document.getElementById('crate-image'); const file = fileInput ? fileInput.files[0] : null; const status = document.getElementById('crate-status'); if(!crate_name) return alert("Name fehlt!"); status.innerText = "Erstelle Kiste..."; let imageUrl = null; if (file) imageUrl = await uploadImage(file, 'crates'); await addDoc(collection(db, "crates"), { name: crate_name, image_url: imageUrl, items: [] }); status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('crate-name').value = ''; if(fileInput) fileInput.value = ''; });
 document.getElementById('btn-save-shop').addEventListener('click', async () => { const name = document.getElementById('shop-item').value; const price = document.getElementById('shop-price').value; const file = document.getElementById('shop-image').files[0]; if(!name || !price) return alert("Name und Preis fehlen!"); document.getElementById('shop-status').innerText = "Speichere..."; const imageUrl = await uploadImage(file, 'shop') || null; await addDoc(collection(db, "shop"), { name, price: Number(price), image_url: imageUrl }); document.getElementById('shop-status').innerText = ""; document.getElementById('shop-item').value = ''; document.getElementById('shop-price').value = ''; });
 document.getElementById('btn-save-ad').addEventListener('click', async () => { const file = document.getElementById('ad-image').files[0]; if(!file || !document.getElementById('ad-title').value) return alert("Bild und Titel fehlen!"); const imageUrl = await uploadImage(file, 'ads'); await addDoc(collection(db, "ads"), { title: document.getElementById('ad-title').value, link: document.getElementById('ad-link').value, image_url: imageUrl }); document.getElementById('ad-title').value = ''; document.getElementById('ad-link').value = ''; document.getElementById('ad-image').value = ''; });
-
-// Kisten-Items Logik
 window.openItemModal = (crateId) => { document.getElementById('modal-crate-id').value = crateId; document.getElementById('item-modal').classList.add('active'); };
 document.getElementById('btn-save-item').addEventListener('click', async () => { try { const crateId = document.getElementById('modal-crate-id').value; const name = document.getElementById('modal-item-name').value; const quantity = document.getElementById('modal-item-quantity').value; const chance = document.getElementById('modal-item-chance').value; const file = document.getElementById('modal-item-image').files[0]; const status = document.getElementById('modal-status'); if(!name || !chance || !quantity) return alert("Item-Name, Menge und Chance fehlen!"); status.innerText = "Speichere Item in Kiste..."; const imageUrl = await uploadImage(file, 'crates/items') || null; const newItem = { id: Date.now().toString(), name: name, quantity: Number(quantity), chance: Number(chance), image_url: imageUrl }; const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId); const updatedItems = [...(crate.items || []), newItem]; await updateDoc(crateRef, { items: updatedItems }); status.innerText = ""; document.getElementById('modal-item-name').value = ''; document.getElementById('modal-item-quantity').value = '1'; document.getElementById('modal-item-chance').value = ''; if(document.getElementById('modal-item-image')) document.getElementById('modal-item-image').value = ''; document.getElementById('item-modal').classList.remove('active'); } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
 window.deleteCrateItem = async (crateId, itemId) => { if(confirm("Möchtest du dieses Item wirklich aus der Kiste entfernen?")) { try { const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId); const updatedItems = (crate.items || []).filter(i => i.id !== itemId); await updateDoc(crateRef, { items: updatedItems }); } catch (error) { console.error(error); } } };
@@ -236,10 +215,9 @@ window.deleteEntry = async (collectionName, id) => { if(confirm('Wirklich lösch
 
 
 // ==========================================
-// GUI PAKETE SPEICHER LOGIK
+// GUI PAKETE SPEICHER LOGIK (GESICHERT)
 // ==========================================
 
-// 1. GUI Paket erstellen
 document.getElementById('btn-save-gui-package').addEventListener('click', async () => {
     const pkgName = document.getElementById('gui-package-name').value;
     const status = document.getElementById('gui-package-status');
@@ -248,19 +226,16 @@ document.getElementById('btn-save-gui-package').addEventListener('click', async 
     status.innerText = "Erstelle Paket...";
     try {
         await addDoc(collection(db, "guis"), { name: pkgName, items: [] });
-        status.innerText = "Erfolgreich!";
-        setTimeout(() => status.innerText = "", 2000);
+        status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000);
         document.getElementById('gui-package-name').value = '';
-    } catch (e) { console.error(e); status.innerText = "Fehler!"; }
+    } catch (e) { console.error(e); status.innerText = "Fehler!"; alert("Fehler: " + e.message); }
 });
 
-// 2. Upload Modal öffnen
 window.openGuiUploadModal = (pkgId) => {
     document.getElementById('modal-gui-package-id').value = pkgId;
     document.getElementById('gui-upload-modal').classList.add('active');
 };
 
-// 3. Bild manuell hochladen
 document.getElementById('btn-save-gui-upload').addEventListener('click', async () => {
     const pkgId = document.getElementById('modal-gui-package-id').value;
     const name = document.getElementById('modal-gui-name').value;
@@ -276,15 +251,23 @@ document.getElementById('btn-save-gui-upload').addEventListener('click', async (
         
         const pkgRef = doc(db, "guis", pkgId);
         const pkg = allGUIs.find(g => g.id === pkgId);
+        if(!pkg) throw new Error("Paket nicht gefunden!");
+
         const updatedItems = [...(pkg.items || []), newItem];
-        
         await updateDoc(pkgRef, { items: updatedItems });
 
-        status.innerText = "";
-        document.getElementById('modal-gui-name').value = '';
-        document.getElementById('modal-gui-image').value = '';
-        document.getElementById('gui-upload-modal').classList.remove('active');
-    } catch (e) { console.error(e); alert("Fehler beim Hochladen!"); }
+        status.innerText = "Erfolgreich!";
+        setTimeout(() => {
+            status.innerText = "";
+            document.getElementById('modal-gui-name').value = '';
+            document.getElementById('modal-gui-image').value = '';
+            document.getElementById('gui-upload-modal').classList.remove('active');
+        }, 1000);
+    } catch (e) { 
+        console.error(e); 
+        status.innerText = "Fehler!"; 
+        alert("Fehler beim Hochladen: " + e.message); 
+    }
 });
 
 window.deleteGuiItem = async (pkgId, itemId) => {
@@ -294,14 +277,9 @@ window.deleteGuiItem = async (pkgId, itemId) => {
             const pkg = allGUIs.find(g => g.id === pkgId);
             const updatedItems = (pkg.items || []).filter(i => i.id !== itemId);
             await updateDoc(pkgRef, { items: updatedItems });
-        } catch (error) { console.error(error); }
+        } catch (error) { console.error(error); alert("Fehler: " + error.message); }
     }
 };
-
-// ==========================================
-// EIGENER GUI EDITOR TAB LOGIK
-// ==========================================
-let editorInitialized = false;
 
 window.openGuiEditorForPkg = (pkgId) => {
     document.querySelector('[data-target="gui-editor"]').click();
@@ -324,7 +302,7 @@ window.editGuiItemInEditor = (pkgId, itemId) => {
     
     if(item.image_url) {
         const img = new Image();
-        img.crossOrigin = "Anonymous";
+        img.crossOrigin = "Anonymous"; // SEHR WICHTIG GEGEN DEN CORS FEHLER!
         img.onload = () => {
             if(window.clearCanvasSilent) window.clearCanvasSilent();
             const canvas = document.getElementById('pixelCanvas');
@@ -333,18 +311,25 @@ window.editGuiItemInEditor = (pkgId, itemId) => {
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             if(window.triggerSaveState) window.triggerSaveState();
         };
+        img.onerror = () => {
+            alert("Das Bild konnte aufgrund von Browser-Sicherheitsrichtlinien (CORS) nicht ins Canvas geladen werden. Bitte lade das Bild manuell hoch.");
+        };
         img.src = item.image_url;
     } else {
         if(window.clearCanvasSilent) window.clearCanvasSilent();
     }
 };
 
-// 1:1 EDITOR LOGIK 
+
+// ==========================================
+// 1:1 GUI EDITOR LOGIK (MIT ZOOM SLIDER)
+// ==========================================
+let editorInitialized = false;
+
 function initEditor() {
     if (editorInitialized) return;
     editorInitialized = true;
 
-    // --- FONT DATA ---
     const fontMap={A:[[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],Ä:[[1,0,0,1],[0,0,0,0],[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],B:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,1],[1,1,1,0]],C:[[0,1,1,1],[1,0,0,0],[1,0,0,0],[1,0,0,0],[0,1,1,1]],D:[[1,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,0]],E:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,1,1,1]],F:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,0,0,0]],G:[[0,1,1,1],[1,0,0,0],[1,0,1,1],[1,0,0,1],[0,1,1,1]],H:[[1,0,0,1],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],I:[[1,1,1],[0,1,0],[0,1,0],[0,1,0],[1,1,1]],J:[[0,0,1,1],[0,0,0,1],[0,0,0,1],[1,0,0,1],[0,1,1,0]],K:[[1,0,0,1],[1,0,1,0],[1,1,0,0],[1,0,1,0],[1,0,0,1]],L:[[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,1,1,1]],M:[[1,0,0,0,1],[1,1,0,1,1],[1,0,1,0,1],[1,0,0,0,1],[1,0,0,0,1]],N:[[1,0,0,1],[1,1,0,1],[1,0,1,1],[1,0,0,1],[1,0,0,1]],O:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],Ö:[[1,0,0,1],[0,0,0,0],[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],P:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,0],[1,0,0,0]],Q:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,1,1],[0,1,1,1]],R:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,1,0],[1,0,0,1]],S:[[0,1,1,1],[1,0,0,0],[0,1,1,0],[0,0,0,1],[1,1,1,0]],T:[[1,1,1],[0,1,0],[0,1,0],[0,1,0],[0,1,0]],U:[[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],Ü:[[1,0,0,1],[0,0,0,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],V:[[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0],[0,0,1,0]],W:[[1,0,0,0,1],[1,0,0,0,1],[1,0,1,0,1],[1,1,0,1,1],[1,0,0,0,1]],X:[[1,0,0,1],[0,1,1,0],[0,1,1,0],[1,0,0,1]],Y:[[1,0,0,1],[0,1,1,0],[0,0,1,0],[0,0,1,0],[0,0,1,0]],Z:[[1,1,1,1],[0,0,0,1],[0,1,1,0],[1,0,0,0],[1,1,1,1]],0:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],1:[[0,1,0],[1,1,0],[0,1,0],[0,1,0],[1,1,1]],2:[[1,1,1,0],[0,0,0,1],[0,1,1,0],[1,0,0,0],[1,1,1,1]],3:[[1,1,1,0],[0,0,0,1],[0,1,1,0],[0,0,0,1],[1,1,1,0]],4:[[1,0,0,1],[1,0,0,1],[1,1,1,1],[0,0,0,1],[0,0,0,1]],5:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[0,0,0,1],[1,1,1,0]],6:[[0,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,1],[0,1,1,0]],7:[[1,1,1,1],[0,0,0,1],[0,0,1,0],[0,1,0,0],[0,1,0,0]],8:[[0,1,1,0],[1,0,0,1],[0,1,1,0],[1,0,0,1],[0,1,1,0]],9:[[0,1,1,0],[1,0,0,1],[0,1,1,1],[0,0,0,1],[0,1,1,0]],' ':[[0],[0],[0],[0],[0]],'.':[[0],[0],[0],[0],[1]],'ß':[[0,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,1],[1,1,1,0]]};
 
     const canvas = document.getElementById('pixelCanvas');
@@ -368,13 +353,27 @@ function initEditor() {
     window.undo = function() { if (undoStack.length > 0) { const data = undoStack.pop(); ctx.putImageData(data, 0, 0); refreshSnapshot(); isDrawing = false; selectionBuffer = null; window.updateGuides(); } }
     document.addEventListener('keydown', e => { if((e.ctrlKey||e.metaKey)&&e.key==='z') window.undo(); });
 
+    // --- NEU: ZOOM SLIDER LOGIK ---
+    window.changeZoom = function(val) {
+        currentZoom = parseInt(val);
+        document.getElementById('zoomVal').innerText = currentZoom;
+        canvas.style.width = (canvas.width * currentZoom) + 'px';
+        canvas.style.height = (canvas.height * currentZoom) + 'px';
+        window.updateGuides();
+    }
+
+    // --- NEU: DROP DOWN LEINWAND GRÖSSE ---
     window.resizeCanvas = function() {
         saveState(); 
-        const s = document.querySelector('#gui-editor input[name="size"]:checked').value; 
+        const s = document.getElementById('canvas-resolution').value; 
         const tempCanvas = document.createElement('canvas'); tempCanvas.width = canvas.width; tempCanvas.height = canvas.height; 
         tempCanvas.getContext('2d').putImageData(ctx.getImageData(0,0,canvas.width, canvas.height), 0, 0);
         
-        if (s === 'square') { canvas.width = 256; canvas.height = 256; currentZoom = 2; } else if (s === 'rect') { canvas.width = 256; canvas.height = 128; currentZoom = 2; } else if (s === 'tall') { canvas.width = 192; canvas.height = 256; currentZoom = 2; } else if (s === 'mid') { canvas.width = 50; canvas.height = 50; currentZoom = 10; } else if (s === 'icon') { canvas.width = 16; canvas.height = 16; currentZoom = 25; }
+        if (s === 'square') { canvas.width = 256; canvas.height = 256; } 
+        else if (s === 'rect') { canvas.width = 256; canvas.height = 128; } 
+        else if (s === 'tall') { canvas.width = 192; canvas.height = 256; } 
+        else if (s === 'mid') { canvas.width = 50; canvas.height = 50; } 
+        else if (s === 'icon') { canvas.width = 16; canvas.height = 16; }
         
         canvas.style.width = (canvas.width * currentZoom) + 'px'; canvas.style.height = (canvas.height * currentZoom) + 'px';
         window.updateGuides(); ctx.imageSmoothingEnabled = false; ctx.drawImage(tempCanvas, 0, 0); saveState();
@@ -472,27 +471,13 @@ function initEditor() {
     
     window.applyTemplate = function(type) { 
         saveState(); const w=canvas.width; const cx=Math.floor((w-176)/2); 
-        if(type==='chest'){ 
-            const sy=10; drawGuiBase(cx,sy,176,166); 
-            for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+17+r*18,false); 
-            for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+83+r*18,false); 
-            for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+141,false); 
-        } else if(type==='double'){ 
-            const sy=5; drawGuiBase(cx,sy,176,222); 
-            for(let r=0;r<6;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+17+r*18,false); 
-            for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+139+r*18,false); 
-            for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+197,false); 
-        } else if(type==='inv'){ 
-            const sy=80; 
-            for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+r*18,false); 
-            for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+58,false); 
-        } 
+        if(type==='chest'){ const sy=10; drawGuiBase(cx,sy,176,166); for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+17+r*18,false); for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+83+r*18,false); for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+141,false); } else if(type==='double'){ const sy=5; drawGuiBase(cx,sy,176,222); for(let r=0;r<6;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+17+r*18,false); for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+139+r*18,false); for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+197,false); } else if(type==='inv'){ const sy=80; for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+r*18,false); for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+58,false); } 
         refreshSnapshot(); 
     }
     
     function floodFill(x,y,erase){ const startPixel=ctx.getImageData(x,y,1,1).data; const startR=startPixel[0],startG=startPixel[1],startB=startPixel[2],startA=startPixel[3]; const f=window.hexToRgb(selectedColor); if(erase){ if(startA===0) return; } else { if(startR===f.r&&startG===f.g&&startB===f.b&&startA===255) return; } const img=ctx.getImageData(0,0,canvas.width,canvas.height); const d=img.data; const s=[[x,y]]; const w=canvas.width,h=canvas.height; while(s.length){ const[cx,cy]=s.pop(); if(cx<0||cx>=w||cy<0||cy>=h)continue; const i=(cy*w+cx)*4; if(d[i]===startR&&d[i+1]===startG&&d[i+2]===startB&&d[i+3]===startA){ if(erase) d[i+3]=0; else { d[i]=f.r; d[i+1]=f.g; d[i+2]=f.b; d[i+3]=255; } s.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]); } } ctx.putImageData(img,0,0); }
 
-    // IN FIREBASE (ZUM PAKET) SPEICHERN
+    // IN FIREBASE SPEICHERN (SICHER MIT FEHLERMELDUNG!)
     window.saveEditorToFirebase = async function() {
         const pkgId = document.getElementById('editor-pkg-select').value;
         const guiName = document.getElementById('editor-gui-name').value;
@@ -502,16 +487,24 @@ function initEditor() {
         if(!guiName) return alert("Bitte gib dem GUI einen Namen!");
 
         showToast("Speichere in Datenbank...");
-        const dataUrl = canvas.toDataURL('image/png');
-        const file = dataURLtoFile(dataUrl, `gui_${Date.now()}.png`);
         
         try {
+            // Das Canvas in ein Bild umwandeln (kann fehlschlagen, wenn CORS greift)
+            const dataUrl = canvas.toDataURL('image/png');
+            const file = dataURLtoFile(dataUrl, `gui_${Date.now()}.png`);
+            
+            // Bild bei Firebase Storage hochladen
             const imageUrl = await uploadImage(file, 'guis/images');
+            
+            // Datenbank-Eintrag aktualisieren
             const pkgRef = doc(db, "guis", pkgId);
             const pkg = allGUIs.find(g => g.id === pkgId);
+            if(!pkg) throw new Error("Das ausgewählte Paket wurde nicht in der Datenbank gefunden.");
+
             let updatedItems = [...(pkg.items || [])];
 
             if (editItemId) {
+                // Bestehendes Bild überschreiben
                 const idx = updatedItems.findIndex(i => i.id === editItemId);
                 if(idx > -1) {
                     updatedItems[idx].name = guiName;
@@ -520,15 +513,27 @@ function initEditor() {
                     updatedItems.push({ id: editItemId, name: guiName, image_url: imageUrl });
                 }
             } else {
+                // Neues Bild hinzufügen
                 updatedItems.push({ id: Date.now().toString(), name: guiName, image_url: imageUrl });
             }
 
             await updateDoc(pkgRef, { items: updatedItems });
 
             showToast("Erfolgreich gespeichert!");
+            
+            // Alles zurücksetzen & Tab wechseln
+            document.getElementById('editor-gui-name').value = '';
+            document.getElementById('editor-gui-item-id').value = '';
+            ctx.clearRect(0,0,canvas.width,canvas.height); 
+            refreshSnapshot();
+            
             document.querySelector('[data-target="gui"]').click();
             
-        } catch (error) { console.error(error); showToast("Fehler beim Speichern!"); }
+        } catch (error) { 
+            console.error(error); 
+            alert("FEHLER BEIM SPEICHERN:\n" + error.message + "\n\nFalls du ein Bild bearbeitet hast, hat der Browser das Speichern wegen Sicherheitsrichtlinien (CORS) blockiert.");
+            showToast("Fehler beim Speichern!"); 
+        }
     }
 
     const myColors = ['#a49e95', '#766f6a', '#483f46', '#231c2c', '#1e1829', '#539d33', '#ffffff', '#000000'];

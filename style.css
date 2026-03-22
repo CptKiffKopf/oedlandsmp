@@ -46,7 +46,7 @@ h2 { font-size: 24px; font-weight: 600; margin-bottom: 8px; letter-spacing: -0.5
 .button-group { display: flex; gap: 12px; }
 textarea { padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; outline: none; transition: border 0.2s; resize: vertical; background: var(--surface-color); color: var(--text-main); width: 100%; font-family: monospace; }
 
-/* Buttons Allgemein */
+/* Buttons */
 .btn { padding: 10px 16px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; transition: 0.2s; }
 .btn-primary { background: var(--primary); color: white; }
 .btn-primary:hover { background: var(--primary-hover); }
@@ -65,7 +65,7 @@ textarea { padding: 10px 12px; border: 1px solid var(--border-color); border-rad
 .perm-badge { display: inline-block; background: var(--bg-color); border: 1px solid var(--border-color); padding: 4px 8px; border-radius: 4px; font-size: 12px; margin: 2px; color: var(--text-main); }
 .perm-inherited { background: #eff6ff; border-color: #bfdbfe; color: #1e3a8a; }
 
-/* GUI / Werbung Grid */
+/* GUI Grid */
 .gui-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px; }
 .gui-card { background: var(--surface-color); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
 .gui-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-weight: 500; }
@@ -92,7 +92,6 @@ input[type="file"] { padding: 7px; background: var(--bg-color); font-size: 12px;
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
-
 /* ========================================= */
 /* 1 ZU 1 GUI EDITOR CSS                     */
 /* ========================================= */
@@ -101,7 +100,7 @@ input[type="file"] { padding: 7px; background: var(--bg-color); font-size: 12px;
 .main-container-editor { display: flex; gap: 20px; align-items: flex-start; }
 .sidebar-editor { display: flex; flex-direction: column; gap: 10px; width: 300px; max-height: 95vh; overflow-y: auto; padding-right: 5px; }
 
-.panel-editor { background: #3c3c3c; padding: 12px; border-radius: 8px; border: 1px solid #555; }
+.panel-editor { background: #3c3c3c; padding: 12px; border-radius: 8px; border: 1px solid #555; text-align: left; }
 .panel-editor h3 { margin: 0 0 8px 0; font-size: 0.95rem; color: #aaa; border-bottom: 1px solid #555; padding-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
 
 .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
@@ -109,42 +108,36 @@ input[type="file"] { padding: 7px; background: var(--bg-color); font-size: 12px;
 .btn-editor:hover { background: #666; }
 .btn-editor.active { background: #4CAF50; font-weight: bold; border: 2px solid #2E7D32; }
 
-.btn-eraser-mode { background: #444; border: 1px dashed #aaa; }
-.btn-eraser-mode.active { background: #FF9800; border: 2px solid #E65100; color: #fff; }
+.editor-btn-eraser-mode { background: #444; border: 1px dashed #aaa; }
+.editor-btn-eraser-mode.active { background: #FF9800; border: 2px solid #E65100; color: #fff; }
 
 .btn-undo { background: #FF9800; width: 100%; margin-bottom: 5px; }
-.btn-editor.btn-danger { background: #d32f2f; color: white;} 
-.btn-editor.btn-danger:hover { background: #b71c1c; }
+#gui-editor .btn-danger { background: #d32f2f; color: white;} 
+#gui-editor .btn-danger:hover { background: #b71c1c; }
 .btn-action { background: #2196F3; margin-top: 5px; width: 100%; padding: 10px; font-weight: bold; color:white; border:none;}
-.btn-template { background: #546E7A; border: 1px solid #455A64; }
-.btn-copy { background: #9C27B0; } 
-.btn-import { background: #009688; }
-.btn-ref { background: #673AB7; margin-top:5px; } 
-.btn-ref:hover { background: #512DA8; }
+.editor-btn-template { background: #546E7A; border: 1px solid #455A64; }
+.editor-btn-copy { background: #9C27B0; } 
+.editor-btn-import { background: #009688; }
 
-#gui-editor input[type="number"], #gui-editor input[type="text"], #gui-editor select { padding: 4px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px; }
-#gui-editor input[type="number"] { width: 50px; }
+#gui-editor input[type="number"], #gui-editor input[type="text"], #gui-editor select { padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px; }
+#gui-editor input[type="range"] { cursor: pointer; }
 
-.canvas-wrapper { 
-    position: relative;
-    border: 2px solid #555; 
-    background-image: linear-gradient(45deg, #808080 25%, transparent 25%), linear-gradient(-45deg, #808080 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #808080 75%), linear-gradient(-45deg, transparent 75%, #808080 75%);
-    background-size: 20px 20px;
-    background-position: 0 0, 0 10px, 10px -10px, -10px 0px; 
-    display: inline-block;
-    cursor: none; 
+.editor-canvas-wrapper { 
+    position: relative; border: 2px solid #555; 
+    background-image: linear-gradient(45deg, #808080 25%, transparent 25%), linear-gradient(-45deg, #808080 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #808080 75%), linear-gradient(-45deg, transparent 75%, #808080 75%); 
+    background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px; 
+    display: inline-block; cursor: crosshair; 
 }
 
-/* WICHTIG: Das Canvas darf auf keinen Fall durch global css limitiert werden! */
-#pixelCanvas { display: block; image-rendering: pixelated; position: relative; z-index: 1; }
+#gui-editor canvas { display: block; image-rendering: pixelated; position: relative; z-index: 1; max-width: none !important; width: auto; height: auto; }
 
-.ref-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0.2; pointer-events: none; display: none; image-rendering: pixelated; z-index: 5; }
-.grid-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; background-image: linear-gradient(to right, rgba(255, 255, 255, 0.25) 1px, transparent 1px), linear-gradient(to bottom, rgba(255, 255, 255, 0.25) 1px, transparent 1px); display: none; z-index: 10; }
-.center-line { position: absolute; top: 0; width: 2px; height: 100%; background: rgba(255, 0, 0, 0.6); pointer-events: none; display: none; left: 50%; transform: translateX(-50%); z-index: 10; }
+.editor-ref-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0.2; pointer-events: none; display: none; image-rendering: pixelated; z-index: 5; max-width: none !important; }
+.editor-grid-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; background-image: linear-gradient(to right, rgba(255, 255, 255, 0.25) 1px, transparent 1px), linear-gradient(to bottom, rgba(255, 255, 255, 0.25) 1px, transparent 1px); display: none; z-index: 10; }
+.editor-center-line { position: absolute; top: 0; width: 2px; height: 100%; background: rgba(255, 0, 0, 0.6); pointer-events: none; display: none; left: 50%; transform: translateX(-50%); z-index: 10; }
 
-#editor-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 10px 20px; border-radius: 20px; pointer-events: none; opacity: 0; transition: opacity 0.3s; z-index: 1000; font-size: 0.9rem; }
+#editor-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 10px 20px; border-radius: 20px; pointer-events: none; opacity: 0; transition: opacity 0.3s; z-index: 20100; font-size: 0.9rem; }
 
-.palette-grid { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 5px; }
-.color-swatch { width: 22px; height: 22px; border: 1px solid #000; cursor: pointer; }
-.color-swatch.active { border: 2px solid #fff; outline: 2px solid #4CAF50; z-index: 10; transform: scale(1.2); }
-.row-editor { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; gap: 5px; }
+.editor-palette-grid { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 5px; }
+#gui-editor .color-swatch { width: 22px; height: 22px; border: 1px solid #000; cursor: pointer; }
+#gui-editor .color-swatch.active { border: 2px solid #fff; outline: 2px solid #4CAF50; z-index: 10; transform: scale(1.2); }
+.editor-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; gap: 5px; }

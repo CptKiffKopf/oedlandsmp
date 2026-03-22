@@ -123,7 +123,7 @@
             </section>
 
             <section id="gui-editor" class="category-section" style="background: #2c2c2c; color: #fff; padding: 20px; border-radius: 8px;">
-                <h1>MC GUI Editor <span style="font-size:0.5em; color:#aaa;">V42</span></h1>
+                <h1>MC GUI Editor <span style="font-size:0.5em; color:#aaa;">V43</span></h1>
 
                 <div class="main-container-editor">
                     <div class="sidebar-editor">
@@ -139,32 +139,28 @@
                         </div>
 
                         <div class="panel-editor">
-                            <button class="btn-editor btn-undo" onclick="window.undo()">↩️ Rückgängig (Strg+Z)</button>
-                            <div class="row-editor" style="border-top:1px solid #555; padding-top:10px;">
-                                <label style="font-size:0.9em"><input type="radio" name="size" value="square" checked onchange="window.resizeCanvas()"> 256²</label>
-                                <label style="font-size:0.9em"><input type="radio" name="size" value="tall" onchange="window.resizeCanvas()"> 192x256</label>
+                            <h3>Leinwand & Zoom</h3>
+                            <select id="canvas-resolution" onchange="window.resizeCanvas()" style="margin-bottom: 10px; font-size: 0.9em;">
+                                <option value="square">256x256 (Standard)</option>
+                                <option value="tall">192x256 (Hoch)</option>
+                                <option value="rect">256x128 (Breit)</option>
+                                <option value="mid">50x50 (Mittel)</option>
+                                <option value="icon">16x16 (Icon)</option>
+                            </select>
+                            
+                            <div style="margin-bottom: 5px; display: flex; justify-content: space-between;">
+                                <label style="font-size:0.8em; color: #aaa;">Zoomfaktor</label>
+                                <label style="font-size:0.8em; color: #aaa;"><span id="zoomVal">2</span>x</label>
                             </div>
-                            <div class="row-editor">
-                                <label style="font-size:0.9em"><input type="radio" name="size" value="rect" onchange="window.resizeCanvas()"> 256x128</label>
-                                <label style="font-size:0.9em; color:#FFC107; font-weight:bold;"><input type="radio" name="size" value="mid" onchange="window.resizeCanvas()"> 50x50</label>
-                            </div>
-                            <div class="row-editor">
-                                <label style="font-size:0.9em; color:#4CAF50; font-weight:bold;"><input type="radio" name="size" value="icon" onchange="window.resizeCanvas()"> 16x16</label>
-                            </div>
+                            <input type="range" id="zoomSlider" min="1" max="20" value="2" oninput="window.changeZoom(this.value)" style="width: 100%; margin-bottom: 10px;">
+                            
+                            <button class="btn-editor btn-undo" onclick="window.undo()" style="width:100%; margin-bottom:5px;">↩️ Rückgängig (Strg+Z)</button>
+                            <button class="btn-editor btn-danger" style="width:100%; margin-bottom: 10px;" onclick="window.clearCanvas()">🗑️ Leinwand Leeren</button>
                             
                             <hr style="border:0; border-top:1px solid #555; margin:10px 0;">
-            
-                            <label class="btn-editor" style="margin-top:5px; display:block;">
-                                📂 Projekt laden <input type="file" id="uploadInput" accept="image/*" style="display:none">
+                            <label class="btn-editor" style="display:block;">
+                                📂 Lokales Bild öffnen <input type="file" id="uploadInput" accept="image/*" style="display:none">
                             </label>
-                            <button class="btn-editor btn-danger" style="width:100%; margin-top:5px;" onclick="window.clearCanvas()">🗑️ Leinwand Leeren</button>
-                            
-                            <hr style="border:0; border-top:1px solid #555; margin:10px 0;">
-                            
-                            <label class="btn-editor btn-ref" style="display:block;">
-                                👻 Referenz laden (20%) <input type="file" id="refInput" accept="image/*" style="display:none" onchange="window.loadReference(this)">
-                            </label>
-                            <button class="btn-editor btn-danger" style="width:100%; margin-top:5px; font-size: 0.8em;" onclick="window.clearReference()">🚫 Referenz entfernen</button>
                         </div>
             
                         <div class="panel-editor">
@@ -222,54 +218,55 @@
                             </div>
                             <div id="textOptions" style="display:none; margin-top:5px;">
                                 <input type="text" id="textInput" placeholder="Text...">
-                                <div class="row-editor">
+                                <div class="editor-row">
                                     <label style="font-size:0.8em"><input type="checkbox" id="textShadow" checked> Schatten</label>
-                                    <select id="textScale" style="width:50px"><option value="1">1x</option><option value="2" selected>2x</option><option value="3">3x</option></select>
+                                    <select id="textScale" style="width:50px; display:inline-block;"><option value="1">1x</option><option value="2" selected>2x</option><option value="3">3x</option></select>
                                 </div>
                             </div>
                         </div>
                         
                         <div class="panel-editor">
-                            <h3>Hilfen</h3>
+                            <h3>Hilfen & Referenz</h3>
                             <div class="tool-grid">
                                 <button class="btn-editor btn-toggle" id="btnAutoCenter" onclick="window.toggleAutoCenter()">🧲 Zentrieren</button>
-                                <label class="btn-editor" style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin:0;">
-                                    <input type="checkbox" id="gridCheck" onchange="window.toggleGrid()"> 📏 18x18 Gitter
-                                </label>
+                                <label class="btn-editor" style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin:0;"><input type="checkbox" id="gridCheck" onchange="window.toggleGrid()"> 📏 Gitter</label>
                             </div>
                             <div id="centerSettings" style="margin-top:5px; display:none; font-size:0.85em; background:#444; padding:5px; border-radius:4px;">
                                 <label><input type="checkbox" id="useContentAlign"> Am Inhalt</label>
-                                <label><input type="checkbox" id="useFixedY" onchange="window.toggleYInput()"> Y: <input type="number" id="fixedYVal" value="10" style="width:30px" disabled></label>
+                                <label><input type="checkbox" id="useFixedY" onchange="window.toggleYInput()"> Y: <input type="number" id="fixedYVal" value="10" style="width:50px; display:inline-block;" disabled></label>
                             </div>
-                            <div id="brushSettings" style="margin-top: 5px;">
-                                <label style="font-size:0.8em">Größe: <span id="sizeVal">1</span>px</label>
+                            <div id="brushSettings" style="margin-top: 10px; margin-bottom: 10px;">
+                                <label style="font-size:0.8em">Pinsel-Größe: <span id="sizeVal">1</span>px</label>
                                 <input type="range" id="brushSize" min="1" max="10" value="1" oninput="document.getElementById('sizeVal').innerText = this.value" style="width:100%">
                             </div>
+                            <hr style="border:0; border-top:1px solid #555; margin:10px 0;">
+                            <label class="btn-editor btn-ref" style="display:block;">👻 Referenz laden (20%) <input type="file" id="refInput" accept="image/*" style="display:none" onchange="window.loadReference(this)"></label>
+                            <button class="btn-editor btn-danger" style="width:100%; margin-top:5px; font-size: 0.8em;" onclick="window.clearReference()">🚫 Referenz entfernen</button>
                         </div>
             
                         <div class="panel-editor">
                             <h3>Templates & Farbe</h3>
                             <div class="tool-grid">
                                 <button class="btn-editor btn-template" onclick="window.applyTemplate('chest')">Kiste</button>
-                                <button class="btn-editor btn-template" onclick="window.applyTemplate('inv')">Inv</button>
-                                <button class="btn-editor btn-template" onclick="window.applyTemplate('double')" style="grid-column: span 2;">Doppelkiste</button>
+                                <button class="btn-editor btn-template" onclick="window.applyTemplate('double')">Doppelt</button>
+                                <button class="btn-editor btn-template" onclick="window.applyTemplate('inv')" style="grid-column: span 2;">Inventar</button>
                             </div>
-                            <div class="row-editor" style="margin-top:10px;">
+                            <div class="editor-row" style="margin-top:10px;">
                                 <input type="color" id="colorPicker" value="#a49e95" style="width: 35px; height: 32px; padding: 0; border: none; cursor: pointer;">
                                 <button class="btn-editor" style="flex:1; font-size: 0.8em;" onclick="window.addToPalette()">+ Merken</button>
                                 <button class="btn-editor btn-danger" style="flex:1; font-size: 0.8em;" onclick="window.deleteSelectedColor()">🗑️ Farbe löschen</button>
                             </div>
-                            <div class="palette-grid" id="paletteGrid"></div>
+                            <div class="editor-palette-grid" id="paletteGrid"></div>
                         </div>
                     </div>
             
-                    <div class="canvas-wrapper" id="canvasWrapper">
+                    <div class="editor-canvas-wrapper" id="canvasWrapper">
                         <canvas id="pixelCanvas" width="256" height="256"></canvas>
-                        <img id="refOverlay" class="ref-overlay"> <div id="gridOverlay" class="grid-overlay"></div>
-                        <div id="centerLine" class="center-line"></div>
+                        <img id="refOverlay" class="editor-ref-overlay"> 
+                        <div id="gridOverlay" class="editor-grid-overlay"></div>
+                        <div id="centerLine" class="editor-center-line"></div>
                     </div>
                 </div>
-                
                 <div id="editor-toast">Nachricht</div>
             </section>
 
