@@ -21,7 +21,6 @@ let allRanks = [], allGUIs = [], allCrates = [], allShop = [], allAds = [], allP
 let editingRankId = null, editingPluginId = null;
 let listenersActive = false; 
 
-// Zustandsspeicher für Kisten (Einklappen & Sortierung)
 window.crateCollapsed = {};
 window.crateSortModes = {};
 
@@ -147,10 +146,17 @@ function startRealtimeListeners() {
         if(!list) return;
         list.innerHTML = '';
         allBroadcasts.forEach(bc => {
+            let formattedMsg = window.formatMcText(bc.message);
             list.innerHTML += `<tr>
-                <td style="white-space: pre-wrap;">${bc.message}</td>
-                <td>Alle ${bc.interval} Sek.</td>
-                <td style="text-align: right;"><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('broadcasts', '${bc.id}')">Löschen</button></td>
+                <td>
+                    <div style="font-size: 11px; color: #888; margin-bottom: 4px;">Original: <span style="font-family:monospace;">${bc.message}</span></div>
+                    <div class="mc-preview-box" style="padding: 8px; font-size: 13px;">${formattedMsg}</div>
+                </td>
+                <td style="vertical-align: middle;">Alle ${bc.interval} Sek.</td>
+                <td style="text-align: right; vertical-align: middle;">
+                    <button class="btn btn-secondary btn-sm" onclick="window.editBroadcast('${bc.id}')">✏️ Bearbeiten</button>
+                    <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('broadcasts', '${bc.id}')">🗑️ Löschen</button>
+                </td>
             </tr>`;
         });
     });
@@ -187,10 +193,9 @@ function startRealtimeListeners() {
         updateDashboard();
     });
 
-    // KISTEN RENDER LOGIK TRIGGER
     onSnapshot(collection(db, "crates"), (snap) => {
         allCrates = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        window.renderCrates(); // Startet die neue Render-Funktion
+        window.renderCrates(); 
         updateDashboard();
     });
 
@@ -204,12 +209,14 @@ function startRealtimeListeners() {
     onSnapshot(collection(db, "guis"), (snap) => {
         allGUIs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const container = document.getElementById('gui-packages-container');
+        
         const editorSelect = document.getElementById('editor-pkg-select');
         const plannerSelect = document.getElementById('planner-pkg-select'); 
         const plannerBgSelect = document.getElementById('planner-bg-select');
         
         if(!container) return;
         container.innerHTML = '';
+        
         const currentEditorVal = editorSelect.value;
         const currentPlannerVal = plannerSelect.value;
         const currentBgVal = plannerBgSelect ? plannerBgSelect.value : '';
@@ -221,16 +228,40 @@ function startRealtimeListeners() {
         allGUIs.forEach(pkg => {
             editorSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`;
             plannerSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`;
-            let items = pkg.items || [];
             
+            let items = pkg.items || [];
             let itemsHtml = items.map(item => {
                 if (plannerBgSelect && item.type !== 'layout' && item.image_url) {
                     plannerBgSelect.innerHTML += `<option value="${item.image_url}">${pkg.name} - ${item.name}</option>`;
                 }
+
                 if (item.type === 'layout') {
-                    return `<div class="gui-card"><div class="gui-card-header"><span>${item.name}</span><div><button class="btn btn-secondary btn-sm" onclick="window.editLayoutInPlanner('${pkg.id}', '${item.id}')" title="Im Planer bearbeiten">✏️</button><button class="btn btn-danger btn-sm" onclick="window.deleteGuiItem('${pkg.id}', '${item.id}')">Löschen</button></div></div><div style="width:100%; height:120px; background:#1e1e1e; border: 2px solid #555; border-radius:6px; display:flex; align-items:center; justify-content:center; flex-direction: column;"><span style="font-size: 30px; margin-bottom: 10px;">📋</span><span style="color:#4CAF50; font-size:12px; font-weight:bold;">Menü Layout (${item.rows} Reihen)</span></div></div>`;
+                    return `
+                        <div class="gui-card">
+                            <div class="gui-card-header">
+                                <span>${item.name}</span>
+                                <div>
+                                    <button class="btn btn-secondary btn-sm" onclick="window.editLayoutInPlanner('${pkg.id}', '${item.id}')" title="Im Planer bearbeiten">✏️</button>
+                                    <button class="btn btn-danger btn-sm" onclick="window.deleteGuiItem('${pkg.id}', '${item.id}')">Löschen</button>
+                                </div>
+                            </div>
+                            <div style="width:100%; height:120px; background:#1e1e1e; border: 2px solid #555; border-radius:6px; display:flex; align-items:center; justify-content:center; flex-direction: column;">
+                                <span style="font-size: 30px; margin-bottom: 10px;">📋</span>
+                                <span style="color:#4CAF50; font-size:12px; font-weight:bold;">Menü Layout (${item.rows} Reihen)</span>
+                            </div>
+                        </div>`;
                 } else {
-                    return `<div class="gui-card"><div class="gui-card-header"><span>${item.name}</span><div><button class="btn btn-secondary btn-sm" onclick="window.editGuiItemInEditor('${pkg.id}', '${item.id}')" title="Im Editor bearbeiten">✏️</button><button class="btn btn-danger btn-sm" onclick="window.deleteGuiItem('${pkg.id}', '${item.id}')">Löschen</button></div></div><img src="${item.image_url}" alt="${item.name}"></div>`;
+                    return `
+                        <div class="gui-card">
+                            <div class="gui-card-header">
+                                <span>${item.name}</span>
+                                <div>
+                                    <button class="btn btn-secondary btn-sm" onclick="window.editGuiItemInEditor('${pkg.id}', '${item.id}')" title="Im Editor bearbeiten">✏️</button>
+                                    <button class="btn btn-danger btn-sm" onclick="window.deleteGuiItem('${pkg.id}', '${item.id}')">Löschen</button>
+                                </div>
+                            </div>
+                            <img src="${item.image_url}" alt="${item.name}">
+                        </div>`;
                 }
             }).join('');
 
@@ -268,7 +299,6 @@ function startRealtimeListeners() {
     });
 }
 
-// Allgemeine Toggle Funktion für GUI & Crates
 window.toggleGuiPackage = (pkgId) => {
     const content = document.getElementById(`pkg-content-${pkgId}`);
     const icon = document.getElementById(`icon-${pkgId}`);
@@ -285,10 +315,10 @@ window.deleteEntry = async (collectionName, id) => {
 // AUTO-BROADCASTER LOGIK
 // ==========================================
 
-window.updateMcPreview = function() {
-    let text = document.getElementById('bc-message').value;
-    text = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    let html = ''; let parts = text.split(/(&[0-9a-fl-or])/i); let currentClasses = ['mc-f'];
+window.formatMcText = function(text) {
+    if(!text) return '';
+    let safeText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    let html = ''; let parts = safeText.split(/(&[0-9a-fl-or])/i); let currentClasses = ['mc-f'];
     for(let part of parts) {
         if(/^&[0-9a-fl-or]$/i.test(part)) {
             let code = part.charAt(1).toLowerCase();
@@ -297,17 +327,51 @@ window.updateMcPreview = function() {
             else { currentClasses.push(`mc-${code}`); } 
         } else if(part) { html += `<span class="${currentClasses.join(' ')}">${part}</span>`; }
     }
-    document.getElementById('bc-preview').innerHTML = html || 'Vorschau...';
+    return html;
+};
+
+window.updateMcPreview = function() {
+    let text = document.getElementById('bc-message').value;
+    document.getElementById('bc-preview').innerHTML = window.formatMcText(text) || 'Vorschau...';
+};
+
+window.editBroadcast = function(id) {
+    const bc = allBroadcasts.find(b => b.id === id);
+    if(!bc) return;
+    document.getElementById('bc-edit-id').value = bc.id;
+    document.getElementById('bc-message').value = bc.message;
+    document.getElementById('bc-interval').value = bc.interval;
+    document.getElementById('btn-save-bc').innerText = "Änderungen speichern";
+    document.getElementById('btn-cancel-bc').style.display = "inline-block";
+    window.updateMcPreview();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+window.cancelEditBroadcast = function() {
+    document.getElementById('bc-edit-id').value = '';
+    document.getElementById('bc-message').value = '';
+    document.getElementById('bc-interval').value = '300';
+    document.getElementById('btn-save-bc').innerText = "Speichern";
+    document.getElementById('btn-cancel-bc').style.display = "none";
+    window.updateMcPreview();
 };
 
 window.saveBroadcast = async function() {
-    const msg = document.getElementById('bc-message').value; const interval = document.getElementById('bc-interval').value;
+    const msg = document.getElementById('bc-message').value; 
+    const interval = document.getElementById('bc-interval').value;
+    const editId = document.getElementById('bc-edit-id').value;
+    
     if(!msg || !interval) return alert("Bitte Nachricht und Intervall ausfüllen!");
     document.getElementById('bc-status').innerText = "Speichere...";
     try {
-        await addDoc(collection(db, "broadcasts"), { message: msg, interval: Number(interval) });
-        document.getElementById('bc-status').innerText = "Gespeichert!"; setTimeout(() => document.getElementById('bc-status').innerText = "", 2000);
-        document.getElementById('bc-message').value = ''; window.updateMcPreview();
+        if(editId) {
+            await updateDoc(doc(db, "broadcasts", editId), { message: msg, interval: Number(interval) });
+        } else {
+            await addDoc(collection(db, "broadcasts"), { message: msg, interval: Number(interval) });
+        }
+        document.getElementById('bc-status').innerText = "Gespeichert!"; 
+        setTimeout(() => document.getElementById('bc-status').innerText = "", 2000);
+        window.cancelEditBroadcast();
     } catch(e) { console.error(e); alert("Fehler!"); }
 };
 
@@ -361,26 +425,17 @@ window.importPluginPerms = () => {
     let uniquePerms = [...new Set(currentPerms)]; document.getElementById('rank-perms').value = uniquePerms.join('\n'); alert("Permissions erfolgreich importiert!");
 };
 
-
-// ==========================================
-// KISTEN LOGIK (MIT SORTIERUNG UND EINKLAPPEN)
-// ==========================================
-
+// --- KISTEN ---
 window.renderCrates = function() {
     const container = document.getElementById('crates-container');
     if(!container) return;
     container.innerHTML = '';
     
     allCrates.forEach(crate => {
-        let items = [...(crate.items || [])]; // Klonen für die Sortierung
-        
-        // SORTIERUNG ANWENDEN
+        let items = [...(crate.items || [])];
         const sortMode = window.crateSortModes[crate.id] || 'default';
-        if (sortMode === 'chance') {
-            items.sort((a, b) => (Number(b.chance) || 0) - (Number(a.chance) || 0));
-        } else if (sortMode === 'name') {
-            items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-        }
+        if (sortMode === 'chance') { items.sort((a, b) => (Number(b.chance) || 0) - (Number(a.chance) || 0)); } 
+        else if (sortMode === 'name') { items.sort((a, b) => (a.name || '').localeCompare(b.name || '')); }
 
         let crateImgHtml = crate.image_url ? `<img src="${crate.image_url}" class="thumbnail" style="width:50px;height:50px;">` : `<div class="thumbnail" style="width:50px;height:50px; display:flex; align-items:center; justify-content:center; font-size:24px;">📦</div>`;
         
@@ -389,7 +444,6 @@ window.renderCrates = function() {
             if(item.type === 'money') typeIcon = '<span style="font-size:20px;">💰</span>';
             if(item.type === 'perk') typeIcon = '<span style="font-size:20px;">🌟</span>';
             if(item.type === 'special') typeIcon = '<span style="font-size:20px;">✨</span>';
-            
             let imgContent = item.image_url ? `<img src="${item.image_url}" class="thumbnail" style="width:30px;height:30px;">` : typeIcon;
             let enchHtml = (item.enchantments && item.enchantments.length > 0) ? `<div style="font-size: 11px; color: #a855f7; margin-top: 4px;">🪄 ${item.enchantments.join(', ')}</div>` : '';
             
@@ -405,7 +459,6 @@ window.renderCrates = function() {
             </tr>`;
         }).join('');
         
-        // EINKLAPP-ZUSTAND PRÜFEN
         let isCollapsed = window.crateCollapsed[crate.id] || false;
         let displayStyle = isCollapsed ? 'none' : 'block';
         let iconText = isCollapsed ? '▶️' : '🔽';
@@ -437,21 +490,13 @@ window.renderCrates = function() {
     });
 };
 
-// NEU: Toggeln für Kisten
 window.toggleCrate = (crateId) => {
     window.crateCollapsed[crateId] = !window.crateCollapsed[crateId];
-    const content = document.getElementById(`crate-content-${crateId}`);
-    const icon = document.getElementById(`crate-icon-${crateId}`);
-    if (window.crateCollapsed[crateId]) { content.style.display = 'none'; icon.innerText = '▶️'; } 
-    else { content.style.display = 'block'; icon.innerText = '🔽'; }
+    const content = document.getElementById(`crate-content-${crateId}`); const icon = document.getElementById(`crate-icon-${crateId}`);
+    if (window.crateCollapsed[crateId]) { content.style.display = 'none'; icon.innerText = '▶️'; } else { content.style.display = 'block'; icon.innerText = '🔽'; }
 };
 
-// NEU: Sortieren
-window.changeCrateSort = (crateId, mode) => {
-    window.crateSortModes[crateId] = mode;
-    window.renderCrates(); // Rendert die Kisten in der neuen Reihenfolge neu
-};
-
+window.changeCrateSort = (crateId, mode) => { window.crateSortModes[crateId] = mode; window.renderCrates(); };
 
 document.getElementById('btn-save-crate').addEventListener('click', async () => { try { const crate_name = document.getElementById('crate-name').value; const fileInput = document.getElementById('crate-image'); const file = fileInput ? fileInput.files[0] : null; const status = document.getElementById('crate-status'); if(!crate_name) return alert("Name fehlt!"); status.innerText = "Erstelle Kiste..."; let imageUrl = null; if (file) imageUrl = await uploadImage(file, 'crates'); await addDoc(collection(db, "crates"), { name: crate_name, image_url: imageUrl, items: [] }); status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('crate-name').value = ''; if(fileInput) fileInput.value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
 
@@ -501,7 +546,6 @@ window.deleteCrateItem = async (crateId, itemId) => { if(confirm("Item entfernen
 window.simulateCrate = function(crateId) {
     const crate = allCrates.find(c => c.id === crateId);
     if(!crate || !crate.items || crate.items.length === 0) return alert("Die Kiste hat noch keine Items!");
-    
     let totalChance = crate.items.reduce((sum, item) => sum + (Number(item.chance) || 0), 0);
     if(totalChance === 0) return alert("Die Items in dieser Kiste haben keine Wahrscheinlichkeit (0%)!");
     
@@ -513,25 +557,16 @@ window.simulateCrate = function(crateId) {
 
     let html = `<ul style="list-style:none; padding:0; margin:0;">`;
     let sortedItems = [...crate.items].sort((a, b) => results[b.id] - results[a.id]);
-    
     sortedItems.forEach(item => {
-        let count = results[item.id];
-        let realPercent = ((count / 1000) * 100).toFixed(1);
-        html += `<li style="padding: 8px 0; border-bottom: 1px solid var(--border-color); display:flex; justify-content:space-between;">
-            <span><strong>${item.name}</strong></span>
-            <span style="color:var(--text-muted);">${count}x gezogen <b style="color:#00BCD4;">(${realPercent}%)</b></span>
-        </li>`;
+        let count = results[item.id]; let realPercent = ((count / 1000) * 100).toFixed(1);
+        html += `<li style="padding: 8px 0; border-bottom: 1px solid var(--border-color); display:flex; justify-content:space-between;"><span><strong>${item.name}</strong></span><span style="color:var(--text-muted);">${count}x gezogen <b style="color:#00BCD4;">(${realPercent}%)</b></span></li>`;
     });
     html += `</ul>`;
-    
-    document.getElementById('crate-test-result').innerHTML = html;
-    document.getElementById('crate-test-modal').classList.add('active');
+    document.getElementById('crate-test-result').innerHTML = html; document.getElementById('crate-test-modal').classList.add('active');
 };
 
 window.exportCrateYaml = function(crateId) {
-    const crate = allCrates.find(c => c.id === crateId);
-    if(!crate) return alert("Kiste nicht gefunden!");
-    
+    const crate = allCrates.find(c => c.id === crateId); if(!crate) return alert("Kiste nicht gefunden!");
     let safeName = crate.name ? crate.name.replace(/[^a-zA-Z0-9]/g, '') : 'CustomCrate';
     let yaml = `Crate:\n  CrateType: CSGO\n  CrateName: '&8${crate.name || 'Unbenannte Kiste'}'\n  Preview-Name: '&8${crate.name || 'Unbenannte Kiste'} Preview'\n  StartingKeys: 0\n  InGUI: true\n  Slot: 14\nPrizes:\n`;
     
@@ -541,12 +576,8 @@ window.exportCrateYaml = function(crateId) {
         if(item.type === 'money') { yaml += `    DisplayItem: 'SUNFLOWER'\n    Commands:\n      - 'eco give %player% ${item.quantity || 1000}'\n`; } 
         else if(item.type === 'perk' || item.type === 'special') { yaml += `    DisplayItem: 'NETHER_STAR'\n    Commands:\n      - 'lp user %player% permission set <deine_permission> true'\n`; } 
         else { yaml += `    DisplayItem: 'STONE'\n    Items:\n      - 'Item:STONE, Amount:${item.quantity || 1}'\n`; }
-        if(item.enchantments && item.enchantments.length > 0) {
-            yaml += `    DisplayEnchantments:\n`;
-            item.enchantments.forEach(ench => { yaml += `      - '${ench}'\n`; });
-        }
+        if(item.enchantments && item.enchantments.length > 0) { yaml += `    DisplayEnchantments:\n`; item.enchantments.forEach(ench => { yaml += `      - '${ench}'\n`; }); }
     });
-    
     const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `${safeName}.yml`; a.click(); URL.revokeObjectURL(url);
 };
@@ -557,10 +588,7 @@ document.getElementById('btn-save-shop').addEventListener('click', async () => {
 window.exportShopYaml = function() {
     if(allShop.length === 0) return alert("Der Shop ist leer!");
     let yaml = `shops:\n  main:\n    name: '&8Server Shop'\n    size: 54\n    items:\n`;
-    allShop.forEach((item, index) => {
-        yaml += `      '${index + 1}':\n        type: item\n        item:\n          material: STONE\n          name: '&e${item.name}'\n`;
-        yaml += `        buyPrice: ${item.price}\n        sellPrice: ${Math.floor(item.price * 0.5)}\n        slot: ${index}\n`;
-    });
+    allShop.forEach((item, index) => { yaml += `      '${index + 1}':\n        type: item\n        item:\n          material: STONE\n          name: '&e${item.name}'\n        buyPrice: ${item.price}\n        sellPrice: ${Math.floor(item.price * 0.5)}\n        slot: ${index}\n`; });
     const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `shopgui_main.yml`; a.click(); URL.revokeObjectURL(url);
 }
