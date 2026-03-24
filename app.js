@@ -21,6 +21,10 @@ let allRanks = [], allGUIs = [], allCrates = [], allShop = [], allAds = [], allP
 let editingRankId = null, editingPluginId = null;
 let listenersActive = false; 
 
+// Zustandsspeicher für Kisten (Einklappen & Sortierung)
+window.crateCollapsed = {};
+window.crateSortModes = {};
+
 // ==========================================
 // HILFSFUNKTIONEN & AUTH
 // ==========================================
@@ -30,6 +34,13 @@ async function uploadImage(file, folderPath) {
     const storageRef = ref(storage, `${folderPath}/${Date.now()}_${file.name}`);
     await uploadBytes(storageRef, file);
     return await getDownloadURL(storageRef);
+}
+
+function dataURLtoFile(dataurl, filename) {
+    let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
+        bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+    while(n--){ u8arr[n] = bstr.charCodeAt(n); }
+    return new File([u8arr], filename, {type:mime});
 }
 
 onAuthStateChanged(auth, (user) => {
@@ -89,7 +100,7 @@ function sortRanksHierarchically(ranks) {
 
 
 // ==========================================
-// LIVE SERVER STATUS PING (NEU)
+// LIVE SERVER STATUS PING
 // ==========================================
 window.checkServerStatus = async function() {
     const ip = document.getElementById('server-ip').value;
@@ -130,7 +141,6 @@ window.checkServerStatus = async function() {
 
 function startRealtimeListeners() {
     
-    // BROADCASTER LISTENER (NEU)
     onSnapshot(collection(db, "broadcasts"), (snap) => {
         allBroadcasts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const list = document.getElementById('bc-list');
@@ -177,50 +187,10 @@ function startRealtimeListeners() {
         updateDashboard();
     });
 
-    // KISTEN RENDER (MIT DROP-TESTER BUTTON)
+    // KISTEN RENDER LOGIK TRIGGER
     onSnapshot(collection(db, "crates"), (snap) => {
         allCrates = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const container = document.getElementById('crates-container'); container.innerHTML = '';
-        allCrates.forEach(crate => {
-            let items = crate.items || []; let crateImgHtml = crate.image_url ? `<img src="${crate.image_url}" class="thumbnail" style="width:50px;height:50px;">` : `<div class="thumbnail" style="width:50px;height:50px;"></div>`;
-            let itemsHtml = items.map(item => {
-                let typeIcon = '📦';
-                if(item.type === 'money') typeIcon = '<span style="font-size:20px;">💰</span>';
-                if(item.type === 'perk') typeIcon = '<span style="font-size:20px;">🌟</span>';
-                if(item.type === 'special') typeIcon = '<span style="font-size:20px;">✨</span>';
-                
-                let imgContent = item.image_url ? `<img src="${item.image_url}" class="thumbnail" style="width:30px;height:30px;">` : typeIcon;
-                let enchHtml = (item.enchantments && item.enchantments.length > 0) ? `<div style="font-size: 11px; color: #a855f7; margin-top: 4px;">🪄 ${item.enchantments.join(', ')}</div>` : '';
-                
-                return `<tr>
-                    <td style="text-align: center;">${imgContent}</td>
-                    <td><strong>${item.name}</strong>${enchHtml}</td>
-                    <td>${item.quantity || 1}x</td>
-                    <td>${item.chance}%</td>
-                    <td style="text-align: right;">
-                        <button class="btn btn-secondary btn-sm" onclick="window.editCrateItem('${crate.id}', '${item.id}')">✏️ Bearbeiten</button>
-                        <button class="btn btn-danger btn-sm" onclick="window.deleteCrateItem('${crate.id}', '${item.id}')">🗑️ Löschen</button>
-                    </td>
-                </tr>`;
-            }).join('');
-            
-            container.innerHTML += `
-                <div class="crate-box">
-                    <div class="crate-header">
-                        <div class="crate-header-left">
-                            ${crateImgHtml}
-                            <h3 style="font-size: 18px;">${crate.name || 'Unbenannte Kiste'}</h3>
-                        </div>
-                        <div class="button-group">
-                            <button class="btn btn-secondary btn-sm" style="border-color:#FF9800; color:#FF9800;" onclick="window.simulateCrate('${crate.id}')">🎲 1.000x Test-Öffnen</button>
-                            <button class="btn btn-info btn-sm" onclick="window.exportCrateYaml('${crate.id}')">📥 CrazyCrates Export</button>
-                            <button class="btn btn-primary btn-sm" onclick="window.openItemModal('${crate.id}')">+ Item hinzufügen</button>
-                            <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('crates', '${crate.id}')">Kiste löschen</button>
-                        </div>
-                    </div>
-                    ${items.length > 0 ? `<table class="crate-items-table"><thead><tr><th style="width: 50px;">Art</th><th>Item Name</th><th>Menge</th><th>Chance</th><th style="text-align: right;">Aktion</th></tr></thead><tbody>${itemsHtml}</tbody></table>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Items in dieser Kiste. Klicke auf "+ Item hinzufügen".</p>'}
-                </div>`;
-        });
+        window.renderCrates(); // Startet die neue Render-Funktion
         updateDashboard();
     });
 
@@ -234,14 +204,12 @@ function startRealtimeListeners() {
     onSnapshot(collection(db, "guis"), (snap) => {
         allGUIs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const container = document.getElementById('gui-packages-container');
-        
         const editorSelect = document.getElementById('editor-pkg-select');
         const plannerSelect = document.getElementById('planner-pkg-select'); 
         const plannerBgSelect = document.getElementById('planner-bg-select');
         
         if(!container) return;
         container.innerHTML = '';
-        
         const currentEditorVal = editorSelect.value;
         const currentPlannerVal = plannerSelect.value;
         const currentBgVal = plannerBgSelect ? plannerBgSelect.value : '';
@@ -253,40 +221,16 @@ function startRealtimeListeners() {
         allGUIs.forEach(pkg => {
             editorSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`;
             plannerSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`;
-            
             let items = pkg.items || [];
+            
             let itemsHtml = items.map(item => {
                 if (plannerBgSelect && item.type !== 'layout' && item.image_url) {
                     plannerBgSelect.innerHTML += `<option value="${item.image_url}">${pkg.name} - ${item.name}</option>`;
                 }
-
                 if (item.type === 'layout') {
-                    return `
-                        <div class="gui-card">
-                            <div class="gui-card-header">
-                                <span>${item.name}</span>
-                                <div>
-                                    <button class="btn btn-secondary btn-sm" onclick="window.editLayoutInPlanner('${pkg.id}', '${item.id}')" title="Im Planer bearbeiten">✏️</button>
-                                    <button class="btn btn-danger btn-sm" onclick="window.deleteGuiItem('${pkg.id}', '${item.id}')">Löschen</button>
-                                </div>
-                            </div>
-                            <div style="width:100%; height:120px; background:#1e1e1e; border: 2px solid #555; border-radius:6px; display:flex; align-items:center; justify-content:center; flex-direction: column;">
-                                <span style="font-size: 30px; margin-bottom: 10px;">📋</span>
-                                <span style="color:#4CAF50; font-size:12px; font-weight:bold;">Menü Layout (${item.rows} Reihen)</span>
-                            </div>
-                        </div>`;
+                    return `<div class="gui-card"><div class="gui-card-header"><span>${item.name}</span><div><button class="btn btn-secondary btn-sm" onclick="window.editLayoutInPlanner('${pkg.id}', '${item.id}')" title="Im Planer bearbeiten">✏️</button><button class="btn btn-danger btn-sm" onclick="window.deleteGuiItem('${pkg.id}', '${item.id}')">Löschen</button></div></div><div style="width:100%; height:120px; background:#1e1e1e; border: 2px solid #555; border-radius:6px; display:flex; align-items:center; justify-content:center; flex-direction: column;"><span style="font-size: 30px; margin-bottom: 10px;">📋</span><span style="color:#4CAF50; font-size:12px; font-weight:bold;">Menü Layout (${item.rows} Reihen)</span></div></div>`;
                 } else {
-                    return `
-                        <div class="gui-card">
-                            <div class="gui-card-header">
-                                <span>${item.name}</span>
-                                <div>
-                                    <button class="btn btn-secondary btn-sm" onclick="window.editGuiItemInEditor('${pkg.id}', '${item.id}')" title="Im Editor bearbeiten">✏️</button>
-                                    <button class="btn btn-danger btn-sm" onclick="window.deleteGuiItem('${pkg.id}', '${item.id}')">Löschen</button>
-                                </div>
-                            </div>
-                            <img src="${item.image_url}" alt="${item.name}">
-                        </div>`;
+                    return `<div class="gui-card"><div class="gui-card-header"><span>${item.name}</span><div><button class="btn btn-secondary btn-sm" onclick="window.editGuiItemInEditor('${pkg.id}', '${item.id}')" title="Im Editor bearbeiten">✏️</button><button class="btn btn-danger btn-sm" onclick="window.deleteGuiItem('${pkg.id}', '${item.id}')">Löschen</button></div></div><img src="${item.image_url}" alt="${item.name}"></div>`;
                 }
             }).join('');
 
@@ -324,6 +268,7 @@ function startRealtimeListeners() {
     });
 }
 
+// Allgemeine Toggle Funktion für GUI & Crates
 window.toggleGuiPackage = (pkgId) => {
     const content = document.getElementById(`pkg-content-${pkgId}`);
     const icon = document.getElementById(`icon-${pkgId}`);
@@ -337,66 +282,50 @@ window.deleteEntry = async (collectionName, id) => {
 
 
 // ==========================================
-// AUTO-BROADCASTER LOGIK (NEU)
+// AUTO-BROADCASTER LOGIK
 // ==========================================
 
 window.updateMcPreview = function() {
     let text = document.getElementById('bc-message').value;
     text = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    
-    let html = '';
-    let parts = text.split(/(&[0-9a-fl-or])/i);
-    let currentClasses = ['mc-f'];
-    
+    let html = ''; let parts = text.split(/(&[0-9a-fl-or])/i); let currentClasses = ['mc-f'];
     for(let part of parts) {
         if(/^&[0-9a-fl-or]$/i.test(part)) {
             let code = part.charAt(1).toLowerCase();
             if(code === 'r') { currentClasses = ['mc-f']; }
             else if(/[0-9a-f]/.test(code)) { currentClasses = [`mc-${code}`]; } 
             else { currentClasses.push(`mc-${code}`); } 
-        } else if(part) {
-            html += `<span class="${currentClasses.join(' ')}">${part}</span>`;
-        }
+        } else if(part) { html += `<span class="${currentClasses.join(' ')}">${part}</span>`; }
     }
     document.getElementById('bc-preview').innerHTML = html || 'Vorschau...';
 };
 
 window.saveBroadcast = async function() {
-    const msg = document.getElementById('bc-message').value;
-    const interval = document.getElementById('bc-interval').value;
+    const msg = document.getElementById('bc-message').value; const interval = document.getElementById('bc-interval').value;
     if(!msg || !interval) return alert("Bitte Nachricht und Intervall ausfüllen!");
-    
     document.getElementById('bc-status').innerText = "Speichere...";
     try {
         await addDoc(collection(db, "broadcasts"), { message: msg, interval: Number(interval) });
-        document.getElementById('bc-status').innerText = "Gespeichert!";
-        setTimeout(() => document.getElementById('bc-status').innerText = "", 2000);
-        document.getElementById('bc-message').value = '';
-        window.updateMcPreview();
+        document.getElementById('bc-status').innerText = "Gespeichert!"; setTimeout(() => document.getElementById('bc-status').innerText = "", 2000);
+        document.getElementById('bc-message').value = ''; window.updateMcPreview();
     } catch(e) { console.error(e); alert("Fehler!"); }
 };
 
 window.exportBroadcastYaml = function() {
-    if(allBroadcasts.length === 0) return alert("Keine Nachrichten zum Exportieren vorhanden!");
+    if(allBroadcasts.length === 0) return alert("Keine Nachrichten vorhanden!");
     let yaml = `settings:\n  interval: 300\n  prefix: '&8[&cServer&8] &7'\nbroadcasts:\n`;
-    
     allBroadcasts.forEach((bc, i) => {
-        yaml += `  'msg${i + 1}':\n`;
-        yaml += `    text:\n`;
-        bc.message.split('\n').forEach(line => {
-            yaml += `      - '${line}'\n`;
-        });
+        yaml += `  'msg${i + 1}':\n    text:\n`;
+        bc.message.split('\n').forEach(line => { yaml += `      - '${line}'\n`; });
         yaml += `    interval: ${bc.interval}\n`;
     });
-    
-    const blob = new Blob([yaml], { type: 'text/yaml' });
-    const url = URL.createObjectURL(blob);
+    const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'autobroadcaster.yml'; a.click(); URL.revokeObjectURL(url);
 };
 
 
 // ==========================================
-// 4. SPEICHERN LOGIK (Ränge, Plugins etc.)
+// RÄNGE & PLUGINS LOGIK
 // ==========================================
 
 function resetPluginForm() {
@@ -422,16 +351,108 @@ document.getElementById('btn-save-rank').addEventListener('click', async () => {
 
 window.editRank = (id) => { const rank = allRanks.find(r => r.id === id); if (!rank) return; editingRankId = id; document.getElementById('rank-name').value = rank.name; document.getElementById('rank-perms').value = (rank.permissions || []).join('\n'); document.getElementById('rank-inherit').value = rank.inherits_from || ''; document.getElementById('rank-form-title').innerText = "Rang bearbeiten: " + rank.name; document.getElementById('btn-save-rank').innerText = "Änderungen speichern"; document.getElementById('btn-cancel-rank').style.display = "inline-block"; window.scrollTo({ top: 0, behavior: 'smooth' }); };
 document.getElementById('btn-cancel-rank').addEventListener('click', () => { editingRankId = null; document.getElementById('rank-form-title').innerText = "Neuen Rang erstellen"; document.getElementById('btn-save-rank').innerText = "Rang speichern"; document.getElementById('btn-cancel-rank').style.display = "none"; document.getElementById('rank-name').value = ''; document.getElementById('rank-perms').value = ''; document.getElementById('rank-inherit').value = ''; if(document.getElementById('rank-image')) document.getElementById('rank-image').value = '';});
+
 document.getElementById('btn-export-ranks').addEventListener('click', () => { if(allRanks.length === 0) return alert("Keine Ränge!"); let yamlContent = "groups:\n"; allRanks.forEach(rank => { const safeName = rank.name.toLowerCase().replace(/[^a-z0-9_-]/g, ''); yamlContent += `  ${safeName}:\n`; if (rank.permissions && rank.permissions.length > 0) { yamlContent += `    permissions:\n`; rank.permissions.forEach(p => { yamlContent += `      - ${p}: true\n`; }); } if (rank.inherits_from) { const safeInherit = rank.inherits_from.toLowerCase().replace(/[^a-z0-9_-]/g, ''); yamlContent += `    parents:\n`; yamlContent += `      - ${safeInherit}\n`; } }); const blob = new Blob([yamlContent], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'luckperms_ranks.yml'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); });
 
 window.importPluginPerms = () => {
     if(allPlugins.length === 0) return alert("Es sind noch keine Plugins gespeichert!");
     let currentPerms = document.getElementById('rank-perms').value.split('\n').map(p => p.trim()).filter(p => p !== "");
     allPlugins.forEach(pl => { if(pl.info) { let pluginLines = pl.info.split('\n').map(p => p.trim()).filter(p => p !== ""); currentPerms = currentPerms.concat(pluginLines); } });
-    let uniquePerms = [...new Set(currentPerms)]; document.getElementById('rank-perms').value = uniquePerms.join('\n'); alert("Permissions aus allen Plugins wurden erfolgreich importiert und doppelte Zeilen entfernt!");
+    let uniquePerms = [...new Set(currentPerms)]; document.getElementById('rank-perms').value = uniquePerms.join('\n'); alert("Permissions erfolgreich importiert!");
 };
 
-// --- KISTEN ---
+
+// ==========================================
+// KISTEN LOGIK (MIT SORTIERUNG UND EINKLAPPEN)
+// ==========================================
+
+window.renderCrates = function() {
+    const container = document.getElementById('crates-container');
+    if(!container) return;
+    container.innerHTML = '';
+    
+    allCrates.forEach(crate => {
+        let items = [...(crate.items || [])]; // Klonen für die Sortierung
+        
+        // SORTIERUNG ANWENDEN
+        const sortMode = window.crateSortModes[crate.id] || 'default';
+        if (sortMode === 'chance') {
+            items.sort((a, b) => (Number(b.chance) || 0) - (Number(a.chance) || 0));
+        } else if (sortMode === 'name') {
+            items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        }
+
+        let crateImgHtml = crate.image_url ? `<img src="${crate.image_url}" class="thumbnail" style="width:50px;height:50px;">` : `<div class="thumbnail" style="width:50px;height:50px; display:flex; align-items:center; justify-content:center; font-size:24px;">📦</div>`;
+        
+        let itemsHtml = items.map(item => {
+            let typeIcon = '📦';
+            if(item.type === 'money') typeIcon = '<span style="font-size:20px;">💰</span>';
+            if(item.type === 'perk') typeIcon = '<span style="font-size:20px;">🌟</span>';
+            if(item.type === 'special') typeIcon = '<span style="font-size:20px;">✨</span>';
+            
+            let imgContent = item.image_url ? `<img src="${item.image_url}" class="thumbnail" style="width:30px;height:30px;">` : typeIcon;
+            let enchHtml = (item.enchantments && item.enchantments.length > 0) ? `<div style="font-size: 11px; color: #a855f7; margin-top: 4px;">🪄 ${item.enchantments.join(', ')}</div>` : '';
+            
+            return `<tr>
+                <td style="text-align: center;">${imgContent}</td>
+                <td><strong>${item.name}</strong>${enchHtml}</td>
+                <td>${item.quantity || 1}x</td>
+                <td>${item.chance}%</td>
+                <td style="text-align: right;">
+                    <button class="btn btn-secondary btn-sm" onclick="window.editCrateItem('${crate.id}', '${item.id}')">✏️ Bearbeiten</button>
+                    <button class="btn btn-danger btn-sm" onclick="window.deleteCrateItem('${crate.id}', '${item.id}')">🗑️ Löschen</button>
+                </td>
+            </tr>`;
+        }).join('');
+        
+        // EINKLAPP-ZUSTAND PRÜFEN
+        let isCollapsed = window.crateCollapsed[crate.id] || false;
+        let displayStyle = isCollapsed ? 'none' : 'block';
+        let iconText = isCollapsed ? '▶️' : '🔽';
+
+        container.innerHTML += `
+            <div class="crate-box">
+                <div class="crate-header" style="cursor: pointer;" onclick="window.toggleCrate('${crate.id}')">
+                    <div class="crate-header-left">
+                        <span id="crate-icon-${crate.id}" style="margin-right: 8px; font-size: 14px;">${iconText}</span>
+                        ${crateImgHtml}
+                        <h3 style="font-size: 18px; margin: 0;">${crate.name || 'Unbenannte Kiste'}</h3>
+                    </div>
+                    <div class="button-group" onclick="event.stopPropagation()">
+                        <select onchange="window.changeCrateSort('${crate.id}', this.value)" style="padding: 6px; border-radius: 4px; background: var(--surface-color); color: var(--text-main); border: 1px solid var(--border-color); font-size: 12px; outline: none;">
+                            <option value="default" ${sortMode === 'default' ? 'selected' : ''}>Sortierung: Standard</option>
+                            <option value="chance" ${sortMode === 'chance' ? 'selected' : ''}>Sortierung: Chance</option>
+                            <option value="name" ${sortMode === 'name' ? 'selected' : ''}>Sortierung: A-Z</option>
+                        </select>
+                        <button class="btn btn-secondary btn-sm" style="border-color:#FF9800; color:#FF9800;" onclick="window.simulateCrate('${crate.id}')">🎲 Test-Öffnen</button>
+                        <button class="btn btn-info btn-sm" onclick="window.exportCrateYaml('${crate.id}')">📥 CrazyCrates Export</button>
+                        <button class="btn btn-primary btn-sm" onclick="window.openItemModal('${crate.id}')">+ Item hinzufügen</button>
+                        <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('crates', '${crate.id}')">Kiste löschen</button>
+                    </div>
+                </div>
+                <div id="crate-content-${crate.id}" style="display: ${displayStyle}; margin-top: 15px;">
+                    ${items.length > 0 ? `<table class="crate-items-table"><thead><tr><th style="width: 50px;">Art</th><th>Item Name</th><th>Menge</th><th>Chance</th><th style="text-align: right;">Aktion</th></tr></thead><tbody>${itemsHtml}</tbody></table>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Items in dieser Kiste. Klicke auf "+ Item hinzufügen".</p>'}
+                </div>
+            </div>`;
+    });
+};
+
+// NEU: Toggeln für Kisten
+window.toggleCrate = (crateId) => {
+    window.crateCollapsed[crateId] = !window.crateCollapsed[crateId];
+    const content = document.getElementById(`crate-content-${crateId}`);
+    const icon = document.getElementById(`crate-icon-${crateId}`);
+    if (window.crateCollapsed[crateId]) { content.style.display = 'none'; icon.innerText = '▶️'; } 
+    else { content.style.display = 'block'; icon.innerText = '🔽'; }
+};
+
+// NEU: Sortieren
+window.changeCrateSort = (crateId, mode) => {
+    window.crateSortModes[crateId] = mode;
+    window.renderCrates(); // Rendert die Kisten in der neuen Reihenfolge neu
+};
+
+
 document.getElementById('btn-save-crate').addEventListener('click', async () => { try { const crate_name = document.getElementById('crate-name').value; const fileInput = document.getElementById('crate-image'); const file = fileInput ? fileInput.files[0] : null; const status = document.getElementById('crate-status'); if(!crate_name) return alert("Name fehlt!"); status.innerText = "Erstelle Kiste..."; let imageUrl = null; if (file) imageUrl = await uploadImage(file, 'crates'); await addDoc(collection(db, "crates"), { name: crate_name, image_url: imageUrl, items: [] }); status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('crate-name').value = ''; if(fileInput) fileInput.value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
 
 window.changeCrateItemType = () => {
@@ -477,7 +498,6 @@ document.getElementById('btn-save-item').addEventListener('click', async () => {
 
 window.deleteCrateItem = async (crateId, itemId) => { if(confirm("Item entfernen?")) { try { const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId); await updateDoc(crateRef, { items: (crate.items || []).filter(i => i.id !== itemId) }); } catch (error) { console.error(error); } } };
 
-// NEU: KISTEN DROP-TEST SIMULATOR
 window.simulateCrate = function(crateId) {
     const crate = allCrates.find(c => c.id === crateId);
     if(!crate || !crate.items || crate.items.length === 0) return alert("Die Kiste hat noch keine Items!");
@@ -485,24 +505,13 @@ window.simulateCrate = function(crateId) {
     let totalChance = crate.items.reduce((sum, item) => sum + (Number(item.chance) || 0), 0);
     if(totalChance === 0) return alert("Die Items in dieser Kiste haben keine Wahrscheinlichkeit (0%)!");
     
-    let results = {};
-    crate.items.forEach(i => results[i.id] = 0);
-
-    // 1000 Ziehungen simulieren
+    let results = {}; crate.items.forEach(i => results[i.id] = 0);
     for(let i=0; i<1000; i++) {
-        let rand = Math.random() * totalChance;
-        let current = 0;
-        for(let item of crate.items) {
-            current += (Number(item.chance) || 0);
-            if(rand <= current) {
-                results[item.id]++;
-                break;
-            }
-        }
+        let rand = Math.random() * totalChance; let current = 0;
+        for(let item of crate.items) { current += (Number(item.chance) || 0); if(rand <= current) { results[item.id]++; break; } }
     }
 
     let html = `<ul style="list-style:none; padding:0; margin:0;">`;
-    // Nach Häufigkeit sortieren
     let sortedItems = [...crate.items].sort((a, b) => results[b.id] - results[a.id]);
     
     sortedItems.forEach(item => {
@@ -519,39 +528,26 @@ window.simulateCrate = function(crateId) {
     document.getElementById('crate-test-modal').classList.add('active');
 };
 
-// --- CRAZYCRATES EXPORT LOGIK ---
 window.exportCrateYaml = function(crateId) {
     const crate = allCrates.find(c => c.id === crateId);
     if(!crate) return alert("Kiste nicht gefunden!");
     
     let safeName = crate.name ? crate.name.replace(/[^a-zA-Z0-9]/g, '') : 'CustomCrate';
-    
     let yaml = `Crate:\n  CrateType: CSGO\n  CrateName: '&8${crate.name || 'Unbenannte Kiste'}'\n  Preview-Name: '&8${crate.name || 'Unbenannte Kiste'} Preview'\n  StartingKeys: 0\n  InGUI: true\n  Slot: 14\nPrizes:\n`;
     
     let items = crate.items || [];
     items.forEach((item, index) => {
-        yaml += `  '${index + 1}':\n`;
-        yaml += `    DisplayName: '&f${item.name}'\n`;
-        yaml += `    DisplayAmount: ${item.quantity || 1}\n`;
-        yaml += `    MaxRange: 100\n`;
-        yaml += `    Chance: ${item.chance}\n`;
-        
-        if(item.type === 'money') {
-            yaml += `    DisplayItem: 'SUNFLOWER'\n    Commands:\n      - 'eco give %player% ${item.quantity || 1000}'\n`;
-        } else if(item.type === 'perk' || item.type === 'special') {
-            yaml += `    DisplayItem: 'NETHER_STAR'\n    Commands:\n      - 'lp user %player% permission set <deine_permission> true'\n`;
-        } else {
-            yaml += `    DisplayItem: 'STONE'\n    Items:\n      - 'Item:STONE, Amount:${item.quantity || 1}'\n`;
-        }
-        
+        yaml += `  '${index + 1}':\n    DisplayName: '&f${item.name}'\n    DisplayAmount: ${item.quantity || 1}\n    MaxRange: 100\n    Chance: ${item.chance}\n`;
+        if(item.type === 'money') { yaml += `    DisplayItem: 'SUNFLOWER'\n    Commands:\n      - 'eco give %player% ${item.quantity || 1000}'\n`; } 
+        else if(item.type === 'perk' || item.type === 'special') { yaml += `    DisplayItem: 'NETHER_STAR'\n    Commands:\n      - 'lp user %player% permission set <deine_permission> true'\n`; } 
+        else { yaml += `    DisplayItem: 'STONE'\n    Items:\n      - 'Item:STONE, Amount:${item.quantity || 1}'\n`; }
         if(item.enchantments && item.enchantments.length > 0) {
             yaml += `    DisplayEnchantments:\n`;
             item.enchantments.forEach(ench => { yaml += `      - '${ench}'\n`; });
         }
     });
     
-    const blob = new Blob([yaml], { type: 'text/yaml' });
-    const url = URL.createObjectURL(blob);
+    const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `${safeName}.yml`; a.click(); URL.revokeObjectURL(url);
 };
 
@@ -562,16 +558,12 @@ window.exportShopYaml = function() {
     if(allShop.length === 0) return alert("Der Shop ist leer!");
     let yaml = `shops:\n  main:\n    name: '&8Server Shop'\n    size: 54\n    items:\n`;
     allShop.forEach((item, index) => {
-        yaml += `      '${index + 1}':\n`;
-        yaml += `        type: item\n        item:\n          material: STONE\n          name: '&e${item.name}'\n`;
+        yaml += `      '${index + 1}':\n        type: item\n        item:\n          material: STONE\n          name: '&e${item.name}'\n`;
         yaml += `        buyPrice: ${item.price}\n        sellPrice: ${Math.floor(item.price * 0.5)}\n        slot: ${index}\n`;
     });
-    const blob = new Blob([yaml], { type: 'text/yaml' });
-    const url = URL.createObjectURL(blob);
+    const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `shopgui_main.yml`; a.click(); URL.revokeObjectURL(url);
 }
-
-document.getElementById('btn-save-ad').addEventListener('click', async () => { try { const file = document.getElementById('ad-image').files[0]; if(!file || !document.getElementById('ad-title').value) return alert("Bild und Titel fehlen!"); const imageUrl = await uploadImage(file, 'ads'); await addDoc(collection(db, "ads"), { title: document.getElementById('ad-title').value, link: document.getElementById('ad-link').value, image_url: imageUrl }); document.getElementById('ad-title').value = ''; document.getElementById('ad-link').value = ''; document.getElementById('ad-image').value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
 
 
 // ==========================================
