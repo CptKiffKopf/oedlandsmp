@@ -17,7 +17,7 @@ const db = getFirestore(app);
 const storage = getStorage(app);
 const auth = getAuth(app);
 
-let allRanks = [], allGUIs = [], allCrates = [], allShop = [], allAds = [], allPlugins = [];
+let allRanks = [], allGUIs = [], allCrates = [], allShop = [], allAds = [], allPlugins = [], allBroadcasts = [];
 let editingRankId = null, editingPluginId = null;
 let listenersActive = false; 
 
@@ -39,7 +39,7 @@ onAuthStateChanged(auth, (user) => {
         if (!listenersActive) { 
             startRealtimeListeners(); 
             initEditor(); 
-            initMenuPlanner(); 
+            if(window.initMenuPlanner) window.initMenuPlanner(); 
             listenersActive = true; 
         }
     } else {
@@ -67,10 +67,7 @@ document.querySelectorAll('.nav-item:not(#btn-logout)').forEach(item => {
         const targetId = e.target.getAttribute('data-target');
         document.querySelectorAll('.category-section').forEach(sec => sec.classList.remove('active'));
         document.getElementById(targetId).classList.add('active');
-        
-        if(targetId === 'gui-editor') {
-            setTimeout(() => { if(window.resizeCanvas) window.resizeCanvas(); }, 50);
-        }
+        if(targetId === 'gui-editor') { setTimeout(() => { if(window.resizeCanvas) window.resizeCanvas(); }, 50); }
     });
 });
 
@@ -92,10 +89,62 @@ function sortRanksHierarchically(ranks) {
 
 
 // ==========================================
+// LIVE SERVER STATUS PING (NEU)
+// ==========================================
+window.checkServerStatus = async function() {
+    const ip = document.getElementById('server-ip').value;
+    const resDiv = document.getElementById('server-status-result');
+    if(!ip) return alert("Bitte eine Minecraft-Server IP eingeben!");
+    
+    resDiv.style.display = 'block';
+    resDiv.innerHTML = "<span style='color: var(--text-muted);'>📡 Pinge Server an... Bitte warten.</span>";
+    
+    try {
+        const response = await fetch('https://api.mcsrvstat.us/3/' + ip);
+        const data = await response.json();
+        
+        if(data.online) {
+            let iconHtml = data.icon ? `<img src="${data.icon}" style="width:64px; height:64px; border-radius:8px; border: 2px solid var(--border-color);">` : `<div style="width:64px; height:64px; background:#444; border-radius:8px;"></div>`;
+            resDiv.innerHTML = `
+                <div style="display:flex; align-items:center; gap: 20px;">
+                    ${iconHtml}
+                    <div>
+                        <div style="color: #4CAF50; font-weight:bold; font-size:18px; margin-bottom: 5px;">🟢 ONLINE</div>
+                        <div style="font-size: 14px;"><strong>Spieler:</strong> ${data.players.online} / ${data.players.max}</div>
+                        <div style="font-size: 14px; color: var(--text-muted);"><strong>Version:</strong> ${data.version}</div>
+                    </div>
+                </div>
+            `;
+        } else {
+            resDiv.innerHTML = `<div style="color:var(--danger); font-weight:bold; font-size:16px;">🔴 OFFLINE (oder nicht erreichbar)</div>`;
+        }
+    } catch(e) {
+        resDiv.innerHTML = "<span style='color:var(--danger);'>❌ Fehler beim Abrufen der API.</span>";
+    }
+}
+
+
+// ==========================================
 // DATEN LADEN (REALTIME LISTENER)
 // ==========================================
 
 function startRealtimeListeners() {
+    
+    // BROADCASTER LISTENER (NEU)
+    onSnapshot(collection(db, "broadcasts"), (snap) => {
+        allBroadcasts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const list = document.getElementById('bc-list');
+        if(!list) return;
+        list.innerHTML = '';
+        allBroadcasts.forEach(bc => {
+            list.innerHTML += `<tr>
+                <td style="white-space: pre-wrap;">${bc.message}</td>
+                <td>Alle ${bc.interval} Sek.</td>
+                <td style="text-align: right;"><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('broadcasts', '${bc.id}')">Löschen</button></td>
+            </tr>`;
+        });
+    });
+
     onSnapshot(collection(db, "ranks"), (snap) => {
         allRanks = sortRanksHierarchically(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         const list = document.getElementById('rank-list'); list.innerHTML = '';
@@ -128,6 +177,7 @@ function startRealtimeListeners() {
         updateDashboard();
     });
 
+    // KISTEN RENDER (MIT DROP-TESTER BUTTON)
     onSnapshot(collection(db, "crates"), (snap) => {
         allCrates = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const container = document.getElementById('crates-container'); container.innerHTML = '';
@@ -153,6 +203,7 @@ function startRealtimeListeners() {
                     </td>
                 </tr>`;
             }).join('');
+            
             container.innerHTML += `
                 <div class="crate-box">
                     <div class="crate-header">
@@ -161,6 +212,7 @@ function startRealtimeListeners() {
                             <h3 style="font-size: 18px;">${crate.name || 'Unbenannte Kiste'}</h3>
                         </div>
                         <div class="button-group">
+                            <button class="btn btn-secondary btn-sm" style="border-color:#FF9800; color:#FF9800;" onclick="window.simulateCrate('${crate.id}')">🎲 1.000x Test-Öffnen</button>
                             <button class="btn btn-info btn-sm" onclick="window.exportCrateYaml('${crate.id}')">📥 CrazyCrates Export</button>
                             <button class="btn btn-primary btn-sm" onclick="window.openItemModal('${crate.id}')">+ Item hinzufügen</button>
                             <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('crates', '${crate.id}')">Kiste löschen</button>
@@ -185,7 +237,7 @@ function startRealtimeListeners() {
         
         const editorSelect = document.getElementById('editor-pkg-select');
         const plannerSelect = document.getElementById('planner-pkg-select'); 
-        const plannerBgSelect = document.getElementById('planner-bg-select'); 
+        const plannerBgSelect = document.getElementById('planner-bg-select');
         
         if(!container) return;
         container.innerHTML = '';
@@ -283,40 +335,81 @@ window.deleteEntry = async (collectionName, id) => {
     if(confirm('Wirklich komplett löschen?')) { await deleteDoc(doc(db, collectionName, id)); }
 };
 
+
 // ==========================================
-// 4. SPEICHERN LOGIK (Ränge, Kisten, Plugins etc.)
+// AUTO-BROADCASTER LOGIK (NEU)
+// ==========================================
+
+window.updateMcPreview = function() {
+    let text = document.getElementById('bc-message').value;
+    text = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    
+    let html = '';
+    let parts = text.split(/(&[0-9a-fl-or])/i);
+    let currentClasses = ['mc-f'];
+    
+    for(let part of parts) {
+        if(/^&[0-9a-fl-or]$/i.test(part)) {
+            let code = part.charAt(1).toLowerCase();
+            if(code === 'r') { currentClasses = ['mc-f']; }
+            else if(/[0-9a-f]/.test(code)) { currentClasses = [`mc-${code}`]; } 
+            else { currentClasses.push(`mc-${code}`); } 
+        } else if(part) {
+            html += `<span class="${currentClasses.join(' ')}">${part}</span>`;
+        }
+    }
+    document.getElementById('bc-preview').innerHTML = html || 'Vorschau...';
+};
+
+window.saveBroadcast = async function() {
+    const msg = document.getElementById('bc-message').value;
+    const interval = document.getElementById('bc-interval').value;
+    if(!msg || !interval) return alert("Bitte Nachricht und Intervall ausfüllen!");
+    
+    document.getElementById('bc-status').innerText = "Speichere...";
+    try {
+        await addDoc(collection(db, "broadcasts"), { message: msg, interval: Number(interval) });
+        document.getElementById('bc-status').innerText = "Gespeichert!";
+        setTimeout(() => document.getElementById('bc-status').innerText = "", 2000);
+        document.getElementById('bc-message').value = '';
+        window.updateMcPreview();
+    } catch(e) { console.error(e); alert("Fehler!"); }
+};
+
+window.exportBroadcastYaml = function() {
+    if(allBroadcasts.length === 0) return alert("Keine Nachrichten zum Exportieren vorhanden!");
+    let yaml = `settings:\n  interval: 300\n  prefix: '&8[&cServer&8] &7'\nbroadcasts:\n`;
+    
+    allBroadcasts.forEach((bc, i) => {
+        yaml += `  'msg${i + 1}':\n`;
+        yaml += `    text:\n`;
+        bc.message.split('\n').forEach(line => {
+            yaml += `      - '${line}'\n`;
+        });
+        yaml += `    interval: ${bc.interval}\n`;
+    });
+    
+    const blob = new Blob([yaml], { type: 'text/yaml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'autobroadcaster.yml'; a.click(); URL.revokeObjectURL(url);
+};
+
+
+// ==========================================
+// 4. SPEICHERN LOGIK (Ränge, Plugins etc.)
 // ==========================================
 
 function resetPluginForm() {
-    editingPluginId = null;
-    document.getElementById('plugin-form-title').innerText = "Neues Plugin hinzufügen";
-    document.getElementById('btn-save-plugin').innerText = "Plugin speichern";
-    document.getElementById('btn-cancel-plugin').style.display = "none";
-    document.getElementById('plugin-name').value = '';
-    document.getElementById('plugin-info').value = '';
+    editingPluginId = null; document.getElementById('plugin-form-title').innerText = "Neues Plugin hinzufügen"; document.getElementById('btn-save-plugin').innerText = "Plugin speichern"; document.getElementById('btn-cancel-plugin').style.display = "none"; document.getElementById('plugin-name').value = ''; document.getElementById('plugin-info').value = '';
 }
 
 window.editPlugin = (id) => {
-    const plugin = allPlugins.find(p => p.id === id);
-    if(!plugin) return;
-    editingPluginId = id;
-    document.getElementById('plugin-name').value = plugin.name;
-    document.getElementById('plugin-info').value = plugin.info || '';
-    document.getElementById('plugin-form-title').innerText = "Plugin bearbeiten: " + plugin.name;
-    document.getElementById('btn-save-plugin').innerText = "Änderungen speichern";
-    document.getElementById('btn-cancel-plugin').style.display = "inline-block";
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const plugin = allPlugins.find(p => p.id === id); if(!plugin) return;
+    editingPluginId = id; document.getElementById('plugin-name').value = plugin.name; document.getElementById('plugin-info').value = plugin.info || ''; document.getElementById('plugin-form-title').innerText = "Plugin bearbeiten: " + plugin.name; document.getElementById('btn-save-plugin').innerText = "Änderungen speichern"; document.getElementById('btn-cancel-plugin').style.display = "inline-block"; window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 document.getElementById('btn-cancel-plugin').addEventListener('click', resetPluginForm);
-
 document.getElementById('btn-save-plugin').addEventListener('click', async () => {
-    try { 
-        const name = document.getElementById('plugin-name').value; const info = document.getElementById('plugin-info').value; const status = document.getElementById('plugin-status'); 
-        if(!name) return alert("Bitte gib einen Plugin-Namen ein!"); status.innerText = "Speichere..."; 
-        if (editingPluginId) { await updateDoc(doc(db, "plugins", editingPluginId), { name: name, info: info }); } 
-        else { await addDoc(collection(db, "plugins"), { name: name, info: info }); }
-        status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); resetPluginForm();
-    } catch (error) { console.error(error); alert("Fehler: " + error.message); }
+    try { const name = document.getElementById('plugin-name').value; const info = document.getElementById('plugin-info').value; const status = document.getElementById('plugin-status'); if(!name) return alert("Bitte gib einen Plugin-Namen ein!"); status.innerText = "Speichere..."; if (editingPluginId) { await updateDoc(doc(db, "plugins", editingPluginId), { name: name, info: info }); } else { await addDoc(collection(db, "plugins"), { name: name, info: info }); } status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); resetPluginForm(); } catch (error) { console.error(error); alert("Fehler: " + error.message); }
 });
 
 document.getElementById('btn-save-rank').addEventListener('click', async () => {
@@ -329,87 +422,20 @@ document.getElementById('btn-save-rank').addEventListener('click', async () => {
 
 window.editRank = (id) => { const rank = allRanks.find(r => r.id === id); if (!rank) return; editingRankId = id; document.getElementById('rank-name').value = rank.name; document.getElementById('rank-perms').value = (rank.permissions || []).join('\n'); document.getElementById('rank-inherit').value = rank.inherits_from || ''; document.getElementById('rank-form-title').innerText = "Rang bearbeiten: " + rank.name; document.getElementById('btn-save-rank').innerText = "Änderungen speichern"; document.getElementById('btn-cancel-rank').style.display = "inline-block"; window.scrollTo({ top: 0, behavior: 'smooth' }); };
 document.getElementById('btn-cancel-rank').addEventListener('click', () => { editingRankId = null; document.getElementById('rank-form-title').innerText = "Neuen Rang erstellen"; document.getElementById('btn-save-rank').innerText = "Rang speichern"; document.getElementById('btn-cancel-rank').style.display = "none"; document.getElementById('rank-name').value = ''; document.getElementById('rank-perms').value = ''; document.getElementById('rank-inherit').value = ''; if(document.getElementById('rank-image')) document.getElementById('rank-image').value = '';});
-
 document.getElementById('btn-export-ranks').addEventListener('click', () => { if(allRanks.length === 0) return alert("Keine Ränge!"); let yamlContent = "groups:\n"; allRanks.forEach(rank => { const safeName = rank.name.toLowerCase().replace(/[^a-z0-9_-]/g, ''); yamlContent += `  ${safeName}:\n`; if (rank.permissions && rank.permissions.length > 0) { yamlContent += `    permissions:\n`; rank.permissions.forEach(p => { yamlContent += `      - ${p}: true\n`; }); } if (rank.inherits_from) { const safeInherit = rank.inherits_from.toLowerCase().replace(/[^a-z0-9_-]/g, ''); yamlContent += `    parents:\n`; yamlContent += `      - ${safeInherit}\n`; } }); const blob = new Blob([yamlContent], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'luckperms_ranks.yml'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); });
 
 window.importPluginPerms = () => {
     if(allPlugins.length === 0) return alert("Es sind noch keine Plugins gespeichert!");
     let currentPerms = document.getElementById('rank-perms').value.split('\n').map(p => p.trim()).filter(p => p !== "");
-    allPlugins.forEach(pl => {
-        if(pl.info) {
-            let pluginLines = pl.info.split('\n').map(p => p.trim()).filter(p => p !== "");
-            currentPerms = currentPerms.concat(pluginLines);
-        }
-    });
-    let uniquePerms = [...new Set(currentPerms)];
-    document.getElementById('rank-perms').value = uniquePerms.join('\n');
-    alert("Permissions aus allen Plugins wurden erfolgreich importiert und doppelte Zeilen entfernt!");
+    allPlugins.forEach(pl => { if(pl.info) { let pluginLines = pl.info.split('\n').map(p => p.trim()).filter(p => p !== ""); currentPerms = currentPerms.concat(pluginLines); } });
+    let uniquePerms = [...new Set(currentPerms)]; document.getElementById('rank-perms').value = uniquePerms.join('\n'); alert("Permissions aus allen Plugins wurden erfolgreich importiert und doppelte Zeilen entfernt!");
 };
 
-// --- CRAZYCRATES EXPORT LOGIK ---
-window.exportCrateYaml = function(crateId) {
-    const crate = allCrates.find(c => c.id === crateId);
-    if(!crate) return alert("Kiste nicht gefunden!");
-    
-    let safeName = crate.name ? crate.name.replace(/[^a-zA-Z0-9]/g, '') : 'CustomCrate';
-    
-    let yaml = `Crate:\n`;
-    yaml += `  CrateType: CSGO\n`;
-    yaml += `  CrateName: '&8${crate.name || 'Unbenannte Kiste'}'\n`;
-    yaml += `  Preview-Name: '&8${crate.name || 'Unbenannte Kiste'} Preview'\n`;
-    yaml += `  StartingKeys: 0\n`;
-    yaml += `  InGUI: true\n`;
-    yaml += `  Slot: 14\n`;
-    yaml += `Prizes:\n`;
-    
-    let items = crate.items || [];
-    items.forEach((item, index) => {
-        yaml += `  '${index + 1}':\n`;
-        yaml += `    DisplayName: '&f${item.name}'\n`;
-        yaml += `    DisplayAmount: ${item.quantity || 1}\n`;
-        yaml += `    MaxRange: 100\n`;
-        yaml += `    Chance: ${item.chance}\n`;
-        
-        // Unterscheidung der Item-Arten
-        if(item.type === 'money') {
-            yaml += `    DisplayItem: 'SUNFLOWER'\n`;
-            yaml += `    Commands:\n`;
-            yaml += `      - 'eco give %player% ${item.quantity || 1000}'\n`;
-        } else if(item.type === 'perk' || item.type === 'special') {
-            yaml += `    DisplayItem: 'NETHER_STAR'\n`;
-            yaml += `    Commands:\n`;
-            yaml += `      - 'lp user %player% permission set <deine_permission> true'\n`;
-        } else {
-            yaml += `    DisplayItem: 'STONE'\n`;
-            yaml += `    Items:\n`;
-            yaml += `      - 'Item:STONE, Amount:${item.quantity || 1}'\n`;
-        }
-        
-        // Verzauberungen anwenden
-        if(item.enchantments && item.enchantments.length > 0) {
-            yaml += `    DisplayEnchantments:\n`;
-            item.enchantments.forEach(ench => {
-                yaml += `      - '${ench}'\n`;
-            });
-        }
-    });
-    
-    const blob = new Blob([yaml], { type: 'text/yaml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${safeName}.yml`;
-    a.click();
-    URL.revokeObjectURL(url);
-};
-
-// --- KISTEN SPEICHERN ---
+// --- KISTEN ---
 document.getElementById('btn-save-crate').addEventListener('click', async () => { try { const crate_name = document.getElementById('crate-name').value; const fileInput = document.getElementById('crate-image'); const file = fileInput ? fileInput.files[0] : null; const status = document.getElementById('crate-status'); if(!crate_name) return alert("Name fehlt!"); status.innerText = "Erstelle Kiste..."; let imageUrl = null; if (file) imageUrl = await uploadImage(file, 'crates'); await addDoc(collection(db, "crates"), { name: crate_name, image_url: imageUrl, items: [] }); status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('crate-name').value = ''; if(fileInput) fileInput.value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
 
 window.changeCrateItemType = () => {
-    const type = document.getElementById('modal-item-type').value;
-    const nameInput = document.getElementById('modal-item-name');
-    const enchSection = document.getElementById('enchantment-section');
+    const type = document.getElementById('modal-item-type').value; const nameInput = document.getElementById('modal-item-name'); const enchSection = document.getElementById('enchantment-section');
     if(type === 'money') { nameInput.placeholder = "Geld-Betrag (z.B. 1000)"; nameInput.value = ""; enchSection.style.display = 'none'; }
     else if(type === 'perk') { nameInput.value = "Platzhalter Perk"; enchSection.style.display = 'none'; }
     else if(type === 'special') { nameInput.value = "Platzhalter Spezial"; enchSection.style.display = 'none'; }
@@ -417,9 +443,7 @@ window.changeCrateItemType = () => {
 };
 
 window.addEnchantmentField = (val = '') => {
-    const container = document.getElementById('enchantments-container');
-    const row = document.createElement('div');
-    row.style.display = 'flex'; row.style.gap = '5px';
+    const container = document.getElementById('enchantments-container'); const row = document.createElement('div'); row.style.display = 'flex'; row.style.gap = '5px';
     row.innerHTML = `<input type="text" class="ench-input" placeholder="z.B. sharpness:5" value="${val}" style="flex-grow:1; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-color); color: var(--text-main);"><button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">X</button>`;
     container.appendChild(row);
 };
@@ -445,12 +469,7 @@ document.getElementById('btn-save-item').addEventListener('click', async () => {
         let imageUrl = null; if(file) imageUrl = await uploadImage(file, 'crates/items');
         const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId);
         let updatedItems = [...(crate.items || [])];
-        if(editItemId) {
-            const idx = updatedItems.findIndex(i => i.id === editItemId);
-            if(idx > -1) { updatedItems[idx].type = type; updatedItems[idx].name = name; updatedItems[idx].quantity = Number(quantity); updatedItems[idx].chance = Number(chance); updatedItems[idx].enchantments = enchantments; if(file) updatedItems[idx].image_url = imageUrl; }
-        } else {
-            updatedItems.push({ id: Date.now().toString(), type: type, name: name, quantity: Number(quantity), chance: Number(chance), enchantments: enchantments, image_url: imageUrl });
-        }
+        if(editItemId) { const idx = updatedItems.findIndex(i => i.id === editItemId); if(idx > -1) { updatedItems[idx].type = type; updatedItems[idx].name = name; updatedItems[idx].quantity = Number(quantity); updatedItems[idx].chance = Number(chance); updatedItems[idx].enchantments = enchantments; if(file) updatedItems[idx].image_url = imageUrl; } } else { updatedItems.push({ id: Date.now().toString(), type: type, name: name, quantity: Number(quantity), chance: Number(chance), enchantments: enchantments, image_url: imageUrl }); }
         await updateDoc(crateRef, { items: updatedItems });
         status.innerText = "Erfolgreich!"; setTimeout(() => { status.innerText = ""; document.getElementById('item-modal').classList.remove('active'); }, 1000);
     } catch (error) { console.error(error); alert("Fehler: " + error.message); }
@@ -458,8 +477,100 @@ document.getElementById('btn-save-item').addEventListener('click', async () => {
 
 window.deleteCrateItem = async (crateId, itemId) => { if(confirm("Item entfernen?")) { try { const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId); await updateDoc(crateRef, { items: (crate.items || []).filter(i => i.id !== itemId) }); } catch (error) { console.error(error); } } };
 
-// --- SHOP & WERBUNG ---
+// NEU: KISTEN DROP-TEST SIMULATOR
+window.simulateCrate = function(crateId) {
+    const crate = allCrates.find(c => c.id === crateId);
+    if(!crate || !crate.items || crate.items.length === 0) return alert("Die Kiste hat noch keine Items!");
+    
+    let totalChance = crate.items.reduce((sum, item) => sum + (Number(item.chance) || 0), 0);
+    if(totalChance === 0) return alert("Die Items in dieser Kiste haben keine Wahrscheinlichkeit (0%)!");
+    
+    let results = {};
+    crate.items.forEach(i => results[i.id] = 0);
+
+    // 1000 Ziehungen simulieren
+    for(let i=0; i<1000; i++) {
+        let rand = Math.random() * totalChance;
+        let current = 0;
+        for(let item of crate.items) {
+            current += (Number(item.chance) || 0);
+            if(rand <= current) {
+                results[item.id]++;
+                break;
+            }
+        }
+    }
+
+    let html = `<ul style="list-style:none; padding:0; margin:0;">`;
+    // Nach Häufigkeit sortieren
+    let sortedItems = [...crate.items].sort((a, b) => results[b.id] - results[a.id]);
+    
+    sortedItems.forEach(item => {
+        let count = results[item.id];
+        let realPercent = ((count / 1000) * 100).toFixed(1);
+        html += `<li style="padding: 8px 0; border-bottom: 1px solid var(--border-color); display:flex; justify-content:space-between;">
+            <span><strong>${item.name}</strong></span>
+            <span style="color:var(--text-muted);">${count}x gezogen <b style="color:#00BCD4;">(${realPercent}%)</b></span>
+        </li>`;
+    });
+    html += `</ul>`;
+    
+    document.getElementById('crate-test-result').innerHTML = html;
+    document.getElementById('crate-test-modal').classList.add('active');
+};
+
+// --- CRAZYCRATES EXPORT LOGIK ---
+window.exportCrateYaml = function(crateId) {
+    const crate = allCrates.find(c => c.id === crateId);
+    if(!crate) return alert("Kiste nicht gefunden!");
+    
+    let safeName = crate.name ? crate.name.replace(/[^a-zA-Z0-9]/g, '') : 'CustomCrate';
+    
+    let yaml = `Crate:\n  CrateType: CSGO\n  CrateName: '&8${crate.name || 'Unbenannte Kiste'}'\n  Preview-Name: '&8${crate.name || 'Unbenannte Kiste'} Preview'\n  StartingKeys: 0\n  InGUI: true\n  Slot: 14\nPrizes:\n`;
+    
+    let items = crate.items || [];
+    items.forEach((item, index) => {
+        yaml += `  '${index + 1}':\n`;
+        yaml += `    DisplayName: '&f${item.name}'\n`;
+        yaml += `    DisplayAmount: ${item.quantity || 1}\n`;
+        yaml += `    MaxRange: 100\n`;
+        yaml += `    Chance: ${item.chance}\n`;
+        
+        if(item.type === 'money') {
+            yaml += `    DisplayItem: 'SUNFLOWER'\n    Commands:\n      - 'eco give %player% ${item.quantity || 1000}'\n`;
+        } else if(item.type === 'perk' || item.type === 'special') {
+            yaml += `    DisplayItem: 'NETHER_STAR'\n    Commands:\n      - 'lp user %player% permission set <deine_permission> true'\n`;
+        } else {
+            yaml += `    DisplayItem: 'STONE'\n    Items:\n      - 'Item:STONE, Amount:${item.quantity || 1}'\n`;
+        }
+        
+        if(item.enchantments && item.enchantments.length > 0) {
+            yaml += `    DisplayEnchantments:\n`;
+            item.enchantments.forEach(ench => { yaml += `      - '${ench}'\n`; });
+        }
+    });
+    
+    const blob = new Blob([yaml], { type: 'text/yaml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `${safeName}.yml`; a.click(); URL.revokeObjectURL(url);
+};
+
+// --- SHOP (MIT EXPORT) ---
 document.getElementById('btn-save-shop').addEventListener('click', async () => { try { const name = document.getElementById('shop-item').value; const price = document.getElementById('shop-price').value; const file = document.getElementById('shop-image').files[0]; if(!name || !price) return alert("Name und Preis fehlen!"); document.getElementById('shop-status').innerText = "Speichere..."; const imageUrl = await uploadImage(file, 'shop') || null; await addDoc(collection(db, "shop"), { name, price: Number(price), image_url: imageUrl }); document.getElementById('shop-status').innerText = ""; document.getElementById('shop-item').value = ''; document.getElementById('shop-price').value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
+
+window.exportShopYaml = function() {
+    if(allShop.length === 0) return alert("Der Shop ist leer!");
+    let yaml = `shops:\n  main:\n    name: '&8Server Shop'\n    size: 54\n    items:\n`;
+    allShop.forEach((item, index) => {
+        yaml += `      '${index + 1}':\n`;
+        yaml += `        type: item\n        item:\n          material: STONE\n          name: '&e${item.name}'\n`;
+        yaml += `        buyPrice: ${item.price}\n        sellPrice: ${Math.floor(item.price * 0.5)}\n        slot: ${index}\n`;
+    });
+    const blob = new Blob([yaml], { type: 'text/yaml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `shopgui_main.yml`; a.click(); URL.revokeObjectURL(url);
+}
+
 document.getElementById('btn-save-ad').addEventListener('click', async () => { try { const file = document.getElementById('ad-image').files[0]; if(!file || !document.getElementById('ad-title').value) return alert("Bild und Titel fehlen!"); const imageUrl = await uploadImage(file, 'ads'); await addDoc(collection(db, "ads"), { title: document.getElementById('ad-title').value, link: document.getElementById('ad-link').value, image_url: imageUrl }); document.getElementById('ad-title').value = ''; document.getElementById('ad-link').value = ''; document.getElementById('ad-image').value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
 
 
@@ -505,7 +616,6 @@ window.deleteGuiItem = async (pkgId, itemId) => {
         } catch (error) { console.error(error); alert("Fehler: " + error.message); }
     }
 };
-
 
 // ==========================================
 // 6. MENÜ PLANER LOGIK
