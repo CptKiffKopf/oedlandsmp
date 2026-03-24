@@ -140,13 +140,11 @@
                     
                     <div class="panel-editor" style="width: 250px; flex-shrink: 0;">
                         <h3 style="color: #00BCD4; border-bottom: 1px solid #00BCD4;">Vorgefertigte Items</h3>
-                        <div id="palette-items" style="display: flex; flex-direction: column; gap: 8px; margin-top: 15px;">
-                            </div>
+                        <div id="palette-items" style="display: flex; flex-direction: column; gap: 8px; margin-top: 15px;"></div>
                         <p style="font-size: 11px; color: #888; margin-top: 15px; text-align: center;">Tipp: Klicke auf ein Item im Inventar, um es wieder zu löschen.</p>
                     </div>
 
                     <div class="panel-editor" style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; background: #1e1e1e;">
-                        
                         <div style="width: 100%; display: flex; gap: 10px; margin-bottom: 15px; background: #3c3c3c; padding: 10px; border-radius: 6px; flex-wrap: wrap;">
                             <div style="flex: 1;">
                                 <label style="color: #aaa; font-size: 12px; display: block; margin-bottom: 4px;">Hintergrund GUI:</label>
@@ -174,30 +172,22 @@
                                 </div>
                             </div>
                         </div>
-                        
                         <div class="planner-canvas-outer">
                             <div class="planner-canvas-inner" id="planner-inner-canvas">
-                                <div id="mc-inventory" class="mc-inventory-overlay">
-                                    </div>
+                                <div id="mc-inventory" class="mc-inventory-overlay"></div>
                             </div>
                         </div>
-
                     </div>
 
                     <div class="panel-editor" style="width: 250px; flex-shrink: 0; border: 2px solid #4CAF50;">
                         <h3 style="color: #4CAF50; border-bottom: 1px solid #4CAF50;">Speichern & Export</h3>
-                        
                         <select id="planner-pkg-select" style="width: 100%; margin-bottom: 10px; padding: 8px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;">
                             <option value="">Ziel-Paket wählen...</option>
                         </select>
-                        
                         <input type="text" id="planner-menu-name" placeholder="Name des Menüs" style="width: 100%; margin-bottom: 15px; padding: 8px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;">
                         <input type="hidden" id="planner-menu-id">
-                        
                         <button class="btn btn-action" onclick="window.saveMenuLayout()" style="width: 100%; margin-bottom: 10px; background: #4CAF50; color: white; border: none; padding: 10px; font-weight: bold; border-radius: 4px; cursor: pointer;">💾 In Paket speichern</button>
-                        
                         <hr style="border:0; border-top:1px solid #555; margin:15px 0;">
-                        
                         <button class="btn" onclick="window.exportMenuYaml()" style="width: 100%; background: transparent; border: 1px solid #00BCD4; color: #00BCD4; padding: 10px; border-radius: 4px; cursor: pointer; transition: 0.2s;">📥 YAML Exportieren</button>
                         <p style="font-size: 11px; color: #aaa; margin-top: 8px; text-align: center;">Generiert fertigen GUI Code</p>
                     </div>
@@ -234,14 +224,12 @@
                             </div>
                             
                             <hr style="border:0; border-top:1px solid #555; margin:10px 0;">
-            
                             <label class="btn-editor" style="margin-top:5px; display:block; text-align:center;">
                                 📂 Projekt laden <input type="file" id="uploadInput" accept="image/*" style="display:none">
                             </label>
                             <button class="btn-editor btn-danger" style="width:100%; margin-top:5px;" onclick="window.clearCanvas()">🗑️ Leinwand Leeren</button>
                             
                             <hr style="border:0; border-top:1px solid #555; margin:10px 0;">
-                            
                             <label class="btn-editor btn-ref" style="display:block; text-align:center;">
                                 👻 Referenz laden (20%) <input type="file" id="refInput" accept="image/*" style="display:none" onchange="window.loadReference(this)">
                             </label>
@@ -398,7 +386,6 @@
             <input type="hidden" id="modal-edit-item-id">
             
             <div class="input-group" style="flex-direction: column; gap: 10px; margin-top: 15px;">
-                
                 <select id="modal-item-type" onchange="window.changeCrateItemType()" style="width:100%; padding: 6px; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
                     <option value="item">📦 Normales Item</option>
                     <option value="money">💰 Geld (Economy)</option>

@@ -32,13 +32,6 @@ async function uploadImage(file, folderPath) {
     return await getDownloadURL(storageRef);
 }
 
-function dataURLtoFile(dataurl, filename) {
-    let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
-        bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
-    while(n--){ u8arr[n] = bstr.charCodeAt(n); }
-    return new File([u8arr], filename, {type:mime});
-}
-
 onAuthStateChanged(auth, (user) => {
     if (user) {
         document.getElementById('login-screen').style.display = 'none';
@@ -46,7 +39,7 @@ onAuthStateChanged(auth, (user) => {
         if (!listenersActive) { 
             startRealtimeListeners(); 
             initEditor(); 
-            if(window.initMenuPlanner) window.initMenuPlanner(); // Menü-Planer starten
+            initMenuPlanner(); 
             listenersActive = true; 
         }
     } else {
@@ -160,7 +153,21 @@ function startRealtimeListeners() {
                     </td>
                 </tr>`;
             }).join('');
-            container.innerHTML += `<div class="crate-box"><div class="crate-header"><div class="crate-header-left">${crateImgHtml}<h3 style="font-size: 18px;">${crate.name || 'Unbenannte Kiste'}</h3></div><div class="button-group"><button class="btn btn-primary btn-sm" onclick="window.openItemModal('${crate.id}')">+ Item hinzufügen</button><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('crates', '${crate.id}')">Kiste löschen</button></div></div>${items.length > 0 ? `<table class="crate-items-table"><thead><tr><th style="width: 50px;">Art</th><th>Item Name</th><th>Menge</th><th>Chance</th><th style="text-align: right;">Aktion</th></tr></thead><tbody>${itemsHtml}</tbody></table>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Items in dieser Kiste. Klicke auf "+ Item hinzufügen".</p>'}</div>`;
+            container.innerHTML += `
+                <div class="crate-box">
+                    <div class="crate-header">
+                        <div class="crate-header-left">
+                            ${crateImgHtml}
+                            <h3 style="font-size: 18px;">${crate.name || 'Unbenannte Kiste'}</h3>
+                        </div>
+                        <div class="button-group">
+                            <button class="btn btn-info btn-sm" onclick="window.exportCrateYaml('${crate.id}')">📥 CrazyCrates Export</button>
+                            <button class="btn btn-primary btn-sm" onclick="window.openItemModal('${crate.id}')">+ Item hinzufügen</button>
+                            <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('crates', '${crate.id}')">Kiste löschen</button>
+                        </div>
+                    </div>
+                    ${items.length > 0 ? `<table class="crate-items-table"><thead><tr><th style="width: 50px;">Art</th><th>Item Name</th><th>Menge</th><th>Chance</th><th style="text-align: right;">Aktion</th></tr></thead><tbody>${itemsHtml}</tbody></table>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Items in dieser Kiste. Klicke auf "+ Item hinzufügen".</p>'}
+                </div>`;
         });
         updateDashboard();
     });
@@ -178,7 +185,7 @@ function startRealtimeListeners() {
         
         const editorSelect = document.getElementById('editor-pkg-select');
         const plannerSelect = document.getElementById('planner-pkg-select'); 
-        const plannerBgSelect = document.getElementById('planner-bg-select');
+        const plannerBgSelect = document.getElementById('planner-bg-select'); 
         
         if(!container) return;
         container.innerHTML = '';
@@ -197,8 +204,6 @@ function startRealtimeListeners() {
             
             let items = pkg.items || [];
             let itemsHtml = items.map(item => {
-                
-                // Populiert das Hintergrund-Dropdown im Menüplaner
                 if (plannerBgSelect && item.type !== 'layout' && item.image_url) {
                     plannerBgSelect.innerHTML += `<option value="${item.image_url}">${pkg.name} - ${item.name}</option>`;
                 }
@@ -278,12 +283,10 @@ window.deleteEntry = async (collectionName, id) => {
     if(confirm('Wirklich komplett löschen?')) { await deleteDoc(doc(db, collectionName, id)); }
 };
 
-
 // ==========================================
 // 4. SPEICHERN LOGIK (Ränge, Kisten, Plugins etc.)
 // ==========================================
 
-// --- PLUGINS ---
 function resetPluginForm() {
     editingPluginId = null;
     document.getElementById('plugin-form-title').innerText = "Neues Plugin hinzufügen";
@@ -308,20 +311,14 @@ document.getElementById('btn-cancel-plugin').addEventListener('click', resetPlug
 
 document.getElementById('btn-save-plugin').addEventListener('click', async () => {
     try { 
-        const name = document.getElementById('plugin-name').value; 
-        const info = document.getElementById('plugin-info').value; 
-        const status = document.getElementById('plugin-status'); 
-        if(!name) return alert("Bitte gib einen Plugin-Namen ein!"); 
-        status.innerText = "Speichere..."; 
-        
+        const name = document.getElementById('plugin-name').value; const info = document.getElementById('plugin-info').value; const status = document.getElementById('plugin-status'); 
+        if(!name) return alert("Bitte gib einen Plugin-Namen ein!"); status.innerText = "Speichere..."; 
         if (editingPluginId) { await updateDoc(doc(db, "plugins", editingPluginId), { name: name, info: info }); } 
         else { await addDoc(collection(db, "plugins"), { name: name, info: info }); }
-        
         status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); resetPluginForm();
     } catch (error) { console.error(error); alert("Fehler: " + error.message); }
 });
 
-// --- RÄNGE ---
 document.getElementById('btn-save-rank').addEventListener('click', async () => {
     const name = document.getElementById('rank-name').value; const perms = document.getElementById('rank-perms').value.split('\n').map(p => p.trim()).filter(p => p !== ""); const inherits = document.getElementById('rank-inherit').value; const file = document.getElementById('rank-image').files[0]; const status = document.getElementById('rank-status');
     if(!name) return alert("Name fehlt!"); status.innerText = "Speichere..."; const rankData = { name: name, permissions: perms, inherits_from: inherits || null }; if (file) { rankData.image_url = await uploadImage(file, 'ranks'); }
@@ -349,7 +346,64 @@ window.importPluginPerms = () => {
     alert("Permissions aus allen Plugins wurden erfolgreich importiert und doppelte Zeilen entfernt!");
 };
 
-// --- KISTEN ---
+// --- CRAZYCRATES EXPORT LOGIK ---
+window.exportCrateYaml = function(crateId) {
+    const crate = allCrates.find(c => c.id === crateId);
+    if(!crate) return alert("Kiste nicht gefunden!");
+    
+    let safeName = crate.name ? crate.name.replace(/[^a-zA-Z0-9]/g, '') : 'CustomCrate';
+    
+    let yaml = `Crate:\n`;
+    yaml += `  CrateType: CSGO\n`;
+    yaml += `  CrateName: '&8${crate.name || 'Unbenannte Kiste'}'\n`;
+    yaml += `  Preview-Name: '&8${crate.name || 'Unbenannte Kiste'} Preview'\n`;
+    yaml += `  StartingKeys: 0\n`;
+    yaml += `  InGUI: true\n`;
+    yaml += `  Slot: 14\n`;
+    yaml += `Prizes:\n`;
+    
+    let items = crate.items || [];
+    items.forEach((item, index) => {
+        yaml += `  '${index + 1}':\n`;
+        yaml += `    DisplayName: '&f${item.name}'\n`;
+        yaml += `    DisplayAmount: ${item.quantity || 1}\n`;
+        yaml += `    MaxRange: 100\n`;
+        yaml += `    Chance: ${item.chance}\n`;
+        
+        // Unterscheidung der Item-Arten
+        if(item.type === 'money') {
+            yaml += `    DisplayItem: 'SUNFLOWER'\n`;
+            yaml += `    Commands:\n`;
+            yaml += `      - 'eco give %player% ${item.quantity || 1000}'\n`;
+        } else if(item.type === 'perk' || item.type === 'special') {
+            yaml += `    DisplayItem: 'NETHER_STAR'\n`;
+            yaml += `    Commands:\n`;
+            yaml += `      - 'lp user %player% permission set <deine_permission> true'\n`;
+        } else {
+            yaml += `    DisplayItem: 'STONE'\n`;
+            yaml += `    Items:\n`;
+            yaml += `      - 'Item:STONE, Amount:${item.quantity || 1}'\n`;
+        }
+        
+        // Verzauberungen anwenden
+        if(item.enchantments && item.enchantments.length > 0) {
+            yaml += `    DisplayEnchantments:\n`;
+            item.enchantments.forEach(ench => {
+                yaml += `      - '${ench}'\n`;
+            });
+        }
+    });
+    
+    const blob = new Blob([yaml], { type: 'text/yaml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${safeName}.yml`;
+    a.click();
+    URL.revokeObjectURL(url);
+};
+
+// --- KISTEN SPEICHERN ---
 document.getElementById('btn-save-crate').addEventListener('click', async () => { try { const crate_name = document.getElementById('crate-name').value; const fileInput = document.getElementById('crate-image'); const file = fileInput ? fileInput.files[0] : null; const status = document.getElementById('crate-status'); if(!crate_name) return alert("Name fehlt!"); status.innerText = "Erstelle Kiste..."; let imageUrl = null; if (file) imageUrl = await uploadImage(file, 'crates'); await addDoc(collection(db, "crates"), { name: crate_name, image_url: imageUrl, items: [] }); status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('crate-name').value = ''; if(fileInput) fileInput.value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
 
 window.changeCrateItemType = () => {
@@ -454,7 +508,7 @@ window.deleteGuiItem = async (pkgId, itemId) => {
 
 
 // ==========================================
-// 6. MENÜ PLANER LOGIK (DIE WIEDERHERGESTELLTE!)
+// 6. MENÜ PLANER LOGIK
 // ==========================================
 
 const plannerPresets = [
@@ -471,7 +525,7 @@ let plannerBgImage = null;
 
 window.initMenuPlanner = function() {
     const palette = document.getElementById('palette-items');
-    if(!palette) return; // Sicherheits-Check falls nicht geladen
+    if(!palette) return;
     palette.innerHTML = '';
     
     plannerPresets.forEach(item => {
@@ -730,7 +784,6 @@ function initEditor() {
     if (editorInitialized) return;
     editorInitialized = true;
 
-    // --- FONT DATA ---
     const fontMap={A:[[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],Ä:[[1,0,0,1],[0,0,0,0],[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],B:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,1],[1,1,1,0]],C:[[0,1,1,1],[1,0,0,0],[1,0,0,0],[1,0,0,0],[0,1,1,1]],D:[[1,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,0]],E:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,1,1,1]],F:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,0,0,0]],G:[[0,1,1,1],[1,0,0,0],[1,0,1,1],[1,0,0,1],[0,1,1,1]],H:[[1,0,0,1],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],I:[[1,1,1],[0,1,0],[0,1,0],[0,1,0],[1,1,1]],J:[[0,0,1,1],[0,0,0,1],[0,0,0,1],[1,0,0,1],[0,1,1,0]],K:[[1,0,0,1],[1,0,1,0],[1,1,0,0],[1,0,1,0],[1,0,0,1]],L:[[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,1,1,1]],M:[[1,0,0,0,1],[1,1,0,1,1],[1,0,1,0,1],[1,0,0,0,1],[1,0,0,0,1]],N:[[1,0,0,1],[1,1,0,1],[1,0,1,1],[1,0,0,1],[1,0,0,1]],O:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],Ö:[[1,0,0,1],[0,0,0,0],[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],P:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,0],[1,0,0,0]],Q:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,1,1],[0,1,1,1]],R:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,1,0],[1,0,0,1]],S:[[0,1,1,1],[1,0,0,0],[0,1,1,0],[0,0,0,1],[1,1,1,0]],T:[[1,1,1],[0,1,0],[0,1,0],[0,1,0],[0,1,0]],U:[[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],Ü:[[1,0,0,1],[0,0,0,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],V:[[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0],[0,0,1,0]],W:[[1,0,0,0,1],[1,0,0,0,1],[1,0,1,0,1],[1,1,0,1,1],[1,0,0,0,1]],X:[[1,0,0,1],[0,1,1,0],[0,1,1,0],[1,0,0,1]],Y:[[1,0,0,1],[0,1,1,0],[0,0,1,0],[0,0,1,0],[0,0,1,0]],Z:[[1,1,1,1],[0,0,0,1],[0,1,1,0],[1,0,0,0],[1,1,1,1]],0:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],1:[[0,1,0],[1,1,0],[0,1,0],[0,1,0],[1,1,1]],2:[[1,1,1,0],[0,0,0,1],[0,1,1,0],[1,0,0,0],[1,1,1,1]],3:[[1,1,1,0],[0,0,0,1],[0,1,1,0],[0,0,0,1],[1,1,1,0]],4:[[1,0,0,1],[1,0,0,1],[1,1,1,1],[0,0,0,1],[0,0,0,1]],5:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[0,0,0,1],[1,1,1,0]],6:[[0,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,1],[0,1,1,0]],7:[[1,1,1,1],[0,0,0,1],[0,0,1,0],[0,1,0,0],[0,1,0,0]],8:[[0,1,1,0],[1,0,0,1],[0,1,1,0],[1,0,0,1],[0,1,1,0]],9:[[0,1,1,0],[1,0,0,1],[0,1,1,1],[0,0,0,1],[0,1,1,0]],' ':[[0],[0],[0],[0],[0]],'.':[[0],[0],[0],[0],[1]],'ß':[[0,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,1],[1,1,1,0]]};
 
     const canvas = document.getElementById('pixelCanvas');
