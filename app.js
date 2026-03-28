@@ -21,10 +21,12 @@ let allRanks = [], allGUIs = [], allCrates = [], allShop = [], allAds = [], allP
 let editingRankId = null, editingPluginId = null, editingShopId = null;
 let listenersActive = false; 
 
+// Zustandsspeicher für eingeklappte Menüs
 window.crateCollapsed = {};
 window.crateSortModes = {};
 window.pluginCollapsed = {};
 window.adCollapsed = {};
+window.guiCollapsed = {};
 let draggedCrateBox = null; 
 
 // ==========================================
@@ -36,12 +38,6 @@ async function uploadImage(file, folderPath) {
     const storageRef = ref(storage, `${folderPath}/${Date.now()}_${file.name}`);
     await uploadBytes(storageRef, file);
     return await getDownloadURL(storageRef);
-}
-
-function dataURLtoFile(dataurl, filename) {
-    let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1], bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
-    while(n--){ u8arr[n] = bstr.charCodeAt(n); }
-    return new File([u8arr], filename, {type:mime});
 }
 
 onAuthStateChanged(auth, (user) => {
@@ -119,6 +115,7 @@ window.checkServerStatus = async function() {
 
 function startRealtimeListeners() {
     
+    // BROADCASTER
     onSnapshot(collection(db, "broadcasts"), (snap) => {
         allBroadcasts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const list = document.getElementById('bc-list'); if(!list) return; list.innerHTML = '';
@@ -135,6 +132,7 @@ function startRealtimeListeners() {
         });
     });
 
+    // RÄNGE
     onSnapshot(collection(db, "ranks"), (snap) => {
         allRanks = sortRanksHierarchically(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         const list = document.getElementById('rank-list'); list.innerHTML = '';
@@ -151,6 +149,7 @@ function startRealtimeListeners() {
         updateDashboard();
     });
 
+    // PLUGINS
     onSnapshot(collection(db, "plugins"), (snap) => {
         allPlugins = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const container = document.getElementById('plugins-container');
@@ -168,7 +167,7 @@ function startRealtimeListeners() {
                 settingsHtml = `<div style="white-space:pre-wrap; font-size:13px; margin-top:5px;">${plugin.settingsText || '-'}</div>`;
             }
 
-            let isCollapsed = window.pluginCollapsed[plugin.id] !== false;
+            let isCollapsed = window.pluginCollapsed[plugin.id] !== false; // Standard eingeklappt
             let displayStyle = isCollapsed ? 'none' : 'block';
             let iconText = isCollapsed ? '▶️' : '🔽';
 
@@ -199,6 +198,7 @@ function startRealtimeListeners() {
         updateDashboard();
     });
 
+    // KISTEN
     onSnapshot(collection(db, "crates"), (snap) => {
         allCrates = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         allCrates.sort((a, b) => (a.order || 0) - (b.order || 0)); 
@@ -206,6 +206,7 @@ function startRealtimeListeners() {
         updateDashboard();
     });
 
+    // SHOP
     onSnapshot(collection(db, "shop"), (snap) => {
         allShop = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const list = document.getElementById('shop-list'); list.innerHTML = '';
@@ -222,10 +223,12 @@ function startRealtimeListeners() {
         updateDashboard();
     });
 
+    // WERBUNG KAMPAGNEN
     onSnapshot(collection(db, "ads"), (snap) => {
         allAds = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const container = document.getElementById('ad-campaigns-container');
-        if(!container) return; container.innerHTML = '';
+        if(!container) return; 
+        container.innerHTML = '';
         
         allAds.forEach(camp => {
             let itemsHtml = (camp.items || []).map(item => {
@@ -243,16 +246,16 @@ function startRealtimeListeners() {
                     </div>`;
             }).join('');
 
-            let isCollapsed = window.adCollapsed[camp.id] !== false;
+            let isCollapsed = window.adCollapsed[camp.id] !== false; // Standard eingeklappt
             let displayStyle = isCollapsed ? 'none' : 'block';
             let iconText = isCollapsed ? '▶️' : '🔽';
 
             container.innerHTML += `
                 <div class="crate-box">
-                    <div class="crate-header" style="cursor: pointer;" onclick="window.toggleAdCampaign('${camp.id}')">
+                    <div class="crate-header" style="cursor: pointer; margin-bottom: 0; padding-bottom: ${isCollapsed ? '0' : '15px'}; border-bottom: ${isCollapsed ? 'none' : '1px solid var(--border-color)'};" onclick="window.toggleAdCampaign('${camp.id}')">
                         <div class="crate-header-left">
                             <span id="ad-icon-${camp.id}" style="margin-right: 8px; font-size: 14px;">${iconText}</span>
-                            <h3 style="font-size: 18px; margin: 0;">${camp.name}</h3>
+                            <h3 style="font-size: 18px; margin: 0;">${camp.name || 'Unbenannte Kampagne'}</h3>
                         </div>
                         <div class="button-group" onclick="event.stopPropagation()">
                             <button class="btn btn-primary btn-sm" onclick="window.openAdUploadModal('${camp.id}')">🖼️ Werbung hinzufügen</button>
@@ -266,24 +269,36 @@ function startRealtimeListeners() {
         });
     });
 
+    // GUI PAKETE
     onSnapshot(collection(db, "guis"), (snap) => {
         allGUIs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const container = document.getElementById('gui-packages-container');
+        
+        // Die Dropdowns sichern, damit JS nicht abstürzt, wenn man auf einem anderen Tab ist
         const editorSelect = document.getElementById('editor-pkg-select');
         const plannerSelect = document.getElementById('planner-pkg-select'); 
         const plannerBgSelect = document.getElementById('planner-bg-select');
         
-        if(!container) return; container.innerHTML = '';
+        if(!container) return; 
+        container.innerHTML = '';
         
-        const currentEditorVal = editorSelect.value; const currentPlannerVal = plannerSelect.value; const currentBgVal = plannerBgSelect ? plannerBgSelect.value : '';
-        editorSelect.innerHTML = '<option value="">Ziel-Paket wählen...</option>'; plannerSelect.innerHTML = '<option value="">Ziel-Paket wählen...</option>';
+        const currentEditorVal = editorSelect ? editorSelect.value : ''; 
+        const currentPlannerVal = plannerSelect ? plannerSelect.value : ''; 
+        const currentBgVal = plannerBgSelect ? plannerBgSelect.value : '';
+        
+        if(editorSelect) editorSelect.innerHTML = '<option value="">Ziel-Paket wählen...</option>'; 
+        if(plannerSelect) plannerSelect.innerHTML = '<option value="">Ziel-Paket wählen...</option>';
         if(plannerBgSelect) plannerBgSelect.innerHTML = '<option value="">Kein Bild (Nur Grid)</option>';
 
         allGUIs.forEach(pkg => {
-            editorSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`; plannerSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`;
+            if(editorSelect) editorSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`; 
+            if(plannerSelect) plannerSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`;
+            
             let items = pkg.items || [];
             let itemsHtml = items.map(item => {
-                if (plannerBgSelect && item.type !== 'layout' && item.image_url) { plannerBgSelect.innerHTML += `<option value="${item.image_url}">${pkg.name} - ${item.name}</option>`; }
+                if (plannerBgSelect && item.type !== 'layout' && item.image_url) { 
+                    plannerBgSelect.innerHTML += `<option value="${item.image_url}">${pkg.name} - ${item.name}</option>`; 
+                }
 
                 if (item.type === 'layout') {
                     return `<div class="gui-card"><div class="gui-card-header"><span>${item.name}</span><div><button class="btn btn-secondary btn-sm" onclick="window.editLayoutInPlanner('${pkg.id}', '${item.id}')" title="Im Planer bearbeiten">✏️</button><button class="btn btn-danger btn-sm" onclick="window.deleteGuiItem('${pkg.id}', '${item.id}')">Löschen</button></div></div><div style="width:100%; height:120px; background:#1e1e1e; border: 2px solid #555; border-radius:6px; display:flex; align-items:center; justify-content:center; flex-direction: column;"><span style="font-size: 30px; margin-bottom: 10px;">📋</span><span style="color:#4CAF50; font-size:12px; font-weight:bold;">Menü Layout (${item.rows} Reihen)</span></div></div>`;
@@ -292,14 +307,17 @@ function startRealtimeListeners() {
                 }
             }).join('');
 
-            let isCollapsed = window.guiCollapsed[pkg.id] !== false;
+            let isCollapsed = window.guiCollapsed[pkg.id] !== false; // Standard eingeklappt
             let displayStyle = isCollapsed ? 'none' : 'block';
             let iconText = isCollapsed ? '▶️' : '🔽';
 
             container.innerHTML += `
                 <div class="crate-box">
-                    <div class="crate-header" style="cursor: pointer;" onclick="window.toggleGuiPackage('${pkg.id}')">
-                        <div class="crate-header-left"><span id="gui-icon-${pkg.id}" style="margin-right: 8px; font-size: 14px;">${iconText}</span><h3 style="font-size: 18px; margin: 0;">${pkg.name}</h3></div>
+                    <div class="crate-header" style="cursor: pointer; margin-bottom: 0; padding-bottom: ${isCollapsed ? '0' : '15px'}; border-bottom: ${isCollapsed ? 'none' : '1px solid var(--border-color)'};" onclick="window.toggleGuiPackage('${pkg.id}')">
+                        <div class="crate-header-left">
+                            <span id="gui-icon-${pkg.id}" style="margin-right: 8px; font-size: 14px;">${iconText}</span>
+                            <h3 style="font-size: 18px; margin: 0;">${pkg.name}</h3>
+                        </div>
                         <div class="button-group" onclick="event.stopPropagation()">
                             <button class="btn btn-info btn-sm" onclick="window.openMenuPlannerForPkg('${pkg.id}')">📋 Menü planen</button>
                             <button class="btn btn-secondary btn-sm" onclick="window.openGuiEditorForPkg('${pkg.id}')">🖌️ Pixel Editor</button>
@@ -313,7 +331,10 @@ function startRealtimeListeners() {
                 </div>`;
         });
         
-        if(currentEditorVal) editorSelect.value = currentEditorVal; if(currentPlannerVal) plannerSelect.value = currentPlannerVal; if(currentBgVal && plannerBgSelect) plannerBgSelect.value = currentBgVal;
+        if(editorSelect && currentEditorVal) editorSelect.value = currentEditorVal; 
+        if(plannerSelect && currentPlannerVal) plannerSelect.value = currentPlannerVal; 
+        if(plannerBgSelect && currentBgVal) plannerBgSelect.value = currentBgVal;
+        
         updateDashboard();
     });
 }
@@ -324,8 +345,9 @@ function startRealtimeListeners() {
 
 window.toggleGuiPackage = (id) => {
     window.guiCollapsed[id] = window.guiCollapsed[id] === false ? true : false;
-    const content = document.getElementById(`gui-content-${id}`); const icon = document.getElementById(`gui-icon-${id}`);
-    if (window.guiCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; } else { content.style.display = 'block'; icon.innerText = '🔽'; }
+    const content = document.getElementById(`gui-content-${id}`); const icon = document.getElementById(`gui-icon-${id}`); const header = content.previousElementSibling;
+    if (window.guiCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } 
+    else { content.style.display = 'block'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; }
 };
 
 window.togglePlugin = (id) => {
@@ -337,8 +359,9 @@ window.togglePlugin = (id) => {
 
 window.toggleAdCampaign = (id) => {
     window.adCollapsed[id] = window.adCollapsed[id] === false ? true : false;
-    const content = document.getElementById(`ad-content-${id}`); const icon = document.getElementById(`ad-icon-${id}`);
-    if (window.adCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; } else { content.style.display = 'block'; icon.innerText = '🔽'; }
+    const content = document.getElementById(`ad-content-${id}`); const icon = document.getElementById(`ad-icon-${id}`); const header = content.previousElementSibling;
+    if (window.adCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } 
+    else { content.style.display = 'block'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; }
 };
 
 window.deleteEntry = async (collectionName, id) => {
@@ -517,7 +540,7 @@ window.importPluginPerms = () => {
 };
 
 // ==========================================
-// KISTEN LOGIK (MIT UMBENNEN & DRAG DROP)
+// KISTEN LOGIK
 // ==========================================
 
 window.renderCrates = function() {
@@ -554,7 +577,7 @@ window.renderCrates = function() {
             </tr>`;
         }).join('');
         
-        let isCollapsed = window.crateCollapsed[crate.id] !== false;
+        let isCollapsed = window.crateCollapsed[crate.id] !== false; // Standard eingeklappt
         let displayStyle = isCollapsed ? 'none' : 'block';
         let iconText = isCollapsed ? '▶️' : '🔽';
 
@@ -585,7 +608,7 @@ window.renderCrates = function() {
             </div>`;
     });
 
-    const boxes = document.querySelectorAll('.crate-box');
+    const boxes = document.querySelectorAll('.crate-box[data-crate-id]');
     boxes.forEach(box => {
         box.addEventListener('dragstart', function(e) { draggedCrateBox = this; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/html', this.innerHTML); this.style.opacity = '0.4'; });
         box.addEventListener('dragover', function(e) { e.preventDefault(); this.classList.add('drag-over'); return false; });
@@ -595,7 +618,7 @@ window.renderCrates = function() {
             if (draggedCrateBox !== this) {
                 let parent = this.parentNode; let children = Array.from(parent.children); let srcIndex = children.indexOf(draggedCrateBox); let targetIndex = children.indexOf(this);
                 if (srcIndex < targetIndex) { this.after(draggedCrateBox); } else { this.before(draggedCrateBox); }
-                let newOrderIds = Array.from(parent.children).map(el => el.getAttribute('data-crate-id'));
+                let newOrderIds = Array.from(parent.children).map(el => el.getAttribute('data-crate-id')).filter(id => id);
                 newOrderIds.forEach((id, index) => { updateDoc(doc(db, "crates", id), { order: index }); });
             }
             return false;
@@ -624,12 +647,24 @@ window.changeCrateItemType = () => { const type = document.getElementById('modal
 window.addEnchantmentField = (val = '') => { const container = document.getElementById('enchantments-container'); const row = document.createElement('div'); row.style.display = 'flex'; row.style.gap = '5px'; row.innerHTML = `<input type="text" class="ench-input" placeholder="z.B. sharpness:5" value="${val}" style="flex-grow:1; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-color); color: var(--text-main);"><button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">X</button>`; container.appendChild(row); };
 window.openItemModal = (crateId) => { document.getElementById('item-modal-title').innerText = "Neues Item hinzufügen"; document.getElementById('modal-crate-id').value = crateId; document.getElementById('modal-edit-item-id').value = ''; document.getElementById('modal-item-type').value = 'item'; document.getElementById('modal-item-name').value = ''; document.getElementById('modal-item-quantity').value = '1'; document.getElementById('modal-item-chance').value = ''; document.getElementById('enchantments-container').innerHTML = ''; window.changeCrateItemType(); document.getElementById('item-modal').classList.add('active'); };
 window.editCrateItem = (crateId, itemId) => { const crate = allCrates.find(c => c.id === crateId); if (!crate) return; const item = (crate.items || []).find(i => i.id === itemId); if (!item) return; document.getElementById('item-modal-title').innerText = "Item bearbeiten"; document.getElementById('modal-crate-id').value = crateId; document.getElementById('modal-edit-item-id').value = item.id; document.getElementById('modal-item-type').value = item.type || 'item'; document.getElementById('modal-item-name').value = item.name || ''; document.getElementById('modal-item-quantity').value = item.quantity || 1; document.getElementById('modal-item-chance').value = item.chance || ''; window.changeCrateItemType(); const enchContainer = document.getElementById('enchantments-container'); enchContainer.innerHTML = ''; if (item.enchantments && item.enchantments.length > 0) { item.enchantments.forEach(ench => window.addEnchantmentField(ench)); } document.getElementById('item-modal').classList.add('active'); };
-document.getElementById('btn-save-item').addEventListener('click', async () => { try { const crateId = document.getElementById('modal-crate-id').value; const editItemId = document.getElementById('modal-edit-item-id').value; const type = document.getElementById('modal-item-type').value; const name = document.getElementById('modal-item-name').value; const quantity = document.getElementById('modal-item-quantity').value; const chance = document.getElementById('modal-item-chance').value; const file = document.getElementById('modal-item-image').files[0]; const status = document.getElementById('modal-status'); if(!name || !chance || !quantity) return alert("Pflichtfelder fehlen!"); status.innerText = "Speichere Item..."; const enchInputs = document.querySelectorAll('.ench-input'); const enchantments = Array.from(enchInputs).map(input => input.value.trim()).filter(v => v !== ''); let imageUrl = null; if(file) imageUrl = await uploadImage(file, 'crates/items'); const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId); let updatedItems = [...(crate.items || [])]; if(editItemId) { const idx = updatedItems.findIndex(i => i.id === editItemId); if(idx > -1) { updatedItems[idx].type = type; updatedItems[idx].name = name; updatedItems[idx].quantity = Number(quantity); updatedItems[idx].chance = Number(chance); updatedItems[idx].enchantments = enchantments; if(file) updatedItems[idx].image_url = imageUrl; } } else { updatedItems.push({ id: Date.now().toString(), type: type, name: name, quantity: Number(quantity), chance: Number(chance), enchantments: enchantments, image_url: imageUrl }); } await updateDoc(crateRef, { items: updatedItems }); status.innerText = "Erfolgreich!"; setTimeout(() => { status.innerText = ""; document.getElementById('item-modal').classList.remove('active'); }, 1000); } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
+document.getElementById('btn-save-item').addEventListener('click', async () => {
+    try {
+        const crateId = document.getElementById('modal-crate-id').value; const editItemId = document.getElementById('modal-edit-item-id').value; const type = document.getElementById('modal-item-type').value; const name = document.getElementById('modal-item-name').value; const quantity = document.getElementById('modal-item-quantity').value; const chance = document.getElementById('modal-item-chance').value; const file = document.getElementById('modal-item-image').files[0]; const status = document.getElementById('modal-status');
+        if(!name || !chance || !quantity) return alert("Pflichtfelder fehlen!"); status.innerText = "Speichere Item...";
+        const enchInputs = document.querySelectorAll('.ench-input'); const enchantments = Array.from(enchInputs).map(input => input.value.trim()).filter(v => v !== '');
+        let imageUrl = null; if(file) imageUrl = await uploadImage(file, 'crates/items');
+        const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId);
+        let updatedItems = [...(crate.items || [])];
+        if(editItemId) { const idx = updatedItems.findIndex(i => i.id === editItemId); if(idx > -1) { updatedItems[idx].type = type; updatedItems[idx].name = name; updatedItems[idx].quantity = Number(quantity); updatedItems[idx].chance = Number(chance); updatedItems[idx].enchantments = enchantments; if(file) updatedItems[idx].image_url = imageUrl; } } else { updatedItems.push({ id: Date.now().toString(), type: type, name: name, quantity: Number(quantity), chance: Number(chance), enchantments: enchantments, image_url: imageUrl }); }
+        await updateDoc(crateRef, { items: updatedItems });
+        status.innerText = "Erfolgreich!"; setTimeout(() => { status.innerText = ""; document.getElementById('item-modal').classList.remove('active'); }, 1000);
+    } catch (error) { console.error(error); alert("Fehler: " + error.message); }
+});
 window.deleteCrateItem = async (crateId, itemId) => { if(confirm("Item entfernen?")) { try { const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId); await updateDoc(crateRef, { items: (crate.items || []).filter(i => i.id !== itemId) }); } catch (error) { console.error(error); } } };
 window.simulateCrate = function(crateId) { const crate = allCrates.find(c => c.id === crateId); if(!crate || !crate.items || crate.items.length === 0) return alert("Die Kiste hat noch keine Items!"); let totalChance = crate.items.reduce((sum, item) => sum + (Number(item.chance) || 0), 0); if(totalChance === 0) return alert("Die Items in dieser Kiste haben keine Wahrscheinlichkeit (0%)!"); let results = {}; crate.items.forEach(i => results[i.id] = 0); for(let i=0; i<1000; i++) { let rand = Math.random() * totalChance; let current = 0; for(let item of crate.items) { current += (Number(item.chance) || 0); if(rand <= current) { results[item.id]++; break; } } } let html = `<ul style="list-style:none; padding:0; margin:0;">`; let sortedItems = [...crate.items].sort((a, b) => results[b.id] - results[a.id]); sortedItems.forEach(item => { let count = results[item.id]; let realPercent = ((count / 1000) * 100).toFixed(1); html += `<li style="padding: 8px 0; border-bottom: 1px solid var(--border-color); display:flex; justify-content:space-between;"><span><strong>${item.name}</strong></span><span style="color:var(--text-muted);">${count}x gezogen <b style="color:#00BCD4;">(${realPercent}%)</b></span></li>`; }); html += `</ul>`; document.getElementById('crate-test-result').innerHTML = html; document.getElementById('crate-test-modal').classList.add('active'); };
 window.exportCrateYaml = function(crateId) { const crate = allCrates.find(c => c.id === crateId); if(!crate) return alert("Kiste nicht gefunden!"); let safeName = crate.name ? crate.name.replace(/[^a-zA-Z0-9]/g, '') : 'CustomCrate'; let yaml = `Crate:\n  CrateType: CSGO\n  CrateName: '&8${crate.name || 'Unbenannte Kiste'}'\n  Preview-Name: '&8${crate.name || 'Unbenannte Kiste'} Preview'\n  StartingKeys: 0\n  InGUI: true\n  Slot: 14\nPrizes:\n`; let items = crate.items || []; items.forEach((item, index) => { yaml += `  '${index + 1}':\n    DisplayName: '&f${item.name}'\n    DisplayAmount: ${item.quantity || 1}\n    MaxRange: 100\n    Chance: ${item.chance}\n`; if(item.type === 'money') { yaml += `    DisplayItem: 'SUNFLOWER'\n    Commands:\n      - 'eco give %player% ${item.quantity || 1000}'\n`; } else if(item.type === 'perk' || item.type === 'special') { yaml += `    DisplayItem: 'NETHER_STAR'\n    Commands:\n      - 'lp user %player% permission set <deine_permission> true'\n`; } else { yaml += `    DisplayItem: 'STONE'\n    Items:\n      - 'Item:STONE, Amount:${item.quantity || 1}'\n`; } if(item.enchantments && item.enchantments.length > 0) { yaml += `    DisplayEnchantments:\n`; item.enchantments.forEach(ench => { yaml += `      - '${ench}'\n`; }); } }); const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${safeName}.yml`; a.click(); URL.revokeObjectURL(url); };
 
-// --- SHOP (MIT EDIT LOGIK) ---
+// --- SHOP ---
 window.resetShopForm = () => { editingShopId = null; document.getElementById('shop-form-title').innerText = "Neues Item im Shop anbieten"; document.getElementById('btn-save-shop').innerText = "Shop-Item speichern"; document.getElementById('btn-cancel-shop').style.display = "none"; document.getElementById('shop-item').value = ''; document.getElementById('shop-price').value = ''; };
 window.editShopItem = (id) => { const item = allShop.find(s => s.id === id); if(!item) return; editingShopId = id; document.getElementById('shop-item').value = item.name; document.getElementById('shop-price').value = item.price; document.getElementById('shop-form-title').innerText = "Item bearbeiten: " + item.name; document.getElementById('btn-save-shop').innerText = "Änderungen speichern"; document.getElementById('btn-cancel-shop').style.display = "inline-block"; window.scrollTo({ top: 0, behavior: 'smooth' }); };
 document.getElementById('btn-cancel-shop').addEventListener('click', window.resetShopForm);
@@ -693,429 +728,105 @@ window.deleteAdItem = async (campId, itemId) => {
 };
 
 // ==========================================
-// 5. GUI PAKETE & UPLOAD LOGIK
+// MENÜ PLANER LOGIK
 // ==========================================
 
-document.getElementById('btn-save-gui-package').addEventListener('click', async () => {
-    try {
-        const pkgName = document.getElementById('gui-package-name').value; const status = document.getElementById('gui-package-status');
-        if(!pkgName) return alert("Bitte gib dem GUI Paket einen Namen!"); status.innerText = "Erstelle Paket...";
-        await addDoc(collection(db, "guis"), { name: pkgName, items: [] });
-        status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('gui-package-name').value = '';
-    } catch (e) { console.error(e); alert("Fehler: " + e.message); }
-});
-
-window.openGuiUploadModal = (pkgId) => {
-    document.getElementById('modal-gui-package-id').value = pkgId; document.getElementById('gui-upload-modal').classList.add('active');
-};
-
-document.getElementById('btn-save-gui-upload').addEventListener('click', async () => {
-    const status = document.getElementById('modal-gui-status');
-    try {
-        const pkgId = document.getElementById('modal-gui-package-id').value; const name = document.getElementById('modal-gui-name').value; const file = document.getElementById('modal-gui-image').files[0];
-        if(!name || !file) return alert("Bitte Name und Bild angeben!"); status.innerText = "Lade hoch (Bitte warten)...";
-        const imageUrl = await uploadImage(file, 'guis/images');
-        if(!imageUrl) throw new Error("Upload fehlgeschlagen.");
-        
-        status.innerText = "Speichere in Paket...";
-        const newItem = { id: Date.now().toString(), name: name, image_url: imageUrl };
-        const pkgRef = doc(db, "guis", pkgId); const pkg = allGUIs.find(g => g.id === pkgId);
-        await updateDoc(pkgRef, { items: [...(pkg.items || []), newItem] });
-        
-        status.innerText = "Erfolgreich!"; setTimeout(() => { status.innerText = ""; document.getElementById('modal-gui-name').value = ''; document.getElementById('modal-gui-image').value = ''; document.getElementById('gui-upload-modal').classList.remove('active'); }, 1500);
-    } catch (e) { console.error("Upload Error:", e); status.innerText = "Fehler!"; alert("Fehler beim Hochladen: " + e.message); }
-});
-
-window.deleteGuiItem = async (pkgId, itemId) => {
-    if(confirm("Element wirklich löschen?")) {
-        try {
-            const pkgRef = doc(db, "guis", pkgId); const pkg = allGUIs.find(g => g.id === pkgId);
-            await updateDoc(pkgRef, { items: (pkg.items || []).filter(i => i.id !== itemId) });
-        } catch (error) { console.error(error); alert("Fehler: " + error.message); }
-    }
-};
-
-// ==========================================
-// 6. MENÜ PLANER (DRAG & DROP INVENTAR)
-// ==========================================
-
-const plannerPresets = [
-    { id: 'btn_next', text: 'Nächste Seite', icon: '▶️' },
-    { id: 'btn_prev', text: 'Letzte Seite', icon: '◀️' },
-    { id: 'btn_close', text: 'Schließen', icon: '❌' },
-    { id: 'btn_money', text: 'Geld / Eco', icon: '💰' },
-    { id: 'btn_info', text: 'Information', icon: 'ℹ️' },
-    { id: 'btn_item', text: 'Item-Platz', icon: '📦' }
-];
-
-let currentMenuLayout = {}; 
-let plannerBgImage = null;
+const plannerPresets = [ { id: 'btn_next', text: 'Nächste Seite', icon: '▶️' }, { id: 'btn_prev', text: 'Letzte Seite', icon: '◀️' }, { id: 'btn_close', text: 'Schließen', icon: '❌' }, { id: 'btn_money', text: 'Geld / Eco', icon: '💰' }, { id: 'btn_info', text: 'Information', icon: 'ℹ️' }, { id: 'btn_item', text: 'Item-Platz', icon: '📦' } ];
+let currentMenuLayout = {}; let plannerBgImage = null;
 
 window.initMenuPlanner = function() {
-    const palette = document.getElementById('palette-items');
-    if(!palette) return;
-    palette.innerHTML = '';
-    
-    plannerPresets.forEach(item => {
-        palette.innerHTML += `
-            <div class="palette-item" draggable="true" ondragstart="window.dragStart(event, '${item.id}')">
-                <span style="font-size: 24px; width: 30px; text-align: center;">${item.icon}</span>
-                <span style="font-size: 14px;">${item.text}</span>
-            </div>
-        `;
-    });
+    const palette = document.getElementById('palette-items'); if(!palette) return; palette.innerHTML = '';
+    plannerPresets.forEach(item => { palette.innerHTML += `<div class="palette-item" draggable="true" ondragstart="window.dragStart(event, '${item.id}')"><span style="font-size: 24px; width: 30px; text-align: center;">${item.icon}</span><span style="font-size: 14px;">${item.text}</span></div>`; });
     window.updateMenuGrid();
 }
 
 window.updateMenuGrid = function() {
-    const rowsElem = document.getElementById('menu-rows');
-    if(!rowsElem) return;
-    
-    const rows = parseInt(rowsElem.value);
-    const bgUrl = document.getElementById('planner-bg-select').value;
-    const grid = document.getElementById('mc-inventory');
-    const canvasInner = document.getElementById('planner-inner-canvas');
-    
-    const inputX = document.getElementById('planner-offset-x');
-    const inputY = document.getElementById('planner-offset-y');
-    
+    const rowsElem = document.getElementById('menu-rows'); if(!rowsElem) return;
+    const rows = parseInt(rowsElem.value); const bgUrl = document.getElementById('planner-bg-select').value; const grid = document.getElementById('mc-inventory'); const canvasInner = document.getElementById('planner-inner-canvas'); const inputX = document.getElementById('planner-offset-x'); const inputY = document.getElementById('planner-offset-y');
     grid.innerHTML = '';
-
-    if (bgUrl) {
-        canvasInner.style.backgroundImage = `url(${bgUrl})`;
-        
-        if (!plannerBgImage || plannerBgImage.src !== bgUrl) {
-            plannerBgImage = new Image();
-            plannerBgImage.onload = () => {
-                canvasInner.style.width = plannerBgImage.naturalWidth + 'px';
-                canvasInner.style.height = plannerBgImage.naturalHeight + 'px';
-                
-                if(plannerBgImage.naturalWidth === 192) {
-                    inputX.value = 8; 
-                } else {
-                    inputX.value = 40;
-                }
-                grid.style.left = inputX.value + 'px';
-            };
-            plannerBgImage.src = bgUrl;
-        }
-    } else {
-        canvasInner.style.backgroundImage = 'none';
-        canvasInner.style.width = '256px';
-        canvasInner.style.height = '256px';
-    }
-
-    grid.style.left = inputX.value + 'px';
-    grid.style.top = inputY.value + 'px';
-    
-    for(let i=0; i < rows * 9; i++) {
-        const itemId = currentMenuLayout[i];
-        let icon = '';
-        if(itemId) {
-            const preset = plannerPresets.find(p => p.id === itemId);
-            if(preset) icon = preset.icon;
-        }
-        
-        grid.innerHTML += `
-            <div class="mc-slot" data-slot="${i}" 
-                 ondragover="window.allowDrop(event)" 
-                 ondragleave="window.dragLeave(event)"
-                 ondrop="window.drop(event)"
-                 onclick="window.clickSlot(${i})">
-                ${icon}
-            </div>
-        `;
-    }
+    if (bgUrl) { canvasInner.style.backgroundImage = `url(${bgUrl})`; if (!plannerBgImage || plannerBgImage.src !== bgUrl) { plannerBgImage = new Image(); plannerBgImage.onload = () => { canvasInner.style.width = plannerBgImage.naturalWidth + 'px'; canvasInner.style.height = plannerBgImage.naturalHeight + 'px'; if(plannerBgImage.naturalWidth === 192) { inputX.value = 8; } else { inputX.value = 40; } grid.style.left = inputX.value + 'px'; }; plannerBgImage.src = bgUrl; } } else { canvasInner.style.backgroundImage = 'none'; canvasInner.style.width = '256px'; canvasInner.style.height = '256px'; }
+    grid.style.left = inputX.value + 'px'; grid.style.top = inputY.value + 'px';
+    for(let i=0; i < rows * 9; i++) { const itemId = currentMenuLayout[i]; let icon = ''; if(itemId) { const preset = plannerPresets.find(p => p.id === itemId); if(preset) icon = preset.icon; } grid.innerHTML += `<div class="mc-slot" data-slot="${i}" ondragover="window.allowDrop(event)" ondragleave="window.dragLeave(event)" ondrop="window.drop(event)" onclick="window.clickSlot(${i})">${icon}</div>`; }
 };
 
 window.dragStart = function(ev, id) { ev.dataTransfer.setData("text", id); };
 window.allowDrop = function(ev) { ev.preventDefault(); if(ev.target.classList.contains('mc-slot')) ev.target.classList.add('drag-over'); };
 window.dragLeave = function(ev) { if(ev.target.classList.contains('mc-slot')) ev.target.classList.remove('drag-over'); };
-window.drop = function(ev) {
-    ev.preventDefault();
-    let target = ev.target;
-    if(!target.classList.contains('mc-slot')) target = target.closest('.mc-slot');
-    
-    if(target) {
-        target.classList.remove('drag-over');
-        const id = ev.dataTransfer.getData("text");
-        const slot = target.getAttribute('data-slot');
-        currentMenuLayout[slot] = id;
-        window.updateMenuGrid();
-    }
-};
+window.drop = function(ev) { ev.preventDefault(); let target = ev.target; if(!target.classList.contains('mc-slot')) target = target.closest('.mc-slot'); if(target) { target.classList.remove('drag-over'); const id = ev.dataTransfer.getData("text"); const slot = target.getAttribute('data-slot'); currentMenuLayout[slot] = id; window.updateMenuGrid(); } };
+window.clickSlot = function(slot) { if(currentMenuLayout[slot]) { delete currentMenuLayout[slot]; window.updateMenuGrid(); } };
 
-window.clickSlot = function(slot) {
-    if(currentMenuLayout[slot]) { delete currentMenuLayout[slot]; window.updateMenuGrid(); }
-};
-
-window.openMenuPlannerForPkg = (pkgId) => {
-    document.querySelector('[data-target="menu-planner"]').click();
-    document.getElementById('planner-pkg-select').value = pkgId;
-    document.getElementById('planner-menu-name').value = '';
-    document.getElementById('planner-menu-id').value = '';
-    currentMenuLayout = {};
-    window.updateMenuGrid();
-};
-
-window.editLayoutInPlanner = (pkgId, itemId) => {
-    const pkg = allGUIs.find(g => g.id === pkgId); if(!pkg) return;
-    const item = (pkg.items || []).find(i => i.id === itemId); if(!item) return;
-
-    document.querySelector('[data-target="menu-planner"]').click();
-    document.getElementById('planner-pkg-select').value = pkgId;
-    document.getElementById('planner-menu-name').value = item.name;
-    document.getElementById('planner-menu-id').value = item.id; 
-    
-    if(item.rows) document.getElementById('menu-rows').value = item.rows;
-    if(item.bg_url) document.getElementById('planner-bg-select').value = item.bg_url;
-    if(item.offset_x !== undefined) document.getElementById('planner-offset-x').value = item.offset_x;
-    if(item.offset_y !== undefined) document.getElementById('planner-offset-y').value = item.offset_y;
-    
-    currentMenuLayout = item.layout || {};
-    window.updateMenuGrid();
-};
+window.openMenuPlannerForPkg = (pkgId) => { document.querySelector('[data-target="menu-planner"]').click(); document.getElementById('planner-pkg-select').value = pkgId; document.getElementById('planner-menu-name').value = ''; document.getElementById('planner-menu-id').value = ''; currentMenuLayout = {}; window.updateMenuGrid(); };
+window.editLayoutInPlanner = (pkgId, itemId) => { const pkg = allGUIs.find(g => g.id === pkgId); if(!pkg) return; const item = (pkg.items || []).find(i => i.id === itemId); if(!item) return; document.querySelector('[data-target="menu-planner"]').click(); document.getElementById('planner-pkg-select').value = pkgId; document.getElementById('planner-menu-name').value = item.name; document.getElementById('planner-menu-id').value = item.id; if(item.rows) document.getElementById('menu-rows').value = item.rows; if(item.bg_url) document.getElementById('planner-bg-select').value = item.bg_url; if(item.offset_x !== undefined) document.getElementById('planner-offset-x').value = item.offset_x; if(item.offset_y !== undefined) document.getElementById('planner-offset-y').value = item.offset_y; currentMenuLayout = item.layout || {}; window.updateMenuGrid(); };
 
 window.saveMenuLayout = async function() {
-    const pkgId = document.getElementById('planner-pkg-select').value;
-    const menuName = document.getElementById('planner-menu-name').value;
-    const editItemId = document.getElementById('planner-menu-id').value;
-    const rows = parseInt(document.getElementById('menu-rows').value);
-    const bgUrl = document.getElementById('planner-bg-select').value;
-    const offX = parseInt(document.getElementById('planner-offset-x').value);
-    const offY = parseInt(document.getElementById('planner-offset-y').value);
-
-    if(!pkgId) return alert("Bitte wähle ein Ziel-Paket aus!");
-    if(!menuName) return alert("Bitte gib dem Layout einen Namen!");
-
-    try {
-        const pkgRef = doc(db, "guis", pkgId);
-        const pkg = allGUIs.find(g => g.id === pkgId);
-        let updatedItems = [...(pkg.items || [])];
-
-        const layoutData = { type: 'layout', rows: rows, bg_url: bgUrl, offset_x: offX, offset_y: offY, layout: currentMenuLayout };
-
-        if (editItemId) {
-            const idx = updatedItems.findIndex(i => i.id === editItemId);
-            if(idx > -1) {
-                updatedItems[idx].name = menuName;
-                updatedItems[idx].rows = rows;
-                updatedItems[idx].bg_url = bgUrl;
-                updatedItems[idx].offset_x = offX;
-                updatedItems[idx].offset_y = offY;
-                updatedItems[idx].layout = currentMenuLayout;
-            } else {
-                updatedItems.push({ id: editItemId, name: menuName, ...layoutData });
-            }
-        } else {
-            updatedItems.push({ id: Date.now().toString(), name: menuName, ...layoutData });
-        }
-
-        await updateDoc(pkgRef, { items: updatedItems });
-        alert("Erfolgreich im Paket gespeichert!");
-        document.querySelector('[data-target="gui"]').click(); 
-        
-    } catch (error) { console.error(error); alert("Fehler beim Speichern!"); }
+    const pkgId = document.getElementById('planner-pkg-select').value; const menuName = document.getElementById('planner-menu-name').value; const editItemId = document.getElementById('planner-menu-id').value; const rows = parseInt(document.getElementById('menu-rows').value); const bgUrl = document.getElementById('planner-bg-select').value; const offX = parseInt(document.getElementById('planner-offset-x').value); const offY = parseInt(document.getElementById('planner-offset-y').value);
+    if(!pkgId) return alert("Bitte wähle ein Ziel-Paket aus!"); if(!menuName) return alert("Bitte gib dem Layout einen Namen!");
+    try { const pkgRef = doc(db, "guis", pkgId); const pkg = allGUIs.find(g => g.id === pkgId); let updatedItems = [...(pkg.items || [])]; const layoutData = { type: 'layout', rows: rows, bg_url: bgUrl, offset_x: offX, offset_y: offY, layout: currentMenuLayout }; if (editItemId) { const idx = updatedItems.findIndex(i => i.id === editItemId); if(idx > -1) { updatedItems[idx].name = menuName; updatedItems[idx].rows = rows; updatedItems[idx].bg_url = bgUrl; updatedItems[idx].offset_x = offX; updatedItems[idx].offset_y = offY; updatedItems[idx].layout = currentMenuLayout; } else { updatedItems.push({ id: editItemId, name: menuName, ...layoutData }); } } else { updatedItems.push({ id: Date.now().toString(), name: menuName, ...layoutData }); } await updateDoc(pkgRef, { items: updatedItems }); alert("Erfolgreich im Paket gespeichert!"); document.querySelector('[data-target="gui"]').click(); } catch (error) { console.error(error); alert("Fehler beim Speichern!"); }
 };
 
 window.exportMenuYaml = function() {
-    const name = document.getElementById('planner-menu-name').value || 'custom_menu';
-    const rows = parseInt(document.getElementById('menu-rows').value);
-    
-    let yaml = `menu_title: '&8${name}'\n`;
-    yaml += `open_command: '${name.toLowerCase().replace(/\s+/g, '')}'\n`;
-    yaml += `size: ${rows * 9}\n`;
-    yaml += `items:\n`;
-    
-    for(let slot in currentMenuLayout) {
-        const itemId = currentMenuLayout[slot];
-        const preset = plannerPresets.find(p => p.id === itemId);
-        if(!preset) continue;
-        
-        yaml += `  '${itemId}_${slot}':\n`;
-        
-        if(itemId === 'btn_next') {
-            yaml += `    material: arrow\n    slot: ${slot}\n    display_name: '&aNächste Seite'\n    left_click_commands:\n      - '[player] menu open nächste_seite'\n`;
-        } else if(itemId === 'btn_prev') {
-            yaml += `    material: arrow\n    slot: ${slot}\n    display_name: '&cLetzte Seite'\n    left_click_commands:\n      - '[player] menu open vorherige_seite'\n`;
-        } else if(itemId === 'btn_close') {
-            yaml += `    material: barrier\n    slot: ${slot}\n    display_name: '&cSchließen'\n    left_click_commands:\n      - '[close]'\n`;
-        } else if(itemId === 'btn_money') {
-            yaml += `    material: gold_ingot\n    slot: ${slot}\n    display_name: '&eDein Guthaben'\n    lore:\n      - '&7Du hast: %vault_eco_balance%'\n`;
-        } else {
-            yaml += `    material: stone\n    slot: ${slot}\n    display_name: '&f${preset.text}'\n`;
-        }
-    }
-    
-    const blob = new Blob([yaml], { type: 'text/yaml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${name.toLowerCase().replace(/\s+/g, '_')}.yml`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const name = document.getElementById('planner-menu-name').value || 'custom_menu'; const rows = parseInt(document.getElementById('menu-rows').value); let yaml = `menu_title: '&8${name}'\nopen_command: '${name.toLowerCase().replace(/\s+/g, '')}'\nsize: ${rows * 9}\nitems:\n`;
+    for(let slot in currentMenuLayout) { const itemId = currentMenuLayout[slot]; const preset = plannerPresets.find(p => p.id === itemId); if(!preset) continue; yaml += `  '${itemId}_${slot}':\n`; if(itemId === 'btn_next') { yaml += `    material: arrow\n    slot: ${slot}\n    display_name: '&aNächste Seite'\n    left_click_commands:\n      - '[player] menu open nächste_seite'\n`; } else if(itemId === 'btn_prev') { yaml += `    material: arrow\n    slot: ${slot}\n    display_name: '&cLetzte Seite'\n    left_click_commands:\n      - '[player] menu open vorherige_seite'\n`; } else if(itemId === 'btn_close') { yaml += `    material: barrier\n    slot: ${slot}\n    display_name: '&cSchließen'\n    left_click_commands:\n      - '[close]'\n`; } else if(itemId === 'btn_money') { yaml += `    material: gold_ingot\n    slot: ${slot}\n    display_name: '&eDein Guthaben'\n    lore:\n      - '&7Du hast: %vault_eco_balance%'\n`; } else { yaml += `    material: stone\n    slot: ${slot}\n    display_name: '&f${preset.text}'\n`; } }
+    const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${name.toLowerCase().replace(/\s+/g, '_')}.yml`; a.click(); URL.revokeObjectURL(url);
 };
-
 
 // ==========================================
 // 7. GUI PIXEL EDITOR LOGIK (ISOLIERT)
 // ==========================================
 
-window.openGuiEditorForPkg = (pkgId) => {
-    document.querySelector('[data-target="gui-editor"]').click();
-    document.getElementById('editor-pkg-select').value = pkgId;
-    document.getElementById('editor-gui-name').value = '';
-    document.getElementById('editor-gui-item-id').value = '';
-    if(window.clearCanvasSilent) window.clearCanvasSilent();
-};
-
-window.editGuiItemInEditor = async (pkgId, itemId) => {
-    const pkg = allGUIs.find(g => g.id === pkgId); if(!pkg) return;
-    const item = (pkg.items || []).find(i => i.id === itemId); if(!item) return;
-
-    document.querySelector('[data-target="gui-editor"]').click();
-    document.getElementById('editor-pkg-select').value = pkgId;
-    document.getElementById('editor-gui-name').value = item.name;
-    document.getElementById('editor-gui-item-id').value = item.id; 
-    
-    if(item.image_url) {
-        try {
-            const imgRef = ref(storage, item.image_url);
-            const blob = await getBlob(imgRef); 
-            const localUrl = URL.createObjectURL(blob);
-            const img = new Image();
-            img.onload = () => {
-                if(window.clearCanvasSilent) window.clearCanvasSilent();
-                const canvas = document.getElementById('pixelCanvas');
-                const ctx = canvas.getContext('2d');
-                ctx.imageSmoothingEnabled = false;
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                URL.revokeObjectURL(localUrl); 
-                if(window.triggerSaveState) window.triggerSaveState();
-            };
-            img.src = localUrl;
-        } catch (error) { console.error("Firebase Download Error:", error); alert("Fehler beim Importieren: " + error.message); }
-    } else {
-        if(window.clearCanvasSilent) window.clearCanvasSilent();
-    }
-};
+window.openGuiEditorForPkg = (pkgId) => { document.querySelector('[data-target="gui-editor"]').click(); document.getElementById('editor-pkg-select').value = pkgId; document.getElementById('editor-gui-name').value = ''; document.getElementById('editor-gui-item-id').value = ''; if(window.clearCanvasSilent) window.clearCanvasSilent(); };
+window.editGuiItemInEditor = async (pkgId, itemId) => { const pkg = allGUIs.find(g => g.id === pkgId); if(!pkg) return; const item = (pkg.items || []).find(i => i.id === itemId); if(!item) return; document.querySelector('[data-target="gui-editor"]').click(); document.getElementById('editor-pkg-select').value = pkgId; document.getElementById('editor-gui-name').value = item.name; document.getElementById('editor-gui-item-id').value = item.id; if(item.image_url) { try { const imgRef = ref(storage, item.image_url); const blob = await getBlob(imgRef); const localUrl = URL.createObjectURL(blob); const img = new Image(); img.onload = () => { if(window.clearCanvasSilent) window.clearCanvasSilent(); const canvas = document.getElementById('pixelCanvas'); const ctx = canvas.getContext('2d'); ctx.imageSmoothingEnabled = false; ctx.drawImage(img, 0, 0, canvas.width, canvas.height); URL.revokeObjectURL(localUrl); if(window.triggerSaveState) window.triggerSaveState(); }; img.src = localUrl; } catch (error) { console.error("Firebase Download Error:", error); alert("Fehler beim Importieren: " + error.message); } } else { if(window.clearCanvasSilent) window.clearCanvasSilent(); } };
 
 let editorInitialized = false;
 
 function initEditor() {
-    if (editorInitialized) return;
-    editorInitialized = true;
+    if (editorInitialized) return; editorInitialized = true;
 
     const fontMap={A:[[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],Ä:[[1,0,0,1],[0,0,0,0],[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],B:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,1],[1,1,1,0]],C:[[0,1,1,1],[1,0,0,0],[1,0,0,0],[1,0,0,0],[0,1,1,1]],D:[[1,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,0]],E:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,1,1,1]],F:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,0,0,0]],G:[[0,1,1,1],[1,0,0,0],[1,0,1,1],[1,0,0,1],[0,1,1,1]],H:[[1,0,0,1],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],I:[[1,1,1],[0,1,0],[0,1,0],[0,1,0],[1,1,1]],J:[[0,0,1,1],[0,0,0,1],[0,0,0,1],[1,0,0,1],[0,1,1,0]],K:[[1,0,0,1],[1,0,1,0],[1,1,0,0],[1,0,1,0],[1,0,0,1]],L:[[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,1,1,1]],M:[[1,0,0,0,1],[1,1,0,1,1],[1,0,1,0,1],[1,0,0,0,1],[1,0,0,0,1]],N:[[1,0,0,1],[1,1,0,1],[1,0,1,1],[1,0,0,1],[1,0,0,1]],O:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],Ö:[[1,0,0,1],[0,0,0,0],[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],P:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,0],[1,0,0,0]],Q:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,1,1],[0,1,1,1]],R:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,1,0],[1,0,0,1]],S:[[0,1,1,1],[1,0,0,0],[0,1,1,0],[0,0,0,1],[1,1,1,0]],T:[[1,1,1],[0,1,0],[0,1,0],[0,1,0],[0,1,0]],U:[[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],Ü:[[1,0,0,1],[0,0,0,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],V:[[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0],[0,0,1,0]],W:[[1,0,0,0,1],[1,0,0,0,1],[1,0,1,0,1],[1,1,0,1,1],[1,0,0,0,1]],X:[[1,0,0,1],[0,1,1,0],[0,1,1,0],[1,0,0,1]],Y:[[1,0,0,1],[0,1,1,0],[0,0,1,0],[0,0,1,0],[0,0,1,0]],Z:[[1,1,1,1],[0,0,0,1],[0,1,1,0],[1,0,0,0],[1,1,1,1]],0:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],1:[[0,1,0],[1,1,0],[0,1,0],[0,1,0],[1,1,1]],2:[[1,1,1,0],[0,0,0,1],[0,1,1,0],[1,0,0,0],[1,1,1,1]],3:[[1,1,1,0],[0,0,0,1],[0,1,1,0],[0,0,0,1],[1,1,1,0]],4:[[1,0,0,1],[1,0,0,1],[1,1,1,1],[0,0,0,1],[0,0,0,1]],5:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[0,0,0,1],[1,1,1,0]],6:[[0,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,1],[0,1,1,0]],7:[[1,1,1,1],[0,0,0,1],[0,0,1,0],[0,1,0,0],[0,1,0,0]],8:[[0,1,1,0],[1,0,0,1],[0,1,1,0],[1,0,0,1],[0,1,1,0]],9:[[0,1,1,0],[1,0,0,1],[0,1,1,1],[0,0,0,1],[0,1,1,0]],' ':[[0],[0],[0],[0],[0]],'.':[[0],[0],[0],[0],[1]],'ß':[[0,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,1],[1,1,1,0]]};
 
-    const canvas = document.getElementById('pixelCanvas');
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    
-    let currentZoom = 2; let currentTool = 'brush'; let selectedColor = '#a49e95'; window.currentStamp = 'slot'; 
-    let autoCenter = false; let isDrawing = false; let isEraseMode = false; let startPos = {x:0, y:0}; 
-    let canvasSnapshot; let selectionBuffer = null; let clipboardData = { img: null, x: 0, y: 0 }; let importedImage = null; 
-    const undoStack = []; const maxUndoSteps = 30;
+    const canvas = document.getElementById('pixelCanvas'); const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    let currentZoom = 2; let currentTool = 'brush'; let selectedColor = '#a49e95'; window.currentStamp = 'slot'; let autoCenter = false; let isDrawing = false; let isEraseMode = false; let startPos = {x:0, y:0}; let canvasSnapshot; let selectionBuffer = null; let clipboardData = { img: null, x: 0, y: 0 }; let importedImage = null; const undoStack = []; const maxUndoSteps = 30;
 
     function showToast(msg) { const t = document.getElementById('editor-toast'); t.innerText = msg; t.style.opacity = 1; setTimeout(() => t.style.opacity = 0, 2000); }
-    
     window.loadReference = function(input) { if(input.files && input.files[0]) { const reader = new FileReader(); reader.onload = function(e) { const img = document.getElementById('refOverlay'); img.src = e.target.result; img.style.display = 'block'; img.style.width = (canvas.width * currentZoom) + 'px'; img.style.height = (canvas.height * currentZoom) + 'px'; showToast("👻 Referenzbild geladen!"); }; reader.readAsDataURL(input.files[0]); } }
     window.clearReference = function() { const img = document.getElementById('refOverlay'); img.style.display = 'none'; img.src = ''; document.getElementById('refInput').value = ''; showToast("🚫 Referenz entfernt"); }
     window.deleteSelectedColor = function() { if(confirm("Farbe " + selectedColor + " löschen?")) { saveState(); const targetRgb = window.hexToRgb(selectedColor); if (!targetRgb) return; const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height); const d = imgData.data; let deletedCount = 0; for(let i = 0; i < d.length; i += 4) { if(d[i+3] > 0 && d[i] === targetRgb.r && d[i+1] === targetRgb.g && d[i+2] === targetRgb.b) { d[i+3] = 0; deletedCount++; } } if (deletedCount > 0) { ctx.putImageData(imgData, 0, 0); refreshSnapshot(); showToast("🧹 Pixel gelöscht!"); } else { undoStack.pop(); showToast("ℹ️ Farbe nicht gefunden."); } } }
     window.handleImport = function(input) { if(input.files && input.files[0]) { const reader = new FileReader(); reader.onload = function(e) { const img = new Image(); img.onload = function() { importedImage = img; window.setTool('import'); showToast("🖼️ Bild geladen! Klicke zum Platzieren."); }; img.src = e.target.result; }; reader.readAsDataURL(input.files[0]); } }
 
     function saveState() { undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height)); if (undoStack.length > maxUndoSteps) undoStack.shift(); refreshSnapshot(); }
-    window.triggerSaveState = saveState;
-    function refreshSnapshot() { canvasSnapshot = ctx.getImageData(0,0,canvas.width,canvas.height); }
+    window.triggerSaveState = saveState; function refreshSnapshot() { canvasSnapshot = ctx.getImageData(0,0,canvas.width,canvas.height); }
     window.undo = function() { if (undoStack.length > 0) { const data = undoStack.pop(); ctx.putImageData(data, 0, 0); refreshSnapshot(); isDrawing = false; selectionBuffer = null; window.updateGuides(); } }
     document.addEventListener('keydown', e => { if((e.ctrlKey||e.metaKey)&&e.key==='z') window.undo(); });
 
-    window.changeZoom = function(val) {
-        currentZoom = parseInt(val);
-        document.getElementById('zoomVal').innerText = currentZoom;
-        canvas.style.width = (canvas.width * currentZoom) + 'px';
-        canvas.style.height = (canvas.height * currentZoom) + 'px';
-        window.updateGuides();
-    }
-
-    window.resizeCanvas = function() {
-        saveState(); const s = document.querySelector('#gui-editor input[name="size"]:checked').value; const tempCanvas = document.createElement('canvas'); tempCanvas.width = canvas.width; tempCanvas.height = canvas.height; tempCanvas.getContext('2d').putImageData(ctx.getImageData(0,0,canvas.width, canvas.height), 0, 0);
-        if (s === 'square') { canvas.width = 256; canvas.height = 256; } else if (s === 'rect') { canvas.width = 256; canvas.height = 128; } else if (s === 'tall') { canvas.width = 192; canvas.height = 256; } else if (s === 'mid') { canvas.width = 50; canvas.height = 50; } else if (s === 'icon') { canvas.width = 16; canvas.height = 16; }
-        canvas.style.width = (canvas.width * currentZoom) + 'px'; canvas.style.height = (canvas.height * currentZoom) + 'px';
-        window.updateGuides(); ctx.imageSmoothingEnabled = false; ctx.drawImage(tempCanvas, 0, 0); saveState();
-    }
-
+    window.changeZoom = function(val) { currentZoom = parseInt(val); document.getElementById('zoomVal').innerText = currentZoom; canvas.style.width = (canvas.width * currentZoom) + 'px'; canvas.style.height = (canvas.height * currentZoom) + 'px'; window.updateGuides(); }
+    window.resizeCanvas = function() { saveState(); const s = document.querySelector('#gui-editor input[name="size"]:checked').value; const tempCanvas = document.createElement('canvas'); tempCanvas.width = canvas.width; tempCanvas.height = canvas.height; tempCanvas.getContext('2d').putImageData(ctx.getImageData(0,0,canvas.width, canvas.height), 0, 0); if (s === 'square') { canvas.width = 256; canvas.height = 256; } else if (s === 'rect') { canvas.width = 256; canvas.height = 128; } else if (s === 'tall') { canvas.width = 192; canvas.height = 256; } else if (s === 'mid') { canvas.width = 50; canvas.height = 50; } else if (s === 'icon') { canvas.width = 16; canvas.height = 16; } canvas.style.width = (canvas.width * currentZoom) + 'px'; canvas.style.height = (canvas.height * currentZoom) + 'px'; window.updateGuides(); ctx.imageSmoothingEnabled = false; ctx.drawImage(tempCanvas, 0, 0); saveState(); }
     document.getElementById('uploadInput').addEventListener('change', e => { if(e.target.files[0]){ saveState(); const r = new FileReader(); r.onload = ev => { const i = new Image(); i.onload = () => { ctx.imageSmoothingEnabled = false; ctx.drawImage(i, 0, 0, canvas.width, canvas.height); saveState(); }; i.src = ev.target.result; }; r.readAsDataURL(e.target.files[0]); } });
 
-    window.setTool = function(tool) {
-        currentTool = tool; document.querySelectorAll('#gui-editor .tool-grid .btn-editor').forEach(b => b.classList.remove('active')); const btn = document.getElementById('tool' + tool.charAt(0).toUpperCase() + tool.slice(1)); if(btn) btn.classList.add('active');
-        if(tool === 'import' && !importedImage) document.getElementById('toolImport')?.classList.remove('active');
-        document.getElementById('stampOptions').style.display = (tool === 'stamp') ? 'block' : 'none'; document.getElementById('textOptions').style.display = (tool === 'text') ? 'block' : 'none';
-        if (tool !== 'select') selectionBuffer = null; if(canvasSnapshot) ctx.putImageData(canvasSnapshot, 0, 0); refreshSnapshot();
-    }
-
+    window.setTool = function(tool) { currentTool = tool; document.querySelectorAll('#gui-editor .tool-grid .btn-editor').forEach(b => b.classList.remove('active')); const btn = document.getElementById('tool' + tool.charAt(0).toUpperCase() + tool.slice(1)); if(btn) btn.classList.add('active'); if(tool === 'import' && !importedImage) document.getElementById('toolImport')?.classList.remove('active'); document.getElementById('stampOptions').style.display = (tool === 'stamp') ? 'block' : 'none'; document.getElementById('textOptions').style.display = (tool === 'text') ? 'block' : 'none'; if (tool !== 'select') selectionBuffer = null; if(canvasSnapshot) ctx.putImageData(canvasSnapshot, 0, 0); refreshSnapshot(); }
     window.toggleEraseMode = function() { isEraseMode = !isEraseMode; const btn = document.getElementById('btnEraseMode'); if (isEraseMode) { btn.classList.add('active'); btn.innerText = "🧽 Radier-Modus (AN)"; showToast("🧽 Alles ist Radierer!"); } else { btn.classList.remove('active'); btn.innerText = "🧽 Radier-Modus (AUS)"; } }
     window.pasteFromClipboard = function() { if (!clipboardData.img) { showToast("⚠️ Leer!"); return; } saveState(); ctx.putImageData(clipboardData.img, clipboardData.x, clipboardData.y); refreshSnapshot(); showToast("📋 Eingefügt"); }
     window.pasteClipboardMove = function() { if (!clipboardData.img) { showToast("⚠️ Leer!"); return; } window.setTool('select'); selectionBuffer = clipboardData.img; showToast("🖱️ Klicke zum Platzieren"); }
     
     function getMousePos(evt) { const r = canvas.getBoundingClientRect(); return { x: Math.floor((evt.clientX - r.left)/currentZoom), y: Math.floor((evt.clientY - r.top)/currentZoom) }; }
 
-    canvas.addEventListener('mousedown', function(e) {
-        if(canvasSnapshot) ctx.putImageData(canvasSnapshot, 0, 0);
-        if(currentTool !== 'select' || !selectionBuffer) saveState();
-        const pos = getMousePos(e);
-        if (currentTool === 'picker') { const p = ctx.getImageData(pos.x, pos.y, 1, 1).data; const hex = "#" + ((1 << 24) + (p[0] << 16) + (p[1] << 8) + p[2]).toString(16).slice(1); selectedColor = hex; document.getElementById('colorPicker').value = hex; window.setTool('brush'); }
-        else if (currentTool === 'fill') { floodFill(pos.x, pos.y, isEraseMode); refreshSnapshot(); }
-        else if (currentTool === 'text') { if(!document.getElementById('textInput').value) showToast("⚠️ Kein Text!"); drawPixelText(document.getElementById('textInput').value, window.getAutoX(pos, 'text'), window.getAutoY(pos), false); refreshSnapshot(); }
-        else if (currentTool === 'stamp') { drawStamp(window.currentStamp, window.getAutoX(pos), window.getAutoY(pos), false); refreshSnapshot(); }
-        else if (currentTool === 'import' && importedImage) { const w = importedImage.width; const h = importedImage.height; ctx.drawImage(importedImage, Math.floor(pos.x - w/2), Math.floor(pos.y - h/2)); refreshSnapshot(); }
-        else if (currentTool === 'select' && selectionBuffer) { ctx.putImageData(selectionBuffer, pos.x, pos.y); selectionBuffer = null; saveState(); } 
-        else { isDrawing = true; startPos = pos; if(isEraseMode) ctx.globalCompositeOperation = 'destination-out'; if (currentTool === 'brush') { drawBrush(pos.x, pos.y); refreshSnapshot(); } else if (currentTool === 'eraser') { drawEraser(pos.x, pos.y); refreshSnapshot(); } else if (currentTool === 'lighten' || currentTool === 'darken') { shadingBrush(pos.x, pos.y, currentTool==='lighten'); refreshSnapshot(); } if(isEraseMode) ctx.globalCompositeOperation = 'source-over'; }
-    });
-
-    canvas.addEventListener('mousemove', function(e) {
-        const pos = getMousePos(e); if(canvasSnapshot) ctx.putImageData(canvasSnapshot, 0, 0);
-        if (isDrawing) {
-            if(isEraseMode) ctx.globalCompositeOperation = 'destination-out';
-            if (currentTool === 'brush') { drawBrush(pos.x, pos.y); refreshSnapshot(); } else if (currentTool === 'eraser') { drawEraser(pos.x, pos.y); refreshSnapshot(); } else if (currentTool === 'lighten' || currentTool === 'darken') { shadingBrush(pos.x, pos.y, currentTool==='lighten'); refreshSnapshot(); } else if (currentTool === 'line') drawLine(startPos.x, startPos.y, pos.x, pos.y); else if (currentTool === 'rect') drawRectShape(startPos.x, startPos.y, pos.x, pos.y, false); else if (currentTool === 'rectFill') drawRectShape(startPos.x, startPos.y, pos.x, pos.y, true); else if (currentTool === 'select' && !selectionBuffer) drawSelectionBox(startPos.x, startPos.y, pos.x, pos.y); else if (currentTool === 'copy') drawSelectionBox(startPos.x, startPos.y, pos.x, pos.y);
-            if(isEraseMode) ctx.globalCompositeOperation = 'source-over';
-        } else {
-            if (['rect', 'rectFill', 'line', 'select', 'copy', 'picker', 'fill'].includes(currentTool)) drawPixelCursor(pos.x, pos.y); else if (['brush', 'lighten', 'darken'].includes(currentTool)) drawBrushPreview(pos.x, pos.y); else if (currentTool === 'eraser') drawBrushPreview(pos.x, pos.y, true); else if (currentTool === 'stamp') drawStamp(window.currentStamp, window.getAutoX(pos), window.getAutoY(pos), true); else if (currentTool === 'text') drawPixelText(document.getElementById('textInput').value, window.getAutoX(pos, 'text'), window.getAutoY(pos), true); else if (currentTool === 'select' && selectionBuffer) ctx.putImageData(selectionBuffer, pos.x, pos.y); else if (currentTool === 'import' && importedImage) { const w = importedImage.width; const h = importedImage.height; ctx.globalAlpha = 0.6; ctx.drawImage(importedImage, Math.floor(pos.x - w/2), Math.floor(pos.y - h/2)); ctx.globalAlpha = 1.0; }
-        }
-    });
+    canvas.addEventListener('mousedown', function(e) { if(canvasSnapshot) ctx.putImageData(canvasSnapshot, 0, 0); if(currentTool !== 'select' || !selectionBuffer) saveState(); const pos = getMousePos(e); if (currentTool === 'picker') { const p = ctx.getImageData(pos.x, pos.y, 1, 1).data; const hex = "#" + ((1 << 24) + (p[0] << 16) + (p[1] << 8) + p[2]).toString(16).slice(1); selectedColor = hex; document.getElementById('colorPicker').value = hex; window.setTool('brush'); } else if (currentTool === 'fill') { floodFill(pos.x, pos.y, isEraseMode); refreshSnapshot(); } else if (currentTool === 'text') { if(!document.getElementById('textInput').value) showToast("⚠️ Kein Text!"); drawPixelText(document.getElementById('textInput').value, window.getAutoX(pos, 'text'), window.getAutoY(pos), false); refreshSnapshot(); } else if (currentTool === 'stamp') { drawStamp(window.currentStamp, window.getAutoX(pos), window.getAutoY(pos), false); refreshSnapshot(); } else if (currentTool === 'import' && importedImage) { const w = importedImage.width; const h = importedImage.height; ctx.drawImage(importedImage, Math.floor(pos.x - w/2), Math.floor(pos.y - h/2)); refreshSnapshot(); } else if (currentTool === 'select' && selectionBuffer) { ctx.putImageData(selectionBuffer, pos.x, pos.y); selectionBuffer = null; saveState(); } else { isDrawing = true; startPos = pos; if(isEraseMode) ctx.globalCompositeOperation = 'destination-out'; if (currentTool === 'brush') { drawBrush(pos.x, pos.y); refreshSnapshot(); } else if (currentTool === 'eraser') { drawEraser(pos.x, pos.y); refreshSnapshot(); } else if (currentTool === 'lighten' || currentTool === 'darken') { shadingBrush(pos.x, pos.y, currentTool==='lighten'); refreshSnapshot(); } if(isEraseMode) ctx.globalCompositeOperation = 'source-over'; } });
+    canvas.addEventListener('mousemove', function(e) { const pos = getMousePos(e); if(canvasSnapshot) ctx.putImageData(canvasSnapshot, 0, 0); if (isDrawing) { if(isEraseMode) ctx.globalCompositeOperation = 'destination-out'; if (currentTool === 'brush') { drawBrush(pos.x, pos.y); refreshSnapshot(); } else if (currentTool === 'eraser') { drawEraser(pos.x, pos.y); refreshSnapshot(); } else if (currentTool === 'lighten' || currentTool === 'darken') { shadingBrush(pos.x, pos.y, currentTool==='lighten'); refreshSnapshot(); } else if (currentTool === 'line') drawLine(startPos.x, startPos.y, pos.x, pos.y); else if (currentTool === 'rect') drawRectShape(startPos.x, startPos.y, pos.x, pos.y, false); else if (currentTool === 'rectFill') drawRectShape(startPos.x, startPos.y, pos.x, pos.y, true); else if (currentTool === 'select' && !selectionBuffer) drawSelectionBox(startPos.x, startPos.y, pos.x, pos.y); else if (currentTool === 'copy') drawSelectionBox(startPos.x, startPos.y, pos.x, pos.y); if(isEraseMode) ctx.globalCompositeOperation = 'source-over'; } else { if (['rect', 'rectFill', 'line', 'select', 'copy', 'picker', 'fill'].includes(currentTool)) drawPixelCursor(pos.x, pos.y); else if (['brush', 'lighten', 'darken'].includes(currentTool)) drawBrushPreview(pos.x, pos.y); else if (currentTool === 'eraser') drawBrushPreview(pos.x, pos.y, true); else if (currentTool === 'stamp') drawStamp(window.currentStamp, window.getAutoX(pos), window.getAutoY(pos), true); else if (currentTool === 'text') drawPixelText(document.getElementById('textInput').value, window.getAutoX(pos, 'text'), window.getAutoY(pos), true); else if (currentTool === 'select' && selectionBuffer) ctx.putImageData(selectionBuffer, pos.x, pos.y); else if (currentTool === 'import' && importedImage) { const w = importedImage.width; const h = importedImage.height; ctx.globalAlpha = 0.6; ctx.drawImage(importedImage, Math.floor(pos.x - w/2), Math.floor(pos.y - h/2)); ctx.globalAlpha = 1.0; } } });
     canvas.addEventListener('mouseout', function() { if(canvasSnapshot) ctx.putImageData(canvasSnapshot, 0, 0); isDrawing = false; });
-    window.addEventListener('mouseup', function(e) {
-        if (!isDrawing) return; const pos = getMousePos(e);
-        if(isEraseMode) ctx.globalCompositeOperation = 'destination-out';
-        if (currentTool === 'line') { drawLine(startPos.x, startPos.y, pos.x, pos.y); } else if (currentTool === 'rect') { drawRectShape(startPos.x, startPos.y, pos.x, pos.y, false); } else if (currentTool === 'rectFill') { drawRectShape(startPos.x, startPos.y, pos.x, pos.y, true); }
-        if(isEraseMode) ctx.globalCompositeOperation = 'source-over';
-        if (currentTool === 'select' && !selectionBuffer) { const x = Math.min(startPos.x, pos.x), y = Math.min(startPos.y, pos.y); const w = Math.abs(pos.x - startPos.x) + 1, h = Math.abs(pos.y - startPos.y) + 1; if (w > 0 && h > 0) { selectionBuffer = ctx.getImageData(x, y, w, h); ctx.clearRect(x, y, w, h); } }
-        else if (currentTool === 'copy') { ctx.putImageData(canvasSnapshot, 0, 0); const x = Math.min(startPos.x, pos.x), y = Math.min(startPos.y, pos.y); const w = Math.abs(pos.x - startPos.x) + 1, h = Math.abs(pos.y - startPos.y) + 1; if (w > 0 && h > 0) { const data = ctx.getImageData(x, y, w, h); clipboardData = { img: data, x: x, y: y }; showToast("✅ Kopiert!"); } }
-        isDrawing = false; refreshSnapshot(); window.updateGuides();
-    });
+    window.addEventListener('mouseup', function(e) { if (!isDrawing) return; const pos = getMousePos(e); if(isEraseMode) ctx.globalCompositeOperation = 'destination-out'; if (currentTool === 'line') { drawLine(startPos.x, startPos.y, pos.x, pos.y); } else if (currentTool === 'rect') { drawRectShape(startPos.x, startPos.y, pos.x, pos.y, false); } else if (currentTool === 'rectFill') { drawRectShape(startPos.x, startPos.y, pos.x, pos.y, true); } if(isEraseMode) ctx.globalCompositeOperation = 'source-over'; if (currentTool === 'select' && !selectionBuffer) { const x = Math.min(startPos.x, pos.x), y = Math.min(startPos.y, pos.y); const w = Math.abs(pos.x - startPos.x) + 1, h = Math.abs(pos.y - startPos.y) + 1; if (w > 0 && h > 0) { selectionBuffer = ctx.getImageData(x, y, w, h); ctx.clearRect(x, y, w, h); } } else if (currentTool === 'copy') { ctx.putImageData(canvasSnapshot, 0, 0); const x = Math.min(startPos.x, pos.x), y = Math.min(startPos.y, pos.y); const w = Math.abs(pos.x - startPos.x) + 1, h = Math.abs(pos.y - startPos.y) + 1; if (w > 0 && h > 0) { const data = ctx.getImageData(x, y, w, h); clipboardData = { img: data, x: x, y: y }; showToast("✅ Kopiert!"); } } isDrawing = false; refreshSnapshot(); window.updateGuides(); });
 
     window.toggleGrid = function() { document.getElementById('gridOverlay').style.display = document.getElementById('gridCheck').checked ? 'block' : 'none'; window.updateGuides(); }
     window.toggleAutoCenter = function() { autoCenter = !autoCenter; document.getElementById('btnAutoCenter').classList.toggle('active'); document.getElementById('btnAutoCenter').innerText = autoCenter ? "🧲 Zentrieren (AN)" : "🧲 Zentrieren (Aus)"; document.getElementById('centerSettings').style.display = autoCenter ? 'block' : 'none'; window.updateGuides(); }
     window.toggleYInput = function() { const el = document.getElementById('fixedYVal'); const active = document.getElementById('useFixedY').checked; el.disabled = !active; el.style.opacity = active ? "1" : "0.5"; }
-    
     window.addToPalette = function(){window.createPaletteSwatch(document.getElementById('colorPicker').value);}
     window.createPaletteSwatch = function(c){const d=document.createElement('div');d.className='color-swatch';d.style.backgroundColor=c;d.onclick=()=>{selectedColor=c;document.getElementById('colorPicker').value=c;document.querySelectorAll('#gui-editor .color-swatch').forEach(e=>e.classList.remove('active'));d.classList.add('active'); window.setTool('brush');};document.getElementById('paletteGrid').appendChild(d);}
-    
     window.clearCanvasSilent = function() { ctx.clearRect(0,0,canvas.width,canvas.height); saveState(); }
     window.clearCanvas = function(){if(confirm("Löschen?")){window.clearCanvasSilent();}}
-    
     window.hexToRgb = function(h){const r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h);return r?{r:parseInt(r[1],16),g:parseInt(r[2],16),b:parseInt(r[3],16)}:null;}
     window.getAutoY = function(p){if(autoCenter&&document.getElementById('useFixedY').checked)return parseInt(document.getElementById('fixedYVal').value)||0;return p.y;}
     window.getAutoX = function(p,t){if(!autoCenter)return p.x;let cx=canvas.width/2;if(document.getElementById('useContentAlign').checked)cx=window.getContentBounds().centerX;if(t==='text'){const txt=document.getElementById('textInput').value;const s=parseInt(document.getElementById('textScale').value)||1;let w=0;for(let c of txt.toUpperCase()){const m=fontMap[c]||fontMap[' '];w+=((m[0]?.length||3)*s)+s;}w-=s;return Math.floor(cx-(w/2));}else{const w=(t.startsWith('job')?45:(window.currentStamp==='slot')?18:16);return Math.floor(cx-(w/2));}}
     window.getContentBounds = function() {const w=canvas.width, h=canvas.height, d=ctx.getImageData(0,0,w,h).data;let minX=w, maxX=0, found=false;for(let y=0;y<h;y++) for(let x=0;x<w;x++) if(d[(y*w+x)*4+3]>0) { if(x<minX)minX=x; if(x>maxX)maxX=x; found=true; }return found ? {minX, maxX, centerX:Math.floor(minX+(maxX-minX)/2), found:true} : {minX:0, maxX:w, centerX:w/2, found:false};}
     
-    window.updateGuides = function() { 
-        const cl=document.getElementById('centerLine'); cl.style.display='none'; 
-        const grid = document.getElementById('gridOverlay'); const gridSize = 18 * currentZoom; grid.style.backgroundSize = `${gridSize}px ${gridSize}px`; 
-        const refImg = document.getElementById('refOverlay'); 
-        if (refImg && refImg.style.display === 'block') { refImg.style.width = (canvas.width * currentZoom) + 'px'; refImg.style.height = (canvas.height * currentZoom) + 'px'; } 
-        grid.style.width = (canvas.width * currentZoom) + 'px'; grid.style.height = (canvas.height * currentZoom) + 'px';
-        if (autoCenter) { let cp = canvas.width / 2; if (document.getElementById('useContentAlign').checked) { const b = window.getContentBounds(); if(b.found) { cp=b.centerX; } } cl.style.left = (cp * currentZoom) + 'px'; cl.style.display = 'block'; } 
-    }
+    window.updateGuides = function() { const cl=document.getElementById('centerLine'); cl.style.display='none'; const grid = document.getElementById('gridOverlay'); const gridSize = 18 * currentZoom; grid.style.backgroundSize = `${gridSize}px ${gridSize}px`; const refImg = document.getElementById('refOverlay'); if (refImg && refImg.style.display === 'block') { refImg.style.width = (canvas.width * currentZoom) + 'px'; refImg.style.height = (canvas.height * currentZoom) + 'px'; } grid.style.width = (canvas.width * currentZoom) + 'px'; grid.style.height = (canvas.height * currentZoom) + 'px'; if (autoCenter) { let cp = canvas.width / 2; if (document.getElementById('useContentAlign').checked) { const b = window.getContentBounds(); if(b.found) { cp=b.centerX; } } cl.style.left = (cp * currentZoom) + 'px'; cl.style.display = 'block'; } }
 
     function drawBrush(x, y) { ctx.fillStyle = selectedColor; const s = parseInt(document.getElementById('brushSize').value); ctx.fillRect(x - Math.floor(s/2), y - Math.floor(s/2), s, s); }
     function drawEraser(x, y) { const s = parseInt(document.getElementById('brushSize').value); ctx.clearRect(x - Math.floor(s/2), y - Math.floor(s/2), s, s); }
@@ -1206,4 +917,8 @@ function initEditor() {
             alert("FEHLER BEIM SPEICHERN:\n" + error.message);
         }
     }
+
+    const myColors = ['#a49e95', '#766f6a', '#483f46', '#231c2c', '#1e1829', '#539d33', '#ffffff', '#000000'];
+    myColors.forEach(c => window.createPaletteSwatch(c));
+    window.resizeCanvas(); saveState(); refreshSnapshot();
 }
