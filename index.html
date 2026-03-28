@@ -102,6 +102,7 @@
 
             <section id="kisten" class="category-section">
                 <h2>Kisten verwalten</h2>
+                <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px;">Tipp: Du kannst die Reihenfolge der Kisten durch <b>Drag & Drop</b> verändern!</p>
                 <div class="form-card">
                     <h3>Neue Kiste erstellen</h3>
                     <div class="input-group">
@@ -121,16 +122,20 @@
                 </div>
                 <div class="form-card">
                     <h3 id="shop-form-title">Neues Item im Shop anbieten</h3>
+                    <input type="hidden" id="shop-edit-id">
                     <div class="input-group">
                         <input type="text" id="shop-item" placeholder="Item Name (z.B. 1000 Münzen)">
                         <input type="number" id="shop-price" placeholder="Preis (Punkte)">
                         <input type="file" id="shop-image" accept="image/png, image/jpeg">
                     </div>
-                    <div class="button-group"><button id="btn-save-shop" class="btn btn-primary">Shop-Item speichern</button></div>
+                    <div class="button-group">
+                        <button id="btn-save-shop" class="btn btn-primary">Shop-Item speichern</button>
+                        <button id="btn-cancel-shop" class="btn btn-secondary" style="display:none;" onclick="window.resetShopForm()">Abbrechen</button>
+                    </div>
                     <p id="shop-status" class="status-text"></p>
                 </div>
                 <div class="table-container">
-                    <table class="data-table"><thead><tr><th>Bild</th><th>Item Name</th><th>Preis</th><th>Aktionen</th></tr></thead><tbody id="shop-list"></tbody></table>
+                    <table class="data-table"><thead><tr><th>Bild</th><th>Item Name</th><th>Preis</th><th style="text-align: right;">Aktionen</th></tr></thead><tbody id="shop-list"></tbody></table>
                 </div>
             </section>
 
@@ -147,7 +152,6 @@
                     <div style="display: flex; gap: 20px; flex-wrap: wrap;">
                         <div style="flex: 1; min-width: 300px;">
                             <input type="hidden" id="bc-edit-id">
-                            
                             <textarea id="bc-message" placeholder="&8[&cSystem&8] &7Vergesst nicht im Shop vorbeizuschauen!" rows="4" oninput="window.updateMcPreview()"></textarea>
                             <div class="input-group" style="margin-top: 10px;">
                                 <input type="number" id="bc-interval" placeholder="Intervall (Sekunden)" value="300" style="width: 200px;">
@@ -199,187 +203,98 @@
                     </div>
 
                     <div class="panel-editor" style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; background: #1e1e1e;">
-                        
                         <div style="width: 100%; display: flex; gap: 10px; margin-bottom: 15px; background: #3c3c3c; padding: 10px; border-radius: 6px; flex-wrap: wrap;">
                             <div style="flex: 1;">
                                 <label style="color: #aaa; font-size: 12px; display: block; margin-bottom: 4px;">Hintergrund GUI:</label>
-                                <select id="planner-bg-select" onchange="window.updateMenuGrid()" style="width: 100%; padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;">
-                                    <option value="">Kein Bild (Nur Grid)</option>
-                                </select>
+                                <select id="planner-bg-select" onchange="window.updateMenuGrid()" style="width: 100%; padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;"><option value="">Kein Bild (Nur Grid)</option></select>
                             </div>
                             <div>
                                 <label style="color: #aaa; font-size: 12px; display: block; margin-bottom: 4px;">Grid Reihen:</label>
                                 <select id="menu-rows" onchange="window.updateMenuGrid()" style="width: 120px; padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;">
-                                    <option value="3">3 (27 Slots)</option>
-                                    <option value="4">4 (36 Slots)</option>
-                                    <option value="5">5 (45 Slots)</option>
-                                    <option value="6" selected>6 (54 Slots)</option>
+                                    <option value="3">3 (27 Slots)</option><option value="4">4 (36 Slots)</option><option value="5">5 (45 Slots)</option><option value="6" selected>6 (54 Slots)</option>
                                 </select>
                             </div>
                             <div style="display: flex; gap: 5px;">
-                                <div>
-                                    <label style="color: #aaa; font-size: 12px; display: block; margin-bottom: 4px;">Verschieben X:</label>
-                                    <input type="number" id="planner-offset-x" value="47" onchange="window.updateMenuGrid()" style="width: 60px; padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;">
-                                </div>
-                                <div>
-                                    <label style="color: #aaa; font-size: 12px; display: block; margin-bottom: 4px;">Verschieben Y:</label>
-                                    <input type="number" id="planner-offset-y" value="22" onchange="window.updateMenuGrid()" style="width: 60px; padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;">
-                                </div>
+                                <div><label style="color: #aaa; font-size: 12px; display: block; margin-bottom: 4px;">Verschieben X:</label><input type="number" id="planner-offset-x" value="47" onchange="window.updateMenuGrid()" style="width: 60px; padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;"></div>
+                                <div><label style="color: #aaa; font-size: 12px; display: block; margin-bottom: 4px;">Verschieben Y:</label><input type="number" id="planner-offset-y" value="22" onchange="window.updateMenuGrid()" style="width: 60px; padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;"></div>
                             </div>
                         </div>
-                        
                         <div class="planner-canvas-outer">
                             <div class="planner-canvas-inner" id="planner-inner-canvas">
                                 <div id="mc-inventory" class="mc-inventory-overlay"></div>
                             </div>
                         </div>
-
                     </div>
 
                     <div class="panel-editor" style="width: 250px; flex-shrink: 0; border: 2px solid #4CAF50;">
                         <h3 style="color: #4CAF50; border-bottom: 1px solid #4CAF50;">Speichern & Export</h3>
-                        
-                        <select id="planner-pkg-select" style="width: 100%; margin-bottom: 10px; padding: 8px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;">
-                            <option value="">Ziel-Paket wählen...</option>
-                        </select>
-                        
+                        <select id="planner-pkg-select" style="width: 100%; margin-bottom: 10px; padding: 8px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;"><option value="">Ziel-Paket wählen...</option></select>
                         <input type="text" id="planner-menu-name" placeholder="Name des Menüs" style="width: 100%; margin-bottom: 15px; padding: 8px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;">
                         <input type="hidden" id="planner-menu-id">
-                        
                         <button class="btn btn-action" onclick="window.saveMenuLayout()" style="width: 100%; margin-bottom: 10px; background: #4CAF50; color: white; border: none; padding: 10px; font-weight: bold; border-radius: 4px; cursor: pointer;">💾 In Paket speichern</button>
-                        
                         <hr style="border:0; border-top:1px solid #555; margin:15px 0;">
-                        
                         <button class="btn" onclick="window.exportMenuYaml()" style="width: 100%; background: transparent; border: 1px solid #00BCD4; color: #00BCD4; padding: 10px; border-radius: 4px; cursor: pointer; transition: 0.2s;">📥 YAML Exportieren</button>
-                        <p style="font-size: 11px; color: #aaa; margin-top: 8px; text-align: center;">Generiert fertigen GUI Code</p>
                     </div>
                 </div>
             </section>
 
             <section id="gui-editor" class="category-section" style="background: #2c2c2c; color: #fff; padding: 20px; border-radius: 8px;">
                 <h1>MC GUI Editor <span style="font-size:0.5em; color:#aaa;">V45</span></h1>
-
                 <div class="main-container-editor">
                     <div class="sidebar-editor">
                         <div class="panel-editor" style="border: 2px solid #4CAF50;">
                             <h3 style="color: #4CAF50; border-bottom: 1px solid #4CAF50;">☁️ Server Speichern</h3>
-                            <select id="editor-pkg-select" style="margin-bottom: 8px; font-size: 0.9em;">
-                                <option value="">Ziel-Paket wählen...</option>
-                            </select>
+                            <select id="editor-pkg-select" style="margin-bottom: 8px; font-size: 0.9em;"><option value="">Ziel-Paket wählen...</option></select>
                             <input type="text" id="editor-gui-name" placeholder="Name des GUIs" style="margin-bottom: 8px; font-size: 0.9em;">
                             <input type="hidden" id="editor-gui-item-id">
                             <button id="btn-editor-save" class="btn-editor btn-action" onclick="window.saveEditorToFirebase()">💾 In Paket speichern</button>
                         </div>
-
                         <div class="panel-editor">
                             <button class="btn-editor btn-undo" onclick="window.undo()">↩️ Rückgängig (Strg+Z)</button>
-                            <div class="row-editor" style="border-top:1px solid #555; padding-top:10px;">
-                                <label style="font-size:0.9em"><input type="radio" name="size" value="square" checked onchange="window.resizeCanvas()"> 256²</label>
-                                <label style="font-size:0.9em"><input type="radio" name="size" value="tall" onchange="window.resizeCanvas()"> 192x256</label>
-                            </div>
-                            <div class="row-editor">
-                                <label style="font-size:0.9em"><input type="radio" name="size" value="rect" onchange="window.resizeCanvas()"> 256x128</label>
-                                <label style="font-size:0.9em; color:#FFC107; font-weight:bold;"><input type="radio" name="size" value="mid" onchange="window.resizeCanvas()"> 50x50</label>
-                            </div>
-                            <div class="row-editor">
-                                <label style="font-size:0.9em; color:#4CAF50; font-weight:bold;"><input type="radio" name="size" value="icon" onchange="window.resizeCanvas()"> 16x16</label>
-                            </div>
-                            
+                            <div class="row-editor" style="border-top:1px solid #555; padding-top:10px;"><label style="font-size:0.9em"><input type="radio" name="size" value="square" checked onchange="window.resizeCanvas()"> 256²</label><label style="font-size:0.9em"><input type="radio" name="size" value="tall" onchange="window.resizeCanvas()"> 192x256</label></div>
+                            <div class="row-editor"><label style="font-size:0.9em"><input type="radio" name="size" value="rect" onchange="window.resizeCanvas()"> 256x128</label><label style="font-size:0.9em; color:#FFC107; font-weight:bold;"><input type="radio" name="size" value="mid" onchange="window.resizeCanvas()"> 50x50</label></div>
+                            <div class="row-editor"><label style="font-size:0.9em; color:#4CAF50; font-weight:bold;"><input type="radio" name="size" value="icon" onchange="window.resizeCanvas()"> 16x16</label></div>
                             <hr style="border:0; border-top:1px solid #555; margin:10px 0;">
-            
-                            <label class="btn-editor" style="margin-top:5px; display:block; text-align:center;">
-                                📂 Projekt laden <input type="file" id="uploadInput" accept="image/*" style="display:none">
-                            </label>
+                            <label class="btn-editor" style="margin-top:5px; display:block; text-align:center;">📂 Projekt laden <input type="file" id="uploadInput" accept="image/*" style="display:none"></label>
                             <button class="btn-editor btn-danger" style="width:100%; margin-top:5px;" onclick="window.clearCanvas()">🗑️ Leinwand Leeren</button>
-                            
                             <hr style="border:0; border-top:1px solid #555; margin:10px 0;">
-                            
-                            <label class="btn-editor btn-ref" style="display:block; text-align:center;">
-                                👻 Referenz laden (20%) <input type="file" id="refInput" accept="image/*" style="display:none" onchange="window.loadReference(this)">
-                            </label>
+                            <label class="btn-editor btn-ref" style="display:block; text-align:center;">👻 Referenz laden <input type="file" id="refInput" accept="image/*" style="display:none" onchange="window.loadReference(this)"></label>
                             <button class="btn-editor btn-danger" style="width:100%; margin-top:5px; font-size: 0.8em;" onclick="window.clearReference()">🚫 Referenz entfernen</button>
                         </div>
-            
                         <div class="panel-editor">
                             <h3>Werkzeuge</h3>
                             <button class="btn-editor btn-eraser-mode" id="btnEraseMode" onclick="window.toggleEraseMode()" style="width:100%; margin-bottom:8px;">🧽 Radier-Modus (AUS)</button>
                             <div class="tool-grid">
-                                <button class="btn-editor active" id="toolBrush" onclick="window.setTool('brush')">🖌️ Pinsel</button>
-                                <button class="btn-editor" id="toolEraser" onclick="window.setTool('eraser')" style="border:1px dashed #FF9800;">🧽 Radierer</button>
-                                <button class="btn-editor" id="toolPicker" onclick="window.setTool('picker')">🧪 Pipette</button>
-                                <button class="btn-editor" id="toolFill" onclick="window.setTool('fill')">🪣 Füllen</button>
-                                <button class="btn-editor" id="toolLine" onclick="window.setTool('line')">📏 Linie</button>
-                                <button class="btn-editor" id="toolRect" onclick="window.setTool('rect')">🔲 Rahmen</button>
-                                <button class="btn-editor" id="toolRectFill" onclick="window.setTool('rectFill')">⬛ Rechteck</button>
-                                <button class="btn-editor" id="toolSelect" onclick="window.setTool('select')">✂️ Move</button>
+                                <button class="btn-editor active" id="toolBrush" onclick="window.setTool('brush')">🖌️ Pinsel</button><button class="btn-editor" id="toolEraser" onclick="window.setTool('eraser')" style="border:1px dashed #FF9800;">🧽 Radierer</button>
+                                <button class="btn-editor" id="toolPicker" onclick="window.setTool('picker')">🧪 Pipette</button><button class="btn-editor" id="toolFill" onclick="window.setTool('fill')">🪣 Füllen</button>
+                                <button class="btn-editor" id="toolLine" onclick="window.setTool('line')">📏 Linie</button><button class="btn-editor" id="toolRect" onclick="window.setTool('rect')">🔲 Rahmen</button>
+                                <button class="btn-editor" id="toolRectFill" onclick="window.setTool('rectFill')">⬛ Rechteck</button><button class="btn-editor" id="toolSelect" onclick="window.setTool('select')">✂️ Move</button>
                             </div>
                         </div>
-            
                         <div class="panel-editor">
                             <h3>Import & Copy</h3>
-                            <div class="tool-grid">
-                                <button class="btn-editor btn-copy" id="toolCopy" onclick="window.setTool('copy')">📸 Copy</button>
-                                <button class="btn-editor btn-copy" onclick="window.pasteFromClipboard()">📋 Fix Paste</button>
-                                <button class="btn-editor btn-copy" onclick="window.pasteClipboardMove()" style="grid-column: span 2;">🖱️ Paste & Bewegen</button>
-                            </div>
-                            <label class="btn-editor btn-import" style="margin-top:5px; display:block; text-align:center;">
-                                🖼️ Bild Importieren <input type="file" id="importInput" accept="image/*" style="display:none" onchange="window.handleImport(this)">
-                            </label>
+                            <div class="tool-grid"><button class="btn-editor btn-copy" id="toolCopy" onclick="window.setTool('copy')">📸 Copy</button><button class="btn-editor btn-copy" onclick="window.pasteFromClipboard()">📋 Fix Paste</button><button class="btn-editor btn-copy" onclick="window.pasteClipboardMove()" style="grid-column: span 2;">🖱️ Paste & Bewegen</button></div>
+                            <label class="btn-editor btn-import" style="margin-top:5px; display:block; text-align:center;">🖼️ Bild Importieren <input type="file" id="importInput" accept="image/*" style="display:none" onchange="window.handleImport(this)"></label>
                         </div>
-            
                         <div class="panel-editor">
                             <h3>Stempel & Text</h3>
-                            <div class="tool-grid">
-                                <button class="btn-editor" id="toolStamp" onclick="window.setTool('stamp')">📦 Stempel</button>
-                                <button class="btn-editor" id="toolText" onclick="window.setTool('text')">🔠 Text</button>
-                            </div>
-                            <div id="stampOptions" style="display:none; margin-top:10px;">
-                                <select id="stampSelect" onchange="window.currentStamp=this.value" style="width:100%;">
-                                    <option value="slot">📦 Slot (18x18)</option>
-                                    <option value="sArrowR">👉 Kleiner Pfeil</option>
-                                </select>
-                            </div>
-                            <div id="textOptions" style="display:none; margin-top:5px;">
-                                <input type="text" id="textInput" placeholder="Text...">
-                                <div class="editor-row">
-                                    <label style="font-size:0.8em"><input type="checkbox" id="textShadow" checked> Schatten</label>
-                                    <select id="textScale" style="width:50px; display:inline-block;"><option value="1">1x</option><option value="2" selected>2x</option><option value="3">3x</option></select>
-                                </div>
-                            </div>
+                            <div class="tool-grid"><button class="btn-editor" id="toolStamp" onclick="window.setTool('stamp')">📦 Stempel</button><button class="btn-editor" id="toolText" onclick="window.setTool('text')">🔠 Text</button></div>
+                            <div id="stampOptions" style="display:none; margin-top:10px;"><select id="stampSelect" onchange="window.currentStamp=this.value" style="width:100%;"><option value="slot">📦 Slot (18x18)</option><option value="sArrowR">👉 Kleiner Pfeil</option></select></div>
+                            <div id="textOptions" style="display:none; margin-top:5px;"><input type="text" id="textInput" placeholder="Text..."><div class="editor-row"><label style="font-size:0.8em"><input type="checkbox" id="textShadow" checked> Schatten</label><select id="textScale" style="width:50px; display:inline-block;"><option value="1">1x</option><option value="2" selected>2x</option><option value="3">3x</option></select></div></div>
                         </div>
-                        
                         <div class="panel-editor">
                             <h3>Hilfen & Referenz</h3>
-                            <div class="tool-grid">
-                                <button class="btn-editor btn-toggle" id="btnAutoCenter" onclick="window.toggleAutoCenter()">🧲 Zentrieren</button>
-                                <label class="btn-editor" style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin:0;"><input type="checkbox" id="gridCheck" onchange="window.toggleGrid()"> 📏 Gitter</label>
-                            </div>
-                            <div id="centerSettings" style="margin-top:5px; display:none; font-size:0.85em; background:#444; padding:5px; border-radius:4px;">
-                                <label><input type="checkbox" id="useContentAlign"> Am Inhalt</label>
-                                <label><input type="checkbox" id="useFixedY" onchange="window.toggleYInput()"> Y: <input type="number" id="fixedYVal" value="10" style="width:50px; display:inline-block;" disabled></label>
-                            </div>
-                            <div id="brushSettings" style="margin-top: 10px; margin-bottom: 10px;">
-                                <label style="font-size:0.8em">Pinsel-Größe: <span id="sizeVal">1</span>px</label>
-                                <input type="range" id="brushSize" min="1" max="10" value="1" oninput="document.getElementById('sizeVal').innerText = this.value" style="width:100%">
-                            </div>
+                            <div class="tool-grid"><button class="btn-editor btn-toggle" id="btnAutoCenter" onclick="window.toggleAutoCenter()">🧲 Zentrieren</button><label class="btn-editor" style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin:0;"><input type="checkbox" id="gridCheck" onchange="window.toggleGrid()"> 📏 Gitter</label></div>
+                            <div id="centerSettings" style="margin-top:5px; display:none; font-size:0.85em; background:#444; padding:5px; border-radius:4px;"><label><input type="checkbox" id="useContentAlign"> Am Inhalt</label><label><input type="checkbox" id="useFixedY" onchange="window.toggleYInput()"> Y: <input type="number" id="fixedYVal" value="10" style="width:50px; display:inline-block;" disabled></label></div>
+                            <div id="brushSettings" style="margin-top: 10px; margin-bottom: 10px;"><label style="font-size:0.8em">Pinsel-Größe: <span id="sizeVal">1</span>px</label><input type="range" id="brushSize" min="1" max="10" value="1" oninput="document.getElementById('sizeVal').innerText = this.value" style="width:100%"></div>
                         </div>
-            
                         <div class="panel-editor">
                             <h3>Templates & Farbe</h3>
-                            <div class="tool-grid">
-                                <button class="btn-editor btn-template" onclick="window.applyTemplate('chest')">Kiste</button>
-                                <button class="btn-editor btn-template" onclick="window.applyTemplate('double')">Doppelt</button>
-                                <button class="btn-editor btn-template" onclick="window.applyTemplate('inv')" style="grid-column: span 2;">Inventar</button>
-                            </div>
-                            <div class="editor-row" style="margin-top:10px;">
-                                <input type="color" id="colorPicker" value="#a49e95" style="width: 35px; height: 32px; padding: 0; border: none; cursor: pointer;">
-                                <button class="btn-editor" style="flex:1; font-size: 0.8em;" onclick="window.addToPalette()">+ Merken</button>
-                                <button class="btn-editor btn-danger" style="flex:1; font-size: 0.8em;" onclick="window.deleteSelectedColor()">🗑️ Farbe löschen</button>
-                            </div>
+                            <div class="tool-grid"><button class="btn-editor btn-template" onclick="window.applyTemplate('chest')">Kiste</button><button class="btn-editor btn-template" onclick="window.applyTemplate('double')">Doppelt</button><button class="btn-editor btn-template" onclick="window.applyTemplate('inv')" style="grid-column: span 2;">Inventar</button></div>
+                            <div class="editor-row" style="margin-top:10px;"><input type="color" id="colorPicker" value="#a49e95" style="width: 35px; height: 32px; padding: 0; border: none; cursor: pointer;"><button class="btn-editor" style="flex:1; font-size: 0.8em;" onclick="window.addToPalette()">+ Merken</button><button class="btn-editor btn-danger" style="flex:1; font-size: 0.8em;" onclick="window.deleteSelectedColor()">🗑️ Farbe</button></div>
                             <div class="editor-palette-grid" id="paletteGrid"></div>
                         </div>
                     </div>
-            
                     <div class="scroll-box-editor">
                         <div class="editor-canvas-wrapper" id="canvasWrapper">
                             <canvas id="pixelCanvas" width="256" height="256"></canvas>
@@ -393,21 +308,48 @@
             </section>
 
             <section id="plugins" class="category-section">
-                <h2>Server Plugins</h2>
+                <h2>Server Plugins & Einstellungen</h2>
                 <div class="form-card">
                     <h3 id="plugin-form-title">Neues Plugin hinzufügen</h3>
+                    
                     <div class="input-group">
-                        <input type="text" id="plugin-name" placeholder="Plugin Name (z.B. EssentialsX)" style="width: 100%;">
+                        <input type="text" id="plugin-name" placeholder="Plugin Name (z.B. DailyRewards)" style="width: 100%; max-width: 300px;">
                     </div>
-                    <textarea id="plugin-info" placeholder="Info Text / Notizen / Commands..." rows="4"></textarea>
-                    <div class="button-group" style="margin-top: 15px;">
+                    
+                    <h4 style="margin-top:10px; font-size: 13px; color: var(--text-muted);">Permissions / Commands:</h4>
+                    <textarea id="plugin-perms" placeholder="essentials.kit.vip..." rows="3"></textarea>
+                    
+                    <h4 style="margin-top:15px; font-size: 13px; color: var(--text-muted);">Einstellungen Typ:</h4>
+                    <select id="plugin-settings-type" onchange="window.togglePluginSettings()" style="width: 100%; max-width: 300px; padding: 10px; border-radius: 6px; background: var(--surface-color); border: 1px solid var(--border-color); margin-bottom: 10px;">
+                        <option value="text">Einfaches Textfeld (Normal)</option>
+                        <option value="daily">Tägliche Belohnungen (Tabelle)</option>
+                    </select>
+
+                    <div id="plugin-settings-text-container">
+                        <textarea id="plugin-settings-text" placeholder="Allgemeine Einstellungen, Config-Notizen..." rows="4"></textarea>
+                    </div>
+
+                    <div id="plugin-settings-daily-container" style="display: none; background: var(--bg-color); padding: 15px; border-radius: 6px; border: 1px solid var(--border-color);">
+                        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+                            <label style="font-size: 14px;">Anzahl der Tage:</label>
+                            <input type="number" id="plugin-daily-days" placeholder="z.B. 7" min="1" max="30" onchange="window.generateDailyFields()" style="width: 100px;">
+                        </div>
+                        <div id="plugin-daily-grid" style="display: flex; flex-direction: column; gap: 8px;">
+                        </div>
+                    </div>
+
+                    <div class="button-group" style="margin-top: 20px;">
                         <button id="btn-save-plugin" class="btn btn-primary">Plugin speichern</button>
                         <button id="btn-cancel-plugin" class="btn btn-secondary" style="display: none;">Abbrechen</button>
                     </div>
                     <p id="plugin-status" class="status-text"></p>
                 </div>
+                
                 <div class="table-container">
-                    <table class="data-table"><thead><tr><th style="width: 200px;">Plugin Name</th><th>Info Text & Notizen</th><th style="text-align: right;">Aktionen</th></tr></thead><tbody id="plugin-list"></tbody></table>
+                    <table class="data-table">
+                        <thead><tr><th style="width: 150px;">Plugin Name</th><th>Permissions & Einstellungen</th><th style="text-align: right;">Aktionen</th></tr></thead>
+                        <tbody id="plugin-list"></tbody>
+                    </table>
                 </div>
             </section>
 
@@ -415,12 +357,16 @@
                 <h2>Werbung & Banner</h2>
                 <div class="form-card">
                     <h3 id="ad-form-title">Neue Werbung erstellen</h3>
+                    <input type="hidden" id="ad-edit-id">
                     <div class="input-group">
                         <input type="text" id="ad-title" placeholder="Titel der Kampagne">
                         <input type="text" id="ad-link" placeholder="Link (URL)">
                         <input type="file" id="ad-image" accept="image/png, image/jpeg">
                     </div>
-                    <div class="button-group"><button id="btn-save-ad" class="btn btn-primary">Werbung speichern</button></div>
+                    <div class="button-group">
+                        <button id="btn-save-ad" class="btn btn-primary">Werbung speichern</button>
+                        <button id="btn-cancel-ad" class="btn btn-secondary" style="display:none;" onclick="window.resetAdForm()">Abbrechen</button>
+                    </div>
                     <p id="ad-status" class="status-text"></p>
                 </div>
                 <div id="ad-list" class="gui-grid"></div>
@@ -429,6 +375,7 @@
         </main>
     </div>
 
+    <!-- Modals (Kisten Simulator etc.) -->
     <div id="crate-test-modal" class="modal">
         <div class="modal-content" style="max-width: 500px;">
             <h3>🎲 Kisten-Simulator (1.000 Öffnungen)</h3>

@@ -18,11 +18,12 @@ const storage = getStorage(app);
 const auth = getAuth(app);
 
 let allRanks = [], allGUIs = [], allCrates = [], allShop = [], allAds = [], allPlugins = [], allBroadcasts = [];
-let editingRankId = null, editingPluginId = null;
+let editingRankId = null, editingPluginId = null, editingShopId = null, editingAdId = null;
 let listenersActive = false; 
 
 window.crateCollapsed = {};
 window.crateSortModes = {};
+let draggedCrateBox = null; // Für Drag & Drop Kisten
 
 // ==========================================
 // HILFSFUNKTIONEN & AUTH
@@ -36,8 +37,7 @@ async function uploadImage(file, folderPath) {
 }
 
 function dataURLtoFile(dataurl, filename) {
-    let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
-        bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+    let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1], bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
     while(n--){ u8arr[n] = bstr.charCodeAt(n); }
     return new File([u8arr], filename, {type:mime});
 }
@@ -59,9 +59,7 @@ onAuthStateChanged(auth, (user) => {
 });
 
 document.getElementById('btn-login').addEventListener('click', async () => {
-    const email = document.getElementById('login-email').value;
-    const password = document.getElementById('login-password').value;
-    const errorText = document.getElementById('login-error');
+    const email = document.getElementById('login-email').value; const password = document.getElementById('login-password').value; const errorText = document.getElementById('login-error');
     if(!email || !password) return errorText.innerText = "Bitte beides ausfüllen!";
     errorText.innerText = "Logge ein..."; errorText.style.color = "var(--text-muted)";
     try { await signInWithEmailAndPassword(auth, email, password); errorText.innerText = ""; } 
@@ -72,11 +70,9 @@ document.getElementById('btn-logout').addEventListener('click', () => { signOut(
 
 document.querySelectorAll('.nav-item:not(#btn-logout)').forEach(item => {
     item.addEventListener('click', (e) => {
-        document.querySelectorAll('.nav-item:not(#btn-logout)').forEach(nav => nav.classList.remove('active'));
-        e.target.classList.add('active');
+        document.querySelectorAll('.nav-item:not(#btn-logout)').forEach(nav => nav.classList.remove('active')); e.target.classList.add('active');
         const targetId = e.target.getAttribute('data-target');
-        document.querySelectorAll('.category-section').forEach(sec => sec.classList.remove('active'));
-        document.getElementById(targetId).classList.add('active');
+        document.querySelectorAll('.category-section').forEach(sec => sec.classList.remove('active')); document.getElementById(targetId).classList.add('active');
         if(targetId === 'gui-editor') { setTimeout(() => { if(window.resizeCanvas) window.resizeCanvas(); }, 50); }
     });
 });
@@ -89,48 +85,21 @@ function updateDashboard() {
     document.getElementById('stat-guis').innerText = allGUIs.length; 
 }
 
-function sortRanksHierarchically(ranks) {
-    let sorted = [], visited = new Set(), baseRanks = ranks.filter(r => !r.inherits_from);
-    function addChildren(parentName) { let children = ranks.filter(r => r.inherits_from === parentName); children.forEach(child => { if (!visited.has(child.id)) { visited.add(child.id); sorted.push(child); addChildren(child.name); } }); }
-    baseRanks.forEach(baseRank => { if (!visited.has(baseRank.id)) { visited.add(baseRank.id); sorted.push(baseRank); addChildren(baseRank.name); } });
-    ranks.forEach(r => { if (!visited.has(r.id)) sorted.push(r); });
-    return sorted;
-}
-
 
 // ==========================================
 // LIVE SERVER STATUS PING
 // ==========================================
 window.checkServerStatus = async function() {
-    const ip = document.getElementById('server-ip').value;
-    const resDiv = document.getElementById('server-status-result');
+    const ip = document.getElementById('server-ip').value; const resDiv = document.getElementById('server-status-result');
     if(!ip) return alert("Bitte eine Minecraft-Server IP eingeben!");
-    
-    resDiv.style.display = 'block';
-    resDiv.innerHTML = "<span style='color: var(--text-muted);'>📡 Pinge Server an... Bitte warten.</span>";
-    
+    resDiv.style.display = 'block'; resDiv.innerHTML = "<span style='color: var(--text-muted);'>📡 Pinge Server an... Bitte warten.</span>";
     try {
-        const response = await fetch('https://api.mcsrvstat.us/3/' + ip);
-        const data = await response.json();
-        
+        const response = await fetch('https://api.mcsrvstat.us/3/' + ip); const data = await response.json();
         if(data.online) {
             let iconHtml = data.icon ? `<img src="${data.icon}" style="width:64px; height:64px; border-radius:8px; border: 2px solid var(--border-color);">` : `<div style="width:64px; height:64px; background:#444; border-radius:8px;"></div>`;
-            resDiv.innerHTML = `
-                <div style="display:flex; align-items:center; gap: 20px;">
-                    ${iconHtml}
-                    <div>
-                        <div style="color: #4CAF50; font-weight:bold; font-size:18px; margin-bottom: 5px;">🟢 ONLINE</div>
-                        <div style="font-size: 14px;"><strong>Spieler:</strong> ${data.players.online} / ${data.players.max}</div>
-                        <div style="font-size: 14px; color: var(--text-muted);"><strong>Version:</strong> ${data.version}</div>
-                    </div>
-                </div>
-            `;
-        } else {
-            resDiv.innerHTML = `<div style="color:var(--danger); font-weight:bold; font-size:16px;">🔴 OFFLINE (oder nicht erreichbar)</div>`;
-        }
-    } catch(e) {
-        resDiv.innerHTML = "<span style='color:var(--danger);'>❌ Fehler beim Abrufen der API.</span>";
-    }
+            resDiv.innerHTML = `<div style="display:flex; align-items:center; gap: 20px;">${iconHtml}<div><div style="color: #4CAF50; font-weight:bold; font-size:18px; margin-bottom: 5px;">🟢 ONLINE</div><div style="font-size: 14px;"><strong>Spieler:</strong> ${data.players.online} / ${data.players.max}</div><div style="font-size: 14px; color: var(--text-muted);"><strong>Version:</strong> ${data.version}</div></div></div>`;
+        } else { resDiv.innerHTML = `<div style="color:var(--danger); font-weight:bold; font-size:16px;">🔴 OFFLINE (oder nicht erreichbar)</div>`; }
+    } catch(e) { resDiv.innerHTML = "<span style='color:var(--danger);'>❌ Fehler beim Abrufen der API.</span>"; }
 }
 
 
@@ -142,16 +111,11 @@ function startRealtimeListeners() {
     
     onSnapshot(collection(db, "broadcasts"), (snap) => {
         allBroadcasts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const list = document.getElementById('bc-list');
-        if(!list) return;
-        list.innerHTML = '';
+        const list = document.getElementById('bc-list'); if(!list) return; list.innerHTML = '';
         allBroadcasts.forEach(bc => {
             let formattedMsg = window.formatMcText(bc.message);
             list.innerHTML += `<tr>
-                <td>
-                    <div style="font-size: 11px; color: #888; margin-bottom: 4px;">Original: <span style="font-family:monospace;">${bc.message}</span></div>
-                    <div class="mc-preview-box" style="padding: 8px; font-size: 13px;">${formattedMsg}</div>
-                </td>
+                <td><div style="font-size: 11px; color: #888; margin-bottom: 4px;">Original: <span style="font-family:monospace;">${bc.message}</span></div><div class="mc-preview-box" style="padding: 8px; font-size: 13px;">${formattedMsg}</div></td>
                 <td style="vertical-align: middle;">Alle ${bc.interval} Sek.</td>
                 <td style="text-align: right; vertical-align: middle;">
                     <button class="btn btn-secondary btn-sm" onclick="window.editBroadcast('${bc.id}')">✏️ Bearbeiten</button>
@@ -162,7 +126,7 @@ function startRealtimeListeners() {
     });
 
     onSnapshot(collection(db, "ranks"), (snap) => {
-        allRanks = sortRanksHierarchically(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        allRanks = (function(ranks){ let sorted = [], visited = new Set(), baseRanks = ranks.filter(r => !r.inherits_from); function addC(pn) { ranks.filter(r => r.inherits_from === pn).forEach(c => { if (!visited.has(c.id)) { visited.add(c.id); sorted.push(c); addC(c.name); } }); } baseRanks.forEach(br => { if (!visited.has(br.id)) { visited.add(br.id); sorted.push(br); addC(br.name); } }); ranks.forEach(r => { if (!visited.has(r.id)) sorted.push(r); }); return sorted; })(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         const list = document.getElementById('rank-list'); list.innerHTML = '';
         allRanks.forEach(rank => {
             const myPerms = rank.permissions || []; const parentRank = rank.inherits_from ? allRanks.find(r => r.name === rank.inherits_from) : null; const inherited = parentRank ? (parentRank.permissions || []) : [];
@@ -181,9 +145,22 @@ function startRealtimeListeners() {
         allPlugins = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const list = document.getElementById('plugin-list'); list.innerHTML = '';
         allPlugins.forEach(plugin => { 
+            let settingsHtml = '';
+            if (plugin.settingsType === 'daily') {
+                settingsHtml = `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; margin-top:5px;">`;
+                (plugin.dailyRewards || []).forEach((req, idx) => { settingsHtml += `<div style="background:var(--bg-color); padding:4px 8px; border-radius:4px; font-size:12px; border:1px solid var(--border-color);"><strong>Tag ${idx+1}:</strong> ${req}</div>`; });
+                settingsHtml += `</div>`;
+            } else {
+                settingsHtml = `<div style="white-space:pre-wrap; font-size:13px; margin-top:5px;">${plugin.settingsText || '-'}</div>`;
+            }
+
             list.innerHTML += `<tr>
                 <td><strong>${plugin.name}</strong></td>
-                <td style="white-space: pre-wrap; font-size: 13px;">${plugin.info || '-'}</td>
+                <td>
+                    <strong>Perms:</strong><br><span style="font-size:12px; color:#aaa;">${plugin.perms || '-'}</span><br><br>
+                    <strong>Einstellungen:</strong>
+                    ${settingsHtml}
+                </td>
                 <td style="text-align: right;">
                     <button class="btn btn-secondary btn-sm" onclick="window.editPlugin('${plugin.id}')">✏️ Bearbeiten</button>
                     <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('plugins', '${plugin.id}')">Löschen</button>
@@ -195,6 +172,7 @@ function startRealtimeListeners() {
 
     onSnapshot(collection(db, "crates"), (snap) => {
         allCrates = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        allCrates.sort((a, b) => (a.order || 0) - (b.order || 0)); // Wichtig für Drag & Drop
         window.renderCrates(); 
         updateDashboard();
     });
@@ -202,76 +180,67 @@ function startRealtimeListeners() {
     onSnapshot(collection(db, "shop"), (snap) => {
         allShop = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const list = document.getElementById('shop-list'); list.innerHTML = '';
-        allShop.forEach(item => { let imgHtml = item.image_url ? `<img src="${item.image_url}" class="thumbnail">` : '<div class="thumbnail"></div>'; list.innerHTML += `<tr><td>${imgHtml}</td><td><strong>${item.name}</strong></td><td>${item.price} Pkt.</td><td><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('shop', '${item.id}')">Löschen</button></td></tr>`; });
+        allShop.forEach(item => { 
+            let imgHtml = item.image_url ? `<img src="${item.image_url}" class="thumbnail">` : '<div class="thumbnail"></div>'; 
+            list.innerHTML += `<tr>
+                <td>${imgHtml}</td><td><strong>${item.name}</strong></td><td>${item.price} Pkt.</td>
+                <td style="text-align: right;">
+                    <button class="btn btn-secondary btn-sm" onclick="window.editShopItem('${item.id}')">✏️ Bearbeiten</button>
+                    <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('shop', '${item.id}')">Löschen</button>
+                </td>
+            </tr>`; 
+        });
         updateDashboard();
+    });
+
+    onSnapshot(collection(db, "ads"), (snap) => {
+        allAds = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const list = document.getElementById('ad-list'); list.innerHTML = '';
+        allAds.forEach(ad => { 
+            let linkHtml = ad.link ? `<a href="${ad.link}" target="_blank" style="font-size:12px; display:block; margin-bottom:10px;">Link öffnen</a>` : ''; 
+            list.innerHTML += `<div class="gui-card">
+                <div class="gui-card-header">
+                    <span>${ad.title}</span>
+                    <div>
+                        <button class="btn btn-secondary btn-sm" onclick="window.editAd('${ad.id}')">✏️</button>
+                        <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('ads', '${ad.id}')">🗑️</button>
+                    </div>
+                </div>
+                ${linkHtml}<img src="${ad.image_url}">
+            </div>`; 
+        });
     });
 
     onSnapshot(collection(db, "guis"), (snap) => {
         allGUIs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const container = document.getElementById('gui-packages-container');
-        
         const editorSelect = document.getElementById('editor-pkg-select');
         const plannerSelect = document.getElementById('planner-pkg-select'); 
         const plannerBgSelect = document.getElementById('planner-bg-select');
         
-        if(!container) return;
-        container.innerHTML = '';
+        if(!container) return; container.innerHTML = '';
         
-        const currentEditorVal = editorSelect.value;
-        const currentPlannerVal = plannerSelect.value;
-        const currentBgVal = plannerBgSelect ? plannerBgSelect.value : '';
-        
-        editorSelect.innerHTML = '<option value="">Ziel-Paket wählen...</option>';
-        plannerSelect.innerHTML = '<option value="">Ziel-Paket wählen...</option>';
+        const currentEditorVal = editorSelect.value; const currentPlannerVal = plannerSelect.value; const currentBgVal = plannerBgSelect ? plannerBgSelect.value : '';
+        editorSelect.innerHTML = '<option value="">Ziel-Paket wählen...</option>'; plannerSelect.innerHTML = '<option value="">Ziel-Paket wählen...</option>';
         if(plannerBgSelect) plannerBgSelect.innerHTML = '<option value="">Kein Bild (Nur Grid)</option>';
 
         allGUIs.forEach(pkg => {
-            editorSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`;
-            plannerSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`;
-            
+            editorSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`; plannerSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`;
             let items = pkg.items || [];
             let itemsHtml = items.map(item => {
-                if (plannerBgSelect && item.type !== 'layout' && item.image_url) {
-                    plannerBgSelect.innerHTML += `<option value="${item.image_url}">${pkg.name} - ${item.name}</option>`;
-                }
+                if (plannerBgSelect && item.type !== 'layout' && item.image_url) { plannerBgSelect.innerHTML += `<option value="${item.image_url}">${pkg.name} - ${item.name}</option>`; }
 
                 if (item.type === 'layout') {
-                    return `
-                        <div class="gui-card">
-                            <div class="gui-card-header">
-                                <span>${item.name}</span>
-                                <div>
-                                    <button class="btn btn-secondary btn-sm" onclick="window.editLayoutInPlanner('${pkg.id}', '${item.id}')" title="Im Planer bearbeiten">✏️</button>
-                                    <button class="btn btn-danger btn-sm" onclick="window.deleteGuiItem('${pkg.id}', '${item.id}')">Löschen</button>
-                                </div>
-                            </div>
-                            <div style="width:100%; height:120px; background:#1e1e1e; border: 2px solid #555; border-radius:6px; display:flex; align-items:center; justify-content:center; flex-direction: column;">
-                                <span style="font-size: 30px; margin-bottom: 10px;">📋</span>
-                                <span style="color:#4CAF50; font-size:12px; font-weight:bold;">Menü Layout (${item.rows} Reihen)</span>
-                            </div>
-                        </div>`;
+                    return `<div class="gui-card"><div class="gui-card-header"><span>${item.name}</span><div><button class="btn btn-secondary btn-sm" onclick="window.editLayoutInPlanner('${pkg.id}', '${item.id}')" title="Im Planer bearbeiten">✏️</button><button class="btn btn-danger btn-sm" onclick="window.deleteGuiItem('${pkg.id}', '${item.id}')">Löschen</button></div></div><div style="width:100%; height:120px; background:#1e1e1e; border: 2px solid #555; border-radius:6px; display:flex; align-items:center; justify-content:center; flex-direction: column;"><span style="font-size: 30px; margin-bottom: 10px;">📋</span><span style="color:#4CAF50; font-size:12px; font-weight:bold;">Menü Layout (${item.rows} Reihen)</span></div></div>`;
                 } else {
-                    return `
-                        <div class="gui-card">
-                            <div class="gui-card-header">
-                                <span>${item.name}</span>
-                                <div>
-                                    <button class="btn btn-secondary btn-sm" onclick="window.editGuiItemInEditor('${pkg.id}', '${item.id}')" title="Im Editor bearbeiten">✏️</button>
-                                    <button class="btn btn-danger btn-sm" onclick="window.deleteGuiItem('${pkg.id}', '${item.id}')">Löschen</button>
-                                </div>
-                            </div>
-                            <img src="${item.image_url}" alt="${item.name}">
-                        </div>`;
+                    return `<div class="gui-card"><div class="gui-card-header"><span>${item.name}</span><div><button class="btn btn-secondary btn-sm" onclick="window.editGuiItemInEditor('${pkg.id}', '${item.id}')" title="Im Editor bearbeiten">✏️</button><button class="btn btn-danger btn-sm" onclick="window.deleteGuiItem('${pkg.id}', '${item.id}')">Löschen</button></div></div><img src="${item.image_url}" alt="${item.name}"></div>`;
                 }
             }).join('');
 
             container.innerHTML += `
                 <div class="crate-box">
                     <div class="crate-header" style="cursor: pointer;" onclick="window.toggleGuiPackage('${pkg.id}')">
-                        <div class="crate-header-left">
-                            <span id="icon-${pkg.id}" style="margin-right: 8px; font-size: 14px;">🔽</span>
-                            <h3 style="font-size: 18px; margin: 0;">${pkg.name}</h3>
-                        </div>
+                        <div class="crate-header-left"><span id="icon-${pkg.id}" style="margin-right: 8px; font-size: 14px;">🔽</span><h3 style="font-size: 18px; margin: 0;">${pkg.name}</h3></div>
                         <div class="button-group" onclick="event.stopPropagation()">
                             <button class="btn btn-info btn-sm" onclick="window.openMenuPlannerForPkg('${pkg.id}')">📋 Menü planen</button>
                             <button class="btn btn-secondary btn-sm" onclick="window.openGuiEditorForPkg('${pkg.id}')">🖌️ Pixel Editor</button>
@@ -282,28 +251,17 @@ function startRealtimeListeners() {
                     <div id="pkg-content-${pkg.id}" style="display: block; margin-top: 15px;">
                         ${items.length > 0 ? `<div class="gui-grid">${itemsHtml}</div>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine GUIs in diesem Paket.</p>'}
                     </div>
-                </div>
-            `;
+                </div>`;
         });
         
-        if(currentEditorVal) editorSelect.value = currentEditorVal;
-        if(currentPlannerVal) plannerSelect.value = currentPlannerVal;
-        if(currentBgVal && plannerBgSelect) plannerBgSelect.value = currentBgVal;
+        if(currentEditorVal) editorSelect.value = currentEditorVal; if(currentPlannerVal) plannerSelect.value = currentPlannerVal; if(currentBgVal && plannerBgSelect) plannerBgSelect.value = currentBgVal;
         updateDashboard();
-    });
-
-    onSnapshot(collection(db, "ads"), (snap) => {
-        allAds = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const list = document.getElementById('ad-list'); list.innerHTML = '';
-        allAds.forEach(ad => { let linkHtml = ad.link ? `<a href="${ad.link}" target="_blank" style="font-size:12px; display:block; margin-bottom:10px;">Link öffnen</a>` : ''; list.innerHTML += `<div class="gui-card"><div class="gui-card-header"><span>${ad.title}</span><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('ads', '${ad.id}')">Löschen</button></div>${linkHtml}<img src="${ad.image_url}"></div>`; });
     });
 }
 
 window.toggleGuiPackage = (pkgId) => {
-    const content = document.getElementById(`pkg-content-${pkgId}`);
-    const icon = document.getElementById(`icon-${pkgId}`);
-    if (content.style.display === 'none') { content.style.display = 'block'; icon.innerText = '🔽'; } 
-    else { content.style.display = 'none'; icon.innerText = '▶️'; }
+    const content = document.getElementById(`pkg-content-${pkgId}`); const icon = document.getElementById(`icon-${pkgId}`);
+    if (content.style.display === 'none') { content.style.display = 'block'; icon.innerText = '🔽'; } else { content.style.display = 'none'; icon.innerText = '▶️'; }
 };
 
 window.deleteEntry = async (collectionName, id) => {
@@ -336,75 +294,134 @@ window.updateMcPreview = function() {
 };
 
 window.editBroadcast = function(id) {
-    const bc = allBroadcasts.find(b => b.id === id);
-    if(!bc) return;
-    document.getElementById('bc-edit-id').value = bc.id;
-    document.getElementById('bc-message').value = bc.message;
-    document.getElementById('bc-interval').value = bc.interval;
-    document.getElementById('btn-save-bc').innerText = "Änderungen speichern";
-    document.getElementById('btn-cancel-bc').style.display = "inline-block";
-    window.updateMcPreview();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const bc = allBroadcasts.find(b => b.id === id); if(!bc) return;
+    document.getElementById('bc-edit-id').value = bc.id; document.getElementById('bc-message').value = bc.message; document.getElementById('bc-interval').value = bc.interval; document.getElementById('btn-save-bc').innerText = "Änderungen speichern"; document.getElementById('btn-cancel-bc').style.display = "inline-block"; window.updateMcPreview(); window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
 window.cancelEditBroadcast = function() {
-    document.getElementById('bc-edit-id').value = '';
-    document.getElementById('bc-message').value = '';
-    document.getElementById('bc-interval').value = '300';
-    document.getElementById('btn-save-bc').innerText = "Speichern";
-    document.getElementById('btn-cancel-bc').style.display = "none";
-    window.updateMcPreview();
+    document.getElementById('bc-edit-id').value = ''; document.getElementById('bc-message').value = ''; document.getElementById('bc-interval').value = '300'; document.getElementById('btn-save-bc').innerText = "Speichern"; document.getElementById('btn-cancel-bc').style.display = "none"; window.updateMcPreview();
 };
 
 window.saveBroadcast = async function() {
-    const msg = document.getElementById('bc-message').value; 
-    const interval = document.getElementById('bc-interval').value;
-    const editId = document.getElementById('bc-edit-id').value;
-    
+    const msg = document.getElementById('bc-message').value; const interval = document.getElementById('bc-interval').value; const editId = document.getElementById('bc-edit-id').value;
     if(!msg || !interval) return alert("Bitte Nachricht und Intervall ausfüllen!");
     document.getElementById('bc-status').innerText = "Speichere...";
     try {
-        if(editId) {
-            await updateDoc(doc(db, "broadcasts", editId), { message: msg, interval: Number(interval) });
-        } else {
-            await addDoc(collection(db, "broadcasts"), { message: msg, interval: Number(interval) });
-        }
-        document.getElementById('bc-status').innerText = "Gespeichert!"; 
-        setTimeout(() => document.getElementById('bc-status').innerText = "", 2000);
-        window.cancelEditBroadcast();
+        if(editId) { await updateDoc(doc(db, "broadcasts", editId), { message: msg, interval: Number(interval) }); } else { await addDoc(collection(db, "broadcasts"), { message: msg, interval: Number(interval) }); }
+        document.getElementById('bc-status').innerText = "Gespeichert!"; setTimeout(() => document.getElementById('bc-status').innerText = "", 2000); window.cancelEditBroadcast();
     } catch(e) { console.error(e); alert("Fehler!"); }
 };
 
 window.exportBroadcastYaml = function() {
     if(allBroadcasts.length === 0) return alert("Keine Nachrichten vorhanden!");
     let yaml = `settings:\n  interval: 300\n  prefix: '&8[&cServer&8] &7'\nbroadcasts:\n`;
-    allBroadcasts.forEach((bc, i) => {
-        yaml += `  'msg${i + 1}':\n    text:\n`;
-        bc.message.split('\n').forEach(line => { yaml += `      - '${line}'\n`; });
-        yaml += `    interval: ${bc.interval}\n`;
-    });
+    allBroadcasts.forEach((bc, i) => { yaml += `  'msg${i + 1}':\n    text:\n`; bc.message.split('\n').forEach(line => { yaml += `      - '${line}'\n`; }); yaml += `    interval: ${bc.interval}\n`; });
     const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'autobroadcaster.yml'; a.click(); URL.revokeObjectURL(url);
 };
 
 
 // ==========================================
-// RÄNGE & PLUGINS LOGIK
+// RÄNGE & PLUGINS LOGIK (MIT NEUEN FELDERN)
 // ==========================================
 
+window.togglePluginSettings = function() {
+    const type = document.getElementById('plugin-settings-type').value;
+    if (type === 'daily') {
+        document.getElementById('plugin-settings-text-container').style.display = 'none';
+        document.getElementById('plugin-settings-daily-container').style.display = 'block';
+        window.generateDailyFields();
+    } else {
+        document.getElementById('plugin-settings-text-container').style.display = 'block';
+        document.getElementById('plugin-settings-daily-container').style.display = 'none';
+    }
+};
+
+window.generateDailyFields = () => {
+    const days = parseInt(document.getElementById('plugin-daily-days').value) || 0;
+    const grid = document.getElementById('plugin-daily-grid');
+    grid.innerHTML = '';
+    for(let i=1; i<=days; i++) {
+        grid.innerHTML += `<div style="display:flex; align-items:center; gap:5px;">
+            <span style="width:50px; color:var(--text-muted); font-size:12px;">Tag ${i}:</span>
+            <input type="text" class="daily-reward-input" data-day="${i}" placeholder="z.B. eco give %player% 1000" style="flex:1; padding:6px; border-radius:4px; border:1px solid var(--border-color); background:var(--surface-color); color:var(--text-main);">
+        </div>`;
+    }
+};
+
 function resetPluginForm() {
-    editingPluginId = null; document.getElementById('plugin-form-title').innerText = "Neues Plugin hinzufügen"; document.getElementById('btn-save-plugin').innerText = "Plugin speichern"; document.getElementById('btn-cancel-plugin').style.display = "none"; document.getElementById('plugin-name').value = ''; document.getElementById('plugin-info').value = '';
+    editingPluginId = null; 
+    document.getElementById('plugin-form-title').innerText = "Neues Plugin hinzufügen"; 
+    document.getElementById('btn-save-plugin').innerText = "Plugin speichern"; 
+    document.getElementById('btn-cancel-plugin').style.display = "none"; 
+    document.getElementById('plugin-name').value = ''; 
+    document.getElementById('plugin-perms').value = '';
+    document.getElementById('plugin-settings-type').value = 'text';
+    document.getElementById('plugin-settings-text').value = '';
+    document.getElementById('plugin-daily-days').value = '';
+    window.togglePluginSettings();
 }
 
 window.editPlugin = (id) => {
     const plugin = allPlugins.find(p => p.id === id); if(!plugin) return;
-    editingPluginId = id; document.getElementById('plugin-name').value = plugin.name; document.getElementById('plugin-info').value = plugin.info || ''; document.getElementById('plugin-form-title').innerText = "Plugin bearbeiten: " + plugin.name; document.getElementById('btn-save-plugin').innerText = "Änderungen speichern"; document.getElementById('btn-cancel-plugin').style.display = "inline-block"; window.scrollTo({ top: 0, behavior: 'smooth' });
+    editingPluginId = id; 
+    document.getElementById('plugin-name').value = plugin.name; 
+    document.getElementById('plugin-perms').value = plugin.perms || ''; 
+    
+    document.getElementById('plugin-settings-type').value = plugin.settingsType || 'text';
+    window.togglePluginSettings();
+    
+    if (plugin.settingsType === 'daily') {
+        document.getElementById('plugin-daily-days').value = plugin.dailyDays || 0;
+        window.generateDailyFields();
+        const inputs = document.querySelectorAll('.daily-reward-input');
+        inputs.forEach((input, idx) => { input.value = plugin.dailyRewards[idx] || ''; });
+    } else {
+        document.getElementById('plugin-settings-text').value = plugin.settingsText || '';
+    }
+
+    document.getElementById('plugin-form-title').innerText = "Plugin bearbeiten: " + plugin.name; 
+    document.getElementById('btn-save-plugin').innerText = "Änderungen speichern"; 
+    document.getElementById('btn-cancel-plugin').style.display = "inline-block"; 
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 };
+
 document.getElementById('btn-cancel-plugin').addEventListener('click', resetPluginForm);
+
 document.getElementById('btn-save-plugin').addEventListener('click', async () => {
-    try { const name = document.getElementById('plugin-name').value; const info = document.getElementById('plugin-info').value; const status = document.getElementById('plugin-status'); if(!name) return alert("Bitte gib einen Plugin-Namen ein!"); status.innerText = "Speichere..."; if (editingPluginId) { await updateDoc(doc(db, "plugins", editingPluginId), { name: name, info: info }); } else { await addDoc(collection(db, "plugins"), { name: name, info: info }); } status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); resetPluginForm(); } catch (error) { console.error(error); alert("Fehler: " + error.message); }
+    try { 
+        const name = document.getElementById('plugin-name').value; 
+        const perms = document.getElementById('plugin-perms').value; 
+        const settingsType = document.getElementById('plugin-settings-type').value;
+        const settingsText = document.getElementById('plugin-settings-text').value;
+        const dailyDays = document.getElementById('plugin-daily-days').value;
+        
+        let dailyRewards = [];
+        if (settingsType === 'daily') {
+            const inputs = document.querySelectorAll('.daily-reward-input');
+            inputs.forEach(input => dailyRewards.push(input.value));
+        }
+
+        const status = document.getElementById('plugin-status'); 
+        if(!name) return alert("Bitte gib einen Plugin-Namen ein!"); 
+        status.innerText = "Speichere..."; 
+        
+        const pluginData = { 
+            name: name, 
+            perms: perms, 
+            settingsType: settingsType, 
+            settingsText: settingsText,
+            dailyDays: Number(dailyDays),
+            dailyRewards: dailyRewards
+        };
+
+        if (editingPluginId) { await updateDoc(doc(db, "plugins", editingPluginId), pluginData); } 
+        else { await addDoc(collection(db, "plugins"), pluginData); } 
+        status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); resetPluginForm(); 
+    } catch (error) { console.error(error); alert("Fehler: " + error.message); }
 });
 
+// Rank & Kisten Logik bleibt
 document.getElementById('btn-save-rank').addEventListener('click', async () => {
     const name = document.getElementById('rank-name').value; const perms = document.getElementById('rank-perms').value.split('\n').map(p => p.trim()).filter(p => p !== ""); const inherits = document.getElementById('rank-inherit').value; const file = document.getElementById('rank-image').files[0]; const status = document.getElementById('rank-status');
     if(!name) return alert("Name fehlt!"); status.innerText = "Speichere..."; const rankData = { name: name, permissions: perms, inherits_from: inherits || null }; if (file) { rankData.image_url = await uploadImage(file, 'ranks'); }
@@ -421,11 +438,19 @@ document.getElementById('btn-export-ranks').addEventListener('click', () => { if
 window.importPluginPerms = () => {
     if(allPlugins.length === 0) return alert("Es sind noch keine Plugins gespeichert!");
     let currentPerms = document.getElementById('rank-perms').value.split('\n').map(p => p.trim()).filter(p => p !== "");
-    allPlugins.forEach(pl => { if(pl.info) { let pluginLines = pl.info.split('\n').map(p => p.trim()).filter(p => p !== ""); currentPerms = currentPerms.concat(pluginLines); } });
+    allPlugins.forEach(pl => { 
+        if(pl.perms) { 
+            let pluginLines = pl.perms.split('\n').map(p => p.trim()).filter(p => p !== ""); 
+            currentPerms = currentPerms.concat(pluginLines); 
+        } 
+    });
     let uniquePerms = [...new Set(currentPerms)]; document.getElementById('rank-perms').value = uniquePerms.join('\n'); alert("Permissions erfolgreich importiert!");
 };
 
-// --- KISTEN ---
+// ==========================================
+// KISTEN LOGIK (MIT UMBENNEN & DRAG DROP)
+// ==========================================
+
 window.renderCrates = function() {
     const container = document.getElementById('crates-container');
     if(!container) return;
@@ -444,6 +469,7 @@ window.renderCrates = function() {
             if(item.type === 'money') typeIcon = '<span style="font-size:20px;">💰</span>';
             if(item.type === 'perk') typeIcon = '<span style="font-size:20px;">🌟</span>';
             if(item.type === 'special') typeIcon = '<span style="font-size:20px;">✨</span>';
+            
             let imgContent = item.image_url ? `<img src="${item.image_url}" class="thumbnail" style="width:30px;height:30px;">` : typeIcon;
             let enchHtml = (item.enchantments && item.enchantments.length > 0) ? `<div style="font-size: 11px; color: #a855f7; margin-top: 4px;">🪄 ${item.enchantments.join(', ')}</div>` : '';
             
@@ -463,10 +489,11 @@ window.renderCrates = function() {
         let displayStyle = isCollapsed ? 'none' : 'block';
         let iconText = isCollapsed ? '▶️' : '🔽';
 
+        // DRAG AND DROP ATTRIBUTE FÜR DIE BOX
         container.innerHTML += `
-            <div class="crate-box">
+            <div class="crate-box" draggable="true" data-crate-id="${crate.id}">
                 <div class="crate-header" style="cursor: pointer;" onclick="window.toggleCrate('${crate.id}')">
-                    <div class="crate-header-left">
+                    <div class="crate-header-left" title="Halten um Kiste zu verschieben">
                         <span id="crate-icon-${crate.id}" style="margin-right: 8px; font-size: 14px;">${iconText}</span>
                         ${crateImgHtml}
                         <h3 style="font-size: 18px; margin: 0;">${crate.name || 'Unbenannte Kiste'}</h3>
@@ -479,8 +506,9 @@ window.renderCrates = function() {
                         </select>
                         <button class="btn btn-secondary btn-sm" style="border-color:#FF9800; color:#FF9800;" onclick="window.simulateCrate('${crate.id}')">🎲 Test-Öffnen</button>
                         <button class="btn btn-info btn-sm" onclick="window.exportCrateYaml('${crate.id}')">📥 CrazyCrates Export</button>
-                        <button class="btn btn-primary btn-sm" onclick="window.openItemModal('${crate.id}')">+ Item hinzufügen</button>
-                        <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('crates', '${crate.id}')">Kiste löschen</button>
+                        <button class="btn btn-primary btn-sm" onclick="window.openItemModal('${crate.id}')">+ Item</button>
+                        <button class="btn btn-secondary btn-sm" onclick="window.renameCrate('${crate.id}')">✏️ Name ändern</button>
+                        <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('crates', '${crate.id}')">Löschen</button>
                     </div>
                 </div>
                 <div id="crate-content-${crate.id}" style="display: ${displayStyle}; margin-top: 15px;">
@@ -488,110 +516,81 @@ window.renderCrates = function() {
                 </div>
             </div>`;
     });
+
+    // DRAG AND DROP EVENTS BINDEN
+    const boxes = document.querySelectorAll('.crate-box');
+    boxes.forEach(box => {
+        box.addEventListener('dragstart', function(e) {
+            draggedCrateBox = this;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', this.innerHTML);
+            this.style.opacity = '0.4';
+        });
+        box.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            this.classList.add('drag-over');
+            return false;
+        });
+        box.addEventListener('dragleave', function(e) {
+            this.classList.remove('drag-over');
+        });
+        box.addEventListener('drop', function(e) {
+            e.stopPropagation();
+            this.classList.remove('drag-over');
+            if (draggedCrateBox !== this) {
+                let parent = this.parentNode;
+                let children = Array.from(parent.children);
+                let srcIndex = children.indexOf(draggedCrateBox);
+                let targetIndex = children.indexOf(this);
+                if (srcIndex < targetIndex) { this.after(draggedCrateBox); } 
+                else { this.before(draggedCrateBox); }
+                
+                // Neue Reihenfolge speichern
+                let newOrderIds = Array.from(parent.children).map(el => el.getAttribute('data-crate-id'));
+                newOrderIds.forEach((id, index) => { updateDoc(doc(db, "crates", id), { order: index }); });
+            }
+            return false;
+        });
+        box.addEventListener('dragend', function(e) {
+            this.style.opacity = '1';
+            boxes.forEach(b => b.classList.remove('drag-over'));
+        });
+    });
 };
 
-window.toggleCrate = (crateId) => {
-    window.crateCollapsed[crateId] = !window.crateCollapsed[crateId];
-    const content = document.getElementById(`crate-content-${crateId}`); const icon = document.getElementById(`crate-icon-${crateId}`);
-    if (window.crateCollapsed[crateId]) { content.style.display = 'none'; icon.innerText = '▶️'; } else { content.style.display = 'block'; icon.innerText = '🔽'; }
-};
+window.renameCrate = async (id) => {
+    const crate = allCrates.find(c => c.id === id);
+    if(!crate) return;
+    const newName = prompt("Bitte gib einen neuen Namen für die Kiste ein:", crate.name);
+    if(newName && newName.trim() !== "" && newName !== crate.name) {
+        await updateDoc(doc(db, "crates", id), { name: newName.trim() });
+    }
+}
 
+window.toggleCrate = (crateId) => { window.crateCollapsed[crateId] = !window.crateCollapsed[crateId]; const content = document.getElementById(`crate-content-${crateId}`); const icon = document.getElementById(`crate-icon-${crateId}`); if (window.crateCollapsed[crateId]) { content.style.display = 'none'; icon.innerText = '▶️'; } else { content.style.display = 'block'; icon.innerText = '🔽'; } };
 window.changeCrateSort = (crateId, mode) => { window.crateSortModes[crateId] = mode; window.renderCrates(); };
 
-document.getElementById('btn-save-crate').addEventListener('click', async () => { try { const crate_name = document.getElementById('crate-name').value; const fileInput = document.getElementById('crate-image'); const file = fileInput ? fileInput.files[0] : null; const status = document.getElementById('crate-status'); if(!crate_name) return alert("Name fehlt!"); status.innerText = "Erstelle Kiste..."; let imageUrl = null; if (file) imageUrl = await uploadImage(file, 'crates'); await addDoc(collection(db, "crates"), { name: crate_name, image_url: imageUrl, items: [] }); status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('crate-name').value = ''; if(fileInput) fileInput.value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
+document.getElementById('btn-save-crate').addEventListener('click', async () => { try { const crate_name = document.getElementById('crate-name').value; const fileInput = document.getElementById('crate-image'); const file = fileInput ? fileInput.files[0] : null; const status = document.getElementById('crate-status'); if(!crate_name) return alert("Name fehlt!"); status.innerText = "Erstelle Kiste..."; let imageUrl = null; if (file) imageUrl = await uploadImage(file, 'crates'); await addDoc(collection(db, "crates"), { name: crate_name, image_url: imageUrl, items: [], order: allCrates.length }); status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('crate-name').value = ''; if(fileInput) fileInput.value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
 
-window.changeCrateItemType = () => {
-    const type = document.getElementById('modal-item-type').value; const nameInput = document.getElementById('modal-item-name'); const enchSection = document.getElementById('enchantment-section');
-    if(type === 'money') { nameInput.placeholder = "Geld-Betrag (z.B. 1000)"; nameInput.value = ""; enchSection.style.display = 'none'; }
-    else if(type === 'perk') { nameInput.value = "Platzhalter Perk"; enchSection.style.display = 'none'; }
-    else if(type === 'special') { nameInput.value = "Platzhalter Spezial"; enchSection.style.display = 'none'; }
-    else { nameInput.placeholder = "Item Name (z.B. Diamant)"; nameInput.value = ""; enchSection.style.display = 'block'; }
-};
-
-window.addEnchantmentField = (val = '') => {
-    const container = document.getElementById('enchantments-container'); const row = document.createElement('div'); row.style.display = 'flex'; row.style.gap = '5px';
-    row.innerHTML = `<input type="text" class="ench-input" placeholder="z.B. sharpness:5" value="${val}" style="flex-grow:1; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-color); color: var(--text-main);"><button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">X</button>`;
-    container.appendChild(row);
-};
-
-window.openItemModal = (crateId) => { 
-    document.getElementById('item-modal-title').innerText = "Neues Item hinzufügen"; document.getElementById('modal-crate-id').value = crateId; document.getElementById('modal-edit-item-id').value = ''; document.getElementById('modal-item-type').value = 'item'; document.getElementById('modal-item-name').value = ''; document.getElementById('modal-item-quantity').value = '1'; document.getElementById('modal-item-chance').value = ''; document.getElementById('enchantments-container').innerHTML = ''; window.changeCrateItemType(); document.getElementById('item-modal').classList.add('active'); 
-};
-
-window.editCrateItem = (crateId, itemId) => {
-    const crate = allCrates.find(c => c.id === crateId); if (!crate) return; const item = (crate.items || []).find(i => i.id === itemId); if (!item) return;
-    document.getElementById('item-modal-title').innerText = "Item bearbeiten"; document.getElementById('modal-crate-id').value = crateId; document.getElementById('modal-edit-item-id').value = item.id; document.getElementById('modal-item-type').value = item.type || 'item'; document.getElementById('modal-item-name').value = item.name || ''; document.getElementById('modal-item-quantity').value = item.quantity || 1; document.getElementById('modal-item-chance').value = item.chance || '';
-    window.changeCrateItemType();
-    const enchContainer = document.getElementById('enchantments-container'); enchContainer.innerHTML = '';
-    if (item.enchantments && item.enchantments.length > 0) { item.enchantments.forEach(ench => window.addEnchantmentField(ench)); }
-    document.getElementById('item-modal').classList.add('active');
-};
-
-document.getElementById('btn-save-item').addEventListener('click', async () => {
-    try {
-        const crateId = document.getElementById('modal-crate-id').value; const editItemId = document.getElementById('modal-edit-item-id').value; const type = document.getElementById('modal-item-type').value; const name = document.getElementById('modal-item-name').value; const quantity = document.getElementById('modal-item-quantity').value; const chance = document.getElementById('modal-item-chance').value; const file = document.getElementById('modal-item-image').files[0]; const status = document.getElementById('modal-status');
-        if(!name || !chance || !quantity) return alert("Pflichtfelder fehlen!"); status.innerText = "Speichere Item...";
-        const enchInputs = document.querySelectorAll('.ench-input'); const enchantments = Array.from(enchInputs).map(input => input.value.trim()).filter(v => v !== '');
-        let imageUrl = null; if(file) imageUrl = await uploadImage(file, 'crates/items');
-        const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId);
-        let updatedItems = [...(crate.items || [])];
-        if(editItemId) { const idx = updatedItems.findIndex(i => i.id === editItemId); if(idx > -1) { updatedItems[idx].type = type; updatedItems[idx].name = name; updatedItems[idx].quantity = Number(quantity); updatedItems[idx].chance = Number(chance); updatedItems[idx].enchantments = enchantments; if(file) updatedItems[idx].image_url = imageUrl; } } else { updatedItems.push({ id: Date.now().toString(), type: type, name: name, quantity: Number(quantity), chance: Number(chance), enchantments: enchantments, image_url: imageUrl }); }
-        await updateDoc(crateRef, { items: updatedItems });
-        status.innerText = "Erfolgreich!"; setTimeout(() => { status.innerText = ""; document.getElementById('item-modal').classList.remove('active'); }, 1000);
-    } catch (error) { console.error(error); alert("Fehler: " + error.message); }
-});
-
+window.changeCrateItemType = () => { const type = document.getElementById('modal-item-type').value; const nameInput = document.getElementById('modal-item-name'); const enchSection = document.getElementById('enchantment-section'); if(type === 'money') { nameInput.placeholder = "Geld-Betrag (z.B. 1000)"; nameInput.value = ""; enchSection.style.display = 'none'; } else if(type === 'perk') { nameInput.value = "Platzhalter Perk"; enchSection.style.display = 'none'; } else if(type === 'special') { nameInput.value = "Platzhalter Spezial"; enchSection.style.display = 'none'; } else { nameInput.placeholder = "Item Name (z.B. Diamant)"; nameInput.value = ""; enchSection.style.display = 'block'; } };
+window.addEnchantmentField = (val = '') => { const container = document.getElementById('enchantments-container'); const row = document.createElement('div'); row.style.display = 'flex'; row.style.gap = '5px'; row.innerHTML = `<input type="text" class="ench-input" placeholder="z.B. sharpness:5" value="${val}" style="flex-grow:1; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-color); color: var(--text-main);"><button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">X</button>`; container.appendChild(row); };
+window.openItemModal = (crateId) => { document.getElementById('item-modal-title').innerText = "Neues Item hinzufügen"; document.getElementById('modal-crate-id').value = crateId; document.getElementById('modal-edit-item-id').value = ''; document.getElementById('modal-item-type').value = 'item'; document.getElementById('modal-item-name').value = ''; document.getElementById('modal-item-quantity').value = '1'; document.getElementById('modal-item-chance').value = ''; document.getElementById('enchantments-container').innerHTML = ''; window.changeCrateItemType(); document.getElementById('item-modal').classList.add('active'); };
+window.editCrateItem = (crateId, itemId) => { const crate = allCrates.find(c => c.id === crateId); if (!crate) return; const item = (crate.items || []).find(i => i.id === itemId); if (!item) return; document.getElementById('item-modal-title').innerText = "Item bearbeiten"; document.getElementById('modal-crate-id').value = crateId; document.getElementById('modal-edit-item-id').value = item.id; document.getElementById('modal-item-type').value = item.type || 'item'; document.getElementById('modal-item-name').value = item.name || ''; document.getElementById('modal-item-quantity').value = item.quantity || 1; document.getElementById('modal-item-chance').value = item.chance || ''; window.changeCrateItemType(); const enchContainer = document.getElementById('enchantments-container'); enchContainer.innerHTML = ''; if (item.enchantments && item.enchantments.length > 0) { item.enchantments.forEach(ench => window.addEnchantmentField(ench)); } document.getElementById('item-modal').classList.add('active'); };
+document.getElementById('btn-save-item').addEventListener('click', async () => { try { const crateId = document.getElementById('modal-crate-id').value; const editItemId = document.getElementById('modal-edit-item-id').value; const type = document.getElementById('modal-item-type').value; const name = document.getElementById('modal-item-name').value; const quantity = document.getElementById('modal-item-quantity').value; const chance = document.getElementById('modal-item-chance').value; const file = document.getElementById('modal-item-image').files[0]; const status = document.getElementById('modal-status'); if(!name || !chance || !quantity) return alert("Pflichtfelder fehlen!"); status.innerText = "Speichere Item..."; const enchInputs = document.querySelectorAll('.ench-input'); const enchantments = Array.from(enchInputs).map(input => input.value.trim()).filter(v => v !== ''); let imageUrl = null; if(file) imageUrl = await uploadImage(file, 'crates/items'); const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId); let updatedItems = [...(crate.items || [])]; if(editItemId) { const idx = updatedItems.findIndex(i => i.id === editItemId); if(idx > -1) { updatedItems[idx].type = type; updatedItems[idx].name = name; updatedItems[idx].quantity = Number(quantity); updatedItems[idx].chance = Number(chance); updatedItems[idx].enchantments = enchantments; if(file) updatedItems[idx].image_url = imageUrl; } } else { updatedItems.push({ id: Date.now().toString(), type: type, name: name, quantity: Number(quantity), chance: Number(chance), enchantments: enchantments, image_url: imageUrl }); } await updateDoc(crateRef, { items: updatedItems }); status.innerText = "Erfolgreich!"; setTimeout(() => { status.innerText = ""; document.getElementById('item-modal').classList.remove('active'); }, 1000); } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
 window.deleteCrateItem = async (crateId, itemId) => { if(confirm("Item entfernen?")) { try { const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId); await updateDoc(crateRef, { items: (crate.items || []).filter(i => i.id !== itemId) }); } catch (error) { console.error(error); } } };
+window.simulateCrate = function(crateId) { const crate = allCrates.find(c => c.id === crateId); if(!crate || !crate.items || crate.items.length === 0) return alert("Die Kiste hat noch keine Items!"); let totalChance = crate.items.reduce((sum, item) => sum + (Number(item.chance) || 0), 0); if(totalChance === 0) return alert("Die Items in dieser Kiste haben keine Wahrscheinlichkeit (0%)!"); let results = {}; crate.items.forEach(i => results[i.id] = 0); for(let i=0; i<1000; i++) { let rand = Math.random() * totalChance; let current = 0; for(let item of crate.items) { current += (Number(item.chance) || 0); if(rand <= current) { results[item.id]++; break; } } } let html = `<ul style="list-style:none; padding:0; margin:0;">`; let sortedItems = [...crate.items].sort((a, b) => results[b.id] - results[a.id]); sortedItems.forEach(item => { let count = results[item.id]; let realPercent = ((count / 1000) * 100).toFixed(1); html += `<li style="padding: 8px 0; border-bottom: 1px solid var(--border-color); display:flex; justify-content:space-between;"><span><strong>${item.name}</strong></span><span style="color:var(--text-muted);">${count}x gezogen <b style="color:#00BCD4;">(${realPercent}%)</b></span></li>`; }); html += `</ul>`; document.getElementById('crate-test-result').innerHTML = html; document.getElementById('crate-test-modal').classList.add('active'); };
+window.exportCrateYaml = function(crateId) { const crate = allCrates.find(c => c.id === crateId); if(!crate) return alert("Kiste nicht gefunden!"); let safeName = crate.name ? crate.name.replace(/[^a-zA-Z0-9]/g, '') : 'CustomCrate'; let yaml = `Crate:\n  CrateType: CSGO\n  CrateName: '&8${crate.name || 'Unbenannte Kiste'}'\n  Preview-Name: '&8${crate.name || 'Unbenannte Kiste'} Preview'\n  StartingKeys: 0\n  InGUI: true\n  Slot: 14\nPrizes:\n`; let items = crate.items || []; items.forEach((item, index) => { yaml += `  '${index + 1}':\n    DisplayName: '&f${item.name}'\n    DisplayAmount: ${item.quantity || 1}\n    MaxRange: 100\n    Chance: ${item.chance}\n`; if(item.type === 'money') { yaml += `    DisplayItem: 'SUNFLOWER'\n    Commands:\n      - 'eco give %player% ${item.quantity || 1000}'\n`; } else if(item.type === 'perk' || item.type === 'special') { yaml += `    DisplayItem: 'NETHER_STAR'\n    Commands:\n      - 'lp user %player% permission set <deine_permission> true'\n`; } else { yaml += `    DisplayItem: 'STONE'\n    Items:\n      - 'Item:STONE, Amount:${item.quantity || 1}'\n`; } if(item.enchantments && item.enchantments.length > 0) { yaml += `    DisplayEnchantments:\n`; item.enchantments.forEach(ench => { yaml += `      - '${ench}'\n`; }); } }); const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${safeName}.yml`; a.click(); URL.revokeObjectURL(url); };
 
-window.simulateCrate = function(crateId) {
-    const crate = allCrates.find(c => c.id === crateId);
-    if(!crate || !crate.items || crate.items.length === 0) return alert("Die Kiste hat noch keine Items!");
-    let totalChance = crate.items.reduce((sum, item) => sum + (Number(item.chance) || 0), 0);
-    if(totalChance === 0) return alert("Die Items in dieser Kiste haben keine Wahrscheinlichkeit (0%)!");
-    
-    let results = {}; crate.items.forEach(i => results[i.id] = 0);
-    for(let i=0; i<1000; i++) {
-        let rand = Math.random() * totalChance; let current = 0;
-        for(let item of crate.items) { current += (Number(item.chance) || 0); if(rand <= current) { results[item.id]++; break; } }
-    }
+// --- SHOP (MIT EDIT LOGIK) ---
+window.resetShopForm = () => { editingShopId = null; document.getElementById('shop-form-title').innerText = "Neues Item im Shop anbieten"; document.getElementById('btn-save-shop').innerText = "Shop-Item speichern"; document.getElementById('btn-cancel-shop').style.display = "none"; document.getElementById('shop-item').value = ''; document.getElementById('shop-price').value = ''; };
+window.editShopItem = (id) => { const item = allShop.find(s => s.id === id); if(!item) return; editingShopId = id; document.getElementById('shop-item').value = item.name; document.getElementById('shop-price').value = item.price; document.getElementById('shop-form-title').innerText = "Item bearbeiten: " + item.name; document.getElementById('btn-save-shop').innerText = "Änderungen speichern"; document.getElementById('btn-cancel-shop').style.display = "inline-block"; window.scrollTo({ top: 0, behavior: 'smooth' }); };
+document.getElementById('btn-save-shop').addEventListener('click', async () => { try { const name = document.getElementById('shop-item').value; const price = document.getElementById('shop-price').value; const file = document.getElementById('shop-image').files[0]; if(!name || !price) return alert("Name und Preis fehlen!"); document.getElementById('shop-status').innerText = "Speichere..."; let imageUrl = file ? await uploadImage(file, 'shop') : null; if(editingShopId) { let updateData = { name, price: Number(price) }; if(imageUrl) updateData.image_url = imageUrl; await updateDoc(doc(db, "shop", editingShopId), updateData); } else { await addDoc(collection(db, "shop"), { name, price: Number(price), image_url: imageUrl }); } document.getElementById('shop-status').innerText = "Erfolgreich!"; setTimeout(() => document.getElementById('shop-status').innerText = "", 2000); window.resetShopForm(); } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
+window.exportShopYaml = function() { if(allShop.length === 0) return alert("Der Shop ist leer!"); let yaml = `shops:\n  main:\n    name: '&8Server Shop'\n    size: 54\n    items:\n`; allShop.forEach((item, index) => { yaml += `      '${index + 1}':\n        type: item\n        item:\n          material: STONE\n          name: '&e${item.name}'\n        buyPrice: ${item.price}\n        sellPrice: ${Math.floor(item.price * 0.5)}\n        slot: ${index}\n`; }); const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `shopgui_main.yml`; a.click(); URL.revokeObjectURL(url); }
 
-    let html = `<ul style="list-style:none; padding:0; margin:0;">`;
-    let sortedItems = [...crate.items].sort((a, b) => results[b.id] - results[a.id]);
-    sortedItems.forEach(item => {
-        let count = results[item.id]; let realPercent = ((count / 1000) * 100).toFixed(1);
-        html += `<li style="padding: 8px 0; border-bottom: 1px solid var(--border-color); display:flex; justify-content:space-between;"><span><strong>${item.name}</strong></span><span style="color:var(--text-muted);">${count}x gezogen <b style="color:#00BCD4;">(${realPercent}%)</b></span></li>`;
-    });
-    html += `</ul>`;
-    document.getElementById('crate-test-result').innerHTML = html; document.getElementById('crate-test-modal').classList.add('active');
-};
-
-window.exportCrateYaml = function(crateId) {
-    const crate = allCrates.find(c => c.id === crateId); if(!crate) return alert("Kiste nicht gefunden!");
-    let safeName = crate.name ? crate.name.replace(/[^a-zA-Z0-9]/g, '') : 'CustomCrate';
-    let yaml = `Crate:\n  CrateType: CSGO\n  CrateName: '&8${crate.name || 'Unbenannte Kiste'}'\n  Preview-Name: '&8${crate.name || 'Unbenannte Kiste'} Preview'\n  StartingKeys: 0\n  InGUI: true\n  Slot: 14\nPrizes:\n`;
-    
-    let items = crate.items || [];
-    items.forEach((item, index) => {
-        yaml += `  '${index + 1}':\n    DisplayName: '&f${item.name}'\n    DisplayAmount: ${item.quantity || 1}\n    MaxRange: 100\n    Chance: ${item.chance}\n`;
-        if(item.type === 'money') { yaml += `    DisplayItem: 'SUNFLOWER'\n    Commands:\n      - 'eco give %player% ${item.quantity || 1000}'\n`; } 
-        else if(item.type === 'perk' || item.type === 'special') { yaml += `    DisplayItem: 'NETHER_STAR'\n    Commands:\n      - 'lp user %player% permission set <deine_permission> true'\n`; } 
-        else { yaml += `    DisplayItem: 'STONE'\n    Items:\n      - 'Item:STONE, Amount:${item.quantity || 1}'\n`; }
-        if(item.enchantments && item.enchantments.length > 0) { yaml += `    DisplayEnchantments:\n`; item.enchantments.forEach(ench => { yaml += `      - '${ench}'\n`; }); }
-    });
-    const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `${safeName}.yml`; a.click(); URL.revokeObjectURL(url);
-};
-
-// --- SHOP (MIT EXPORT) ---
-document.getElementById('btn-save-shop').addEventListener('click', async () => { try { const name = document.getElementById('shop-item').value; const price = document.getElementById('shop-price').value; const file = document.getElementById('shop-image').files[0]; if(!name || !price) return alert("Name und Preis fehlen!"); document.getElementById('shop-status').innerText = "Speichere..."; const imageUrl = await uploadImage(file, 'shop') || null; await addDoc(collection(db, "shop"), { name, price: Number(price), image_url: imageUrl }); document.getElementById('shop-status').innerText = ""; document.getElementById('shop-item').value = ''; document.getElementById('shop-price').value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
-
-window.exportShopYaml = function() {
-    if(allShop.length === 0) return alert("Der Shop ist leer!");
-    let yaml = `shops:\n  main:\n    name: '&8Server Shop'\n    size: 54\n    items:\n`;
-    allShop.forEach((item, index) => { yaml += `      '${index + 1}':\n        type: item\n        item:\n          material: STONE\n          name: '&e${item.name}'\n        buyPrice: ${item.price}\n        sellPrice: ${Math.floor(item.price * 0.5)}\n        slot: ${index}\n`; });
-    const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `shopgui_main.yml`; a.click(); URL.revokeObjectURL(url);
-}
+// --- ADS (WERBUNG) MIT EDIT ---
+window.resetAdForm = () => { editingAdId = null; document.getElementById('ad-form-title').innerText = "Neue Werbung erstellen"; document.getElementById('btn-save-ad').innerText = "Werbung speichern"; document.getElementById('btn-cancel-ad').style.display = "none"; document.getElementById('ad-title').value = ''; document.getElementById('ad-link').value = ''; document.getElementById('ad-image').value = ''; };
+window.editAd = (id) => { const ad = allAds.find(a => a.id === id); if(!ad) return; editingAdId = id; document.getElementById('ad-title').value = ad.title; document.getElementById('ad-link').value = ad.link || ''; document.getElementById('ad-form-title').innerText = "Werbung bearbeiten: " + ad.title; document.getElementById('btn-save-ad').innerText = "Änderungen speichern"; document.getElementById('btn-cancel-ad').style.display = "inline-block"; window.scrollTo({ top: 0, behavior: 'smooth' }); };
+document.getElementById('btn-save-ad').addEventListener('click', async () => { try { const file = document.getElementById('ad-image').files[0]; const title = document.getElementById('ad-title').value; const link = document.getElementById('ad-link').value; if(!title) return alert("Titel fehlt!"); document.getElementById('ad-status').innerText = "Speichere..."; let imageUrl = file ? await uploadImage(file, 'ads') : null; if (editingAdId) { let updateData = { title, link }; if(imageUrl) updateData.image_url = imageUrl; await updateDoc(doc(db, "ads", editingAdId), updateData); } else { if(!imageUrl) return alert("Bitte beim Erstellen ein Bild auswählen!"); await addDoc(collection(db, "ads"), { title, link, image_url: imageUrl }); } document.getElementById('ad-status').innerText = "Erfolgreich!"; setTimeout(() => document.getElementById('ad-status').innerText = "", 2000); window.resetAdForm(); } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
 
 
 // ==========================================
@@ -607,306 +606,60 @@ document.getElementById('btn-save-gui-package').addEventListener('click', async 
     } catch (e) { console.error(e); alert("Fehler: " + e.message); }
 });
 
-window.openGuiUploadModal = (pkgId) => {
-    document.getElementById('modal-gui-package-id').value = pkgId; document.getElementById('gui-upload-modal').classList.add('active');
-};
+window.openGuiUploadModal = (pkgId) => { document.getElementById('modal-gui-package-id').value = pkgId; document.getElementById('gui-upload-modal').classList.add('active'); };
+document.getElementById('btn-save-gui-upload').addEventListener('click', async () => { const status = document.getElementById('modal-gui-status'); try { const pkgId = document.getElementById('modal-gui-package-id').value; const name = document.getElementById('modal-gui-name').value; const file = document.getElementById('modal-gui-image').files[0]; if(!name || !file) return alert("Bitte Name und Bild angeben!"); status.innerText = "Lade hoch (Bitte warten)..."; const imageUrl = await uploadImage(file, 'guis/images'); if(!imageUrl) throw new Error("Upload fehlgeschlagen."); status.innerText = "Speichere in Paket..."; const newItem = { id: Date.now().toString(), name: name, image_url: imageUrl }; const pkgRef = doc(db, "guis", pkgId); const pkg = allGUIs.find(g => g.id === pkgId); await updateDoc(pkgRef, { items: [...(pkg.items || []), newItem] }); status.innerText = "Erfolgreich!"; setTimeout(() => { status.innerText = ""; document.getElementById('modal-gui-name').value = ''; document.getElementById('modal-gui-image').value = ''; document.getElementById('gui-upload-modal').classList.remove('active'); }, 1500); } catch (e) { console.error("Upload Error:", e); status.innerText = "Fehler!"; alert("Fehler beim Hochladen: " + e.message); } });
+window.deleteGuiItem = async (pkgId, itemId) => { if(confirm("Element wirklich löschen?")) { try { const pkgRef = doc(db, "guis", pkgId); const pkg = allGUIs.find(g => g.id === pkgId); await updateDoc(pkgRef, { items: (pkg.items || []).filter(i => i.id !== itemId) }); } catch (error) { console.error(error); alert("Fehler: " + error.message); } } };
 
-document.getElementById('btn-save-gui-upload').addEventListener('click', async () => {
-    const status = document.getElementById('modal-gui-status');
-    try {
-        const pkgId = document.getElementById('modal-gui-package-id').value; const name = document.getElementById('modal-gui-name').value; const file = document.getElementById('modal-gui-image').files[0];
-        if(!name || !file) return alert("Bitte Name und Bild angeben!"); status.innerText = "Lade hoch (Bitte warten)...";
-        const imageUrl = await uploadImage(file, 'guis/images');
-        if(!imageUrl) throw new Error("Upload fehlgeschlagen.");
-        
-        status.innerText = "Speichere in Paket...";
-        const newItem = { id: Date.now().toString(), name: name, image_url: imageUrl };
-        const pkgRef = doc(db, "guis", pkgId); const pkg = allGUIs.find(g => g.id === pkgId);
-        await updateDoc(pkgRef, { items: [...(pkg.items || []), newItem] });
-        
-        status.innerText = "Erfolgreich!"; setTimeout(() => { status.innerText = ""; document.getElementById('modal-gui-name').value = ''; document.getElementById('modal-gui-image').value = ''; document.getElementById('gui-upload-modal').classList.remove('active'); }, 1500);
-    } catch (e) { console.error("Upload Error:", e); status.innerText = "Fehler!"; alert("Fehler beim Hochladen: " + e.message); }
-});
-
-window.deleteGuiItem = async (pkgId, itemId) => {
-    if(confirm("Element wirklich löschen?")) {
-        try {
-            const pkgRef = doc(db, "guis", pkgId); const pkg = allGUIs.find(g => g.id === pkgId);
-            await updateDoc(pkgRef, { items: (pkg.items || []).filter(i => i.id !== itemId) });
-        } catch (error) { console.error(error); alert("Fehler: " + error.message); }
-    }
-};
 
 // ==========================================
 // 6. MENÜ PLANER LOGIK
 // ==========================================
 
-const plannerPresets = [
-    { id: 'btn_next', text: 'Nächste Seite', icon: '▶️' },
-    { id: 'btn_prev', text: 'Letzte Seite', icon: '◀️' },
-    { id: 'btn_close', text: 'Schließen', icon: '❌' },
-    { id: 'btn_money', text: 'Geld / Eco', icon: '💰' },
-    { id: 'btn_info', text: 'Information', icon: 'ℹ️' },
-    { id: 'btn_item', text: 'Item-Platz', icon: '📦' }
-];
-
-let currentMenuLayout = {}; 
-let plannerBgImage = null;
+const plannerPresets = [ { id: 'btn_next', text: 'Nächste Seite', icon: '▶️' }, { id: 'btn_prev', text: 'Letzte Seite', icon: '◀️' }, { id: 'btn_close', text: 'Schließen', icon: '❌' }, { id: 'btn_money', text: 'Geld / Eco', icon: '💰' }, { id: 'btn_info', text: 'Information', icon: 'ℹ️' }, { id: 'btn_item', text: 'Item-Platz', icon: '📦' } ];
+let currentMenuLayout = {}; let plannerBgImage = null;
 
 window.initMenuPlanner = function() {
-    const palette = document.getElementById('palette-items');
-    if(!palette) return;
-    palette.innerHTML = '';
-    
-    plannerPresets.forEach(item => {
-        palette.innerHTML += `
-            <div class="palette-item" draggable="true" ondragstart="window.dragStart(event, '${item.id}')">
-                <span style="font-size: 24px; width: 30px; text-align: center;">${item.icon}</span>
-                <span style="font-size: 14px;">${item.text}</span>
-            </div>
-        `;
-    });
+    const palette = document.getElementById('palette-items'); if(!palette) return; palette.innerHTML = '';
+    plannerPresets.forEach(item => { palette.innerHTML += `<div class="palette-item" draggable="true" ondragstart="window.dragStart(event, '${item.id}')"><span style="font-size: 24px; width: 30px; text-align: center;">${item.icon}</span><span style="font-size: 14px;">${item.text}</span></div>`; });
     window.updateMenuGrid();
 }
 
 window.updateMenuGrid = function() {
-    const rowsElem = document.getElementById('menu-rows');
-    if(!rowsElem) return;
-    
-    const rows = parseInt(rowsElem.value);
-    const bgUrl = document.getElementById('planner-bg-select').value;
-    const grid = document.getElementById('mc-inventory');
-    const canvasInner = document.getElementById('planner-inner-canvas');
-    
-    const inputX = document.getElementById('planner-offset-x');
-    const inputY = document.getElementById('planner-offset-y');
-    
+    const rowsElem = document.getElementById('menu-rows'); if(!rowsElem) return;
+    const rows = parseInt(rowsElem.value); const bgUrl = document.getElementById('planner-bg-select').value; const grid = document.getElementById('mc-inventory'); const canvasInner = document.getElementById('planner-inner-canvas'); const inputX = document.getElementById('planner-offset-x'); const inputY = document.getElementById('planner-offset-y');
     grid.innerHTML = '';
-
-    if (bgUrl) {
-        canvasInner.style.backgroundImage = `url(${bgUrl})`;
-        
-        if (!plannerBgImage || plannerBgImage.src !== bgUrl) {
-            plannerBgImage = new Image();
-            plannerBgImage.onload = () => {
-                canvasInner.style.width = plannerBgImage.naturalWidth + 'px';
-                canvasInner.style.height = plannerBgImage.naturalHeight + 'px';
-                
-                if(plannerBgImage.naturalWidth === 192) {
-                    inputX.value = 8; 
-                } else {
-                    inputX.value = 40;
-                }
-                grid.style.left = inputX.value + 'px';
-            };
-            plannerBgImage.src = bgUrl;
-        }
-    } else {
-        canvasInner.style.backgroundImage = 'none';
-        canvasInner.style.width = '256px';
-        canvasInner.style.height = '256px';
-    }
-
-    grid.style.left = inputX.value + 'px';
-    grid.style.top = inputY.value + 'px';
-    
-    for(let i=0; i < rows * 9; i++) {
-        const itemId = currentMenuLayout[i];
-        let icon = '';
-        if(itemId) {
-            const preset = plannerPresets.find(p => p.id === itemId);
-            if(preset) icon = preset.icon;
-        }
-        grid.innerHTML += `
-            <div class="mc-slot" data-slot="${i}" 
-                 ondragover="window.allowDrop(event)" 
-                 ondragleave="window.dragLeave(event)"
-                 ondrop="window.drop(event)"
-                 onclick="window.clickSlot(${i})">
-                ${icon}
-            </div>
-        `;
-    }
+    if (bgUrl) { canvasInner.style.backgroundImage = `url(${bgUrl})`; if (!plannerBgImage || plannerBgImage.src !== bgUrl) { plannerBgImage = new Image(); plannerBgImage.onload = () => { canvasInner.style.width = plannerBgImage.naturalWidth + 'px'; canvasInner.style.height = plannerBgImage.naturalHeight + 'px'; if(plannerBgImage.naturalWidth === 192) { inputX.value = 8; } else { inputX.value = 40; } grid.style.left = inputX.value + 'px'; }; plannerBgImage.src = bgUrl; } } else { canvasInner.style.backgroundImage = 'none'; canvasInner.style.width = '256px'; canvasInner.style.height = '256px'; }
+    grid.style.left = inputX.value + 'px'; grid.style.top = inputY.value + 'px';
+    for(let i=0; i < rows * 9; i++) { const itemId = currentMenuLayout[i]; let icon = ''; if(itemId) { const preset = plannerPresets.find(p => p.id === itemId); if(preset) icon = preset.icon; } grid.innerHTML += `<div class="mc-slot" data-slot="${i}" ondragover="window.allowDrop(event)" ondragleave="window.dragLeave(event)" ondrop="window.drop(event)" onclick="window.clickSlot(${i})">${icon}</div>`; }
 };
 
 window.dragStart = function(ev, id) { ev.dataTransfer.setData("text", id); };
 window.allowDrop = function(ev) { ev.preventDefault(); if(ev.target.classList.contains('mc-slot')) ev.target.classList.add('drag-over'); };
 window.dragLeave = function(ev) { if(ev.target.classList.contains('mc-slot')) ev.target.classList.remove('drag-over'); };
-window.drop = function(ev) {
-    ev.preventDefault();
-    let target = ev.target;
-    if(!target.classList.contains('mc-slot')) target = target.closest('.mc-slot');
-    
-    if(target) {
-        target.classList.remove('drag-over');
-        const id = ev.dataTransfer.getData("text");
-        const slot = target.getAttribute('data-slot');
-        currentMenuLayout[slot] = id;
-        window.updateMenuGrid();
-    }
-};
+window.drop = function(ev) { ev.preventDefault(); let target = ev.target; if(!target.classList.contains('mc-slot')) target = target.closest('.mc-slot'); if(target) { target.classList.remove('drag-over'); const id = ev.dataTransfer.getData("text"); const slot = target.getAttribute('data-slot'); currentMenuLayout[slot] = id; window.updateMenuGrid(); } };
+window.clickSlot = function(slot) { if(currentMenuLayout[slot]) { delete currentMenuLayout[slot]; window.updateMenuGrid(); } };
 
-window.clickSlot = function(slot) {
-    if(currentMenuLayout[slot]) { delete currentMenuLayout[slot]; window.updateMenuGrid(); }
-};
-
-window.openMenuPlannerForPkg = (pkgId) => {
-    document.querySelector('[data-target="menu-planner"]').click();
-    document.getElementById('planner-pkg-select').value = pkgId;
-    document.getElementById('planner-menu-name').value = '';
-    document.getElementById('planner-menu-id').value = '';
-    currentMenuLayout = {};
-    window.updateMenuGrid();
-};
-
-window.editLayoutInPlanner = (pkgId, itemId) => {
-    const pkg = allGUIs.find(g => g.id === pkgId); if(!pkg) return;
-    const item = (pkg.items || []).find(i => i.id === itemId); if(!item) return;
-
-    document.querySelector('[data-target="menu-planner"]').click();
-    document.getElementById('planner-pkg-select').value = pkgId;
-    document.getElementById('planner-menu-name').value = item.name;
-    document.getElementById('planner-menu-id').value = item.id; 
-    
-    if(item.rows) document.getElementById('menu-rows').value = item.rows;
-    if(item.bg_url) document.getElementById('planner-bg-select').value = item.bg_url;
-    if(item.offset_x !== undefined) document.getElementById('planner-offset-x').value = item.offset_x;
-    if(item.offset_y !== undefined) document.getElementById('planner-offset-y').value = item.offset_y;
-    
-    currentMenuLayout = item.layout || {};
-    window.updateMenuGrid();
-};
+window.openMenuPlannerForPkg = (pkgId) => { document.querySelector('[data-target="menu-planner"]').click(); document.getElementById('planner-pkg-select').value = pkgId; document.getElementById('planner-menu-name').value = ''; document.getElementById('planner-menu-id').value = ''; currentMenuLayout = {}; window.updateMenuGrid(); };
+window.editLayoutInPlanner = (pkgId, itemId) => { const pkg = allGUIs.find(g => g.id === pkgId); if(!pkg) return; const item = (pkg.items || []).find(i => i.id === itemId); if(!item) return; document.querySelector('[data-target="menu-planner"]').click(); document.getElementById('planner-pkg-select').value = pkgId; document.getElementById('planner-menu-name').value = item.name; document.getElementById('planner-menu-id').value = item.id; if(item.rows) document.getElementById('menu-rows').value = item.rows; if(item.bg_url) document.getElementById('planner-bg-select').value = item.bg_url; if(item.offset_x !== undefined) document.getElementById('planner-offset-x').value = item.offset_x; if(item.offset_y !== undefined) document.getElementById('planner-offset-y').value = item.offset_y; currentMenuLayout = item.layout || {}; window.updateMenuGrid(); };
 
 window.saveMenuLayout = async function() {
-    const pkgId = document.getElementById('planner-pkg-select').value;
-    const menuName = document.getElementById('planner-menu-name').value;
-    const editItemId = document.getElementById('planner-menu-id').value;
-    const rows = parseInt(document.getElementById('menu-rows').value);
-    const bgUrl = document.getElementById('planner-bg-select').value;
-    const offX = parseInt(document.getElementById('planner-offset-x').value);
-    const offY = parseInt(document.getElementById('planner-offset-y').value);
-
-    if(!pkgId) return alert("Bitte wähle ein Ziel-Paket aus!");
-    if(!menuName) return alert("Bitte gib dem Layout einen Namen!");
-
-    try {
-        const pkgRef = doc(db, "guis", pkgId);
-        const pkg = allGUIs.find(g => g.id === pkgId);
-        let updatedItems = [...(pkg.items || [])];
-
-        const layoutData = { 
-            type: 'layout', 
-            rows: rows, 
-            bg_url: bgUrl,
-            offset_x: offX,
-            offset_y: offY,
-            layout: currentMenuLayout 
-        };
-
-        if (editItemId) {
-            const idx = updatedItems.findIndex(i => i.id === editItemId);
-            if(idx > -1) {
-                updatedItems[idx].name = menuName;
-                updatedItems[idx].rows = rows;
-                updatedItems[idx].bg_url = bgUrl;
-                updatedItems[idx].offset_x = offX;
-                updatedItems[idx].offset_y = offY;
-                updatedItems[idx].layout = currentMenuLayout;
-            } else {
-                updatedItems.push({ id: editItemId, name: menuName, ...layoutData });
-            }
-        } else {
-            updatedItems.push({ id: Date.now().toString(), name: menuName, ...layoutData });
-        }
-
-        await updateDoc(pkgRef, { items: updatedItems });
-        alert("Erfolgreich im Paket gespeichert!");
-        document.querySelector('[data-target="gui"]').click(); 
-        
-    } catch (error) { console.error(error); alert("Fehler beim Speichern!"); }
+    const pkgId = document.getElementById('planner-pkg-select').value; const menuName = document.getElementById('planner-menu-name').value; const editItemId = document.getElementById('planner-menu-id').value; const rows = parseInt(document.getElementById('menu-rows').value); const bgUrl = document.getElementById('planner-bg-select').value; const offX = parseInt(document.getElementById('planner-offset-x').value); const offY = parseInt(document.getElementById('planner-offset-y').value);
+    if(!pkgId) return alert("Bitte wähle ein Ziel-Paket aus!"); if(!menuName) return alert("Bitte gib dem Layout einen Namen!");
+    try { const pkgRef = doc(db, "guis", pkgId); const pkg = allGUIs.find(g => g.id === pkgId); let updatedItems = [...(pkg.items || [])]; const layoutData = { type: 'layout', rows: rows, bg_url: bgUrl, offset_x: offX, offset_y: offY, layout: currentMenuLayout }; if (editItemId) { const idx = updatedItems.findIndex(i => i.id === editItemId); if(idx > -1) { updatedItems[idx].name = menuName; updatedItems[idx].rows = rows; updatedItems[idx].bg_url = bgUrl; updatedItems[idx].offset_x = offX; updatedItems[idx].offset_y = offY; updatedItems[idx].layout = currentMenuLayout; } else { updatedItems.push({ id: editItemId, name: menuName, ...layoutData }); } } else { updatedItems.push({ id: Date.now().toString(), name: menuName, ...layoutData }); } await updateDoc(pkgRef, { items: updatedItems }); alert("Erfolgreich im Paket gespeichert!"); document.querySelector('[data-target="gui"]').click(); } catch (error) { console.error(error); alert("Fehler beim Speichern!"); }
 };
 
 window.exportMenuYaml = function() {
-    const name = document.getElementById('planner-menu-name').value || 'custom_menu';
-    const rows = parseInt(document.getElementById('menu-rows').value);
-    
-    let yaml = `menu_title: '&8${name}'\n`;
-    yaml += `open_command: '${name.toLowerCase().replace(/\s+/g, '')}'\n`;
-    yaml += `size: ${rows * 9}\n`;
-    yaml += `items:\n`;
-    
-    for(let slot in currentMenuLayout) {
-        const itemId = currentMenuLayout[slot];
-        const preset = plannerPresets.find(p => p.id === itemId);
-        if(!preset) continue;
-        
-        yaml += `  '${itemId}_${slot}':\n`;
-        
-        if(itemId === 'btn_next') {
-            yaml += `    material: arrow\n    slot: ${slot}\n    display_name: '&aNächste Seite'\n    left_click_commands:\n      - '[player] menu open nächste_seite'\n`;
-        } else if(itemId === 'btn_prev') {
-            yaml += `    material: arrow\n    slot: ${slot}\n    display_name: '&cLetzte Seite'\n    left_click_commands:\n      - '[player] menu open vorherige_seite'\n`;
-        } else if(itemId === 'btn_close') {
-            yaml += `    material: barrier\n    slot: ${slot}\n    display_name: '&cSchließen'\n    left_click_commands:\n      - '[close]'\n`;
-        } else if(itemId === 'btn_money') {
-            yaml += `    material: gold_ingot\n    slot: ${slot}\n    display_name: '&eDein Guthaben'\n    lore:\n      - '&7Du hast: %vault_eco_balance%'\n`;
-        } else {
-            yaml += `    material: stone\n    slot: ${slot}\n    display_name: '&f${preset.text}'\n`;
-        }
-    }
-    
-    const blob = new Blob([yaml], { type: 'text/yaml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${name.toLowerCase().replace(/\s+/g, '_')}.yml`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const name = document.getElementById('planner-menu-name').value || 'custom_menu'; const rows = parseInt(document.getElementById('menu-rows').value); let yaml = `menu_title: '&8${name}'\nopen_command: '${name.toLowerCase().replace(/\s+/g, '')}'\nsize: ${rows * 9}\nitems:\n`;
+    for(let slot in currentMenuLayout) { const itemId = currentMenuLayout[slot]; const preset = plannerPresets.find(p => p.id === itemId); if(!preset) continue; yaml += `  '${itemId}_${slot}':\n`; if(itemId === 'btn_next') { yaml += `    material: arrow\n    slot: ${slot}\n    display_name: '&aNächste Seite'\n    left_click_commands:\n      - '[player] menu open nächste_seite'\n`; } else if(itemId === 'btn_prev') { yaml += `    material: arrow\n    slot: ${slot}\n    display_name: '&cLetzte Seite'\n    left_click_commands:\n      - '[player] menu open vorherige_seite'\n`; } else if(itemId === 'btn_close') { yaml += `    material: barrier\n    slot: ${slot}\n    display_name: '&cSchließen'\n    left_click_commands:\n      - '[close]'\n`; } else if(itemId === 'btn_money') { yaml += `    material: gold_ingot\n    slot: ${slot}\n    display_name: '&eDein Guthaben'\n    lore:\n      - '&7Du hast: %vault_eco_balance%'\n`; } else { yaml += `    material: stone\n    slot: ${slot}\n    display_name: '&f${preset.text}'\n`; } }
+    const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${name.toLowerCase().replace(/\s+/g, '_')}.yml`; a.click(); URL.revokeObjectURL(url);
 };
-
 
 // ==========================================
 // 7. GUI PIXEL EDITOR LOGIK (ISOLIERT)
 // ==========================================
 
-window.openGuiEditorForPkg = (pkgId) => {
-    document.querySelector('[data-target="gui-editor"]').click();
-    document.getElementById('editor-pkg-select').value = pkgId;
-    document.getElementById('editor-gui-name').value = '';
-    document.getElementById('editor-gui-item-id').value = '';
-    if(window.clearCanvasSilent) window.clearCanvasSilent();
-};
-
-window.editGuiItemInEditor = async (pkgId, itemId) => {
-    const pkg = allGUIs.find(g => g.id === pkgId); if(!pkg) return;
-    const item = (pkg.items || []).find(i => i.id === itemId); if(!item) return;
-
-    document.querySelector('[data-target="gui-editor"]').click();
-    document.getElementById('editor-pkg-select').value = pkgId;
-    document.getElementById('editor-gui-name').value = item.name;
-    document.getElementById('editor-gui-item-id').value = item.id; 
-    
-    if(item.image_url) {
-        try {
-            const imgRef = ref(storage, item.image_url);
-            const blob = await getBlob(imgRef); 
-            const localUrl = URL.createObjectURL(blob);
-            const img = new Image();
-            img.onload = () => {
-                if(window.clearCanvasSilent) window.clearCanvasSilent();
-                const canvas = document.getElementById('pixelCanvas');
-                const ctx = canvas.getContext('2d');
-                ctx.imageSmoothingEnabled = false;
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                URL.revokeObjectURL(localUrl); 
-                if(window.triggerSaveState) window.triggerSaveState();
-            };
-            img.src = localUrl;
-        } catch (error) { console.error("Firebase Download Error:", error); alert("Fehler beim Importieren: " + error.message); }
-    } else {
-        if(window.clearCanvasSilent) window.clearCanvasSilent();
-    }
-};
+window.openGuiEditorForPkg = (pkgId) => { document.querySelector('[data-target="gui-editor"]').click(); document.getElementById('editor-pkg-select').value = pkgId; document.getElementById('editor-gui-name').value = ''; document.getElementById('editor-gui-item-id').value = ''; if(window.clearCanvasSilent) window.clearCanvasSilent(); };
+window.editGuiItemInEditor = async (pkgId, itemId) => { const pkg = allGUIs.find(g => g.id === pkgId); if(!pkg) return; const item = (pkg.items || []).find(i => i.id === itemId); if(!item) return; document.querySelector('[data-target="gui-editor"]').click(); document.getElementById('editor-pkg-select').value = pkgId; document.getElementById('editor-gui-name').value = item.name; document.getElementById('editor-gui-item-id').value = item.id; if(item.image_url) { try { const imgRef = ref(storage, item.image_url); const blob = await getBlob(imgRef); const localUrl = URL.createObjectURL(blob); const img = new Image(); img.onload = () => { if(window.clearCanvasSilent) window.clearCanvasSilent(); const canvas = document.getElementById('pixelCanvas'); const ctx = canvas.getContext('2d'); ctx.imageSmoothingEnabled = false; ctx.drawImage(img, 0, 0, canvas.width, canvas.height); URL.revokeObjectURL(localUrl); if(window.triggerSaveState) window.triggerSaveState(); }; img.src = localUrl; } catch (error) { console.error("Firebase Download Error:", error); alert("Fehler beim Importieren: " + error.message); } } else { if(window.clearCanvasSilent) window.clearCanvasSilent(); } };
 
 let editorInitialized = false;
 

@@ -62,7 +62,7 @@ textarea { padding: 10px 12px; border: 1px solid var(--border-color); border-rad
 .table-container { background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 12px; overflow-x: auto; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 .data-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
 .data-table th { background: var(--bg-color); padding: 12px 16px; font-weight: 600; color: var(--text-muted); border-bottom: 1px solid var(--border-color); }
-.data-table td { padding: 16px; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
+.data-table td { padding: 16px; border-bottom: 1px solid var(--border-color); vertical-align: top; }
 .data-table tr:last-child td { border-bottom: none; }
 .perm-badge { display: inline-block; background: var(--bg-color); border: 1px solid var(--border-color); padding: 4px 8px; border-radius: 4px; font-size: 12px; margin: 2px; color: var(--text-main); }
 .perm-inherited { background: #eff6ff; border-color: #bfdbfe; color: #1e3a8a; }
@@ -73,11 +73,13 @@ textarea { padding: 10px 12px; border: 1px solid var(--border-color); border-rad
 .gui-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-weight: 500; }
 .gui-card img { width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 12px; image-rendering: pixelated; }
 
-/* Kisten Layout */
+/* Kisten Layout (inkl. Drag & Drop States) */
 .crates-layout { display: flex; flex-direction: column; gap: 20px; }
-.crate-box { background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+.crate-box { background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s; }
+.crate-box.drag-over { border: 2px dashed #4CAF50; transform: scale(1.01); background: #f0fdf4; }
 .crate-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid var(--border-color); }
-.crate-header-left { display: flex; align-items: center; gap: 15px; }
+.crate-header-left { display: flex; align-items: center; gap: 15px; cursor: grab; }
+.crate-header-left:active { cursor: grabbing; }
 .crate-items-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .crate-items-table th { text-align: left; padding: 8px; color: var(--text-muted); border-bottom: 1px solid var(--border-color); }
 .crate-items-table td { padding: 8px; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
@@ -94,7 +96,7 @@ input[type="file"] { padding: 7px; background: var(--bg-color); font-size: 12px;
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
-/* NEU: MINECRAFT COLOR CODES FÜR BROADCASTER */
+/* MC COLOR CODES */
 .mc-0 { color: #000000; } .mc-1 { color: #0000AA; } .mc-2 { color: #00AA00; } .mc-3 { color: #00AAAA; }
 .mc-4 { color: #AA0000; } .mc-5 { color: #AA00AA; } .mc-6 { color: #FFAA00; } .mc-7 { color: #AAAAAA; }
 .mc-8 { color: #555555; } .mc-9 { color: #5555FF; } .mc-a { color: #55FF55; } .mc-b { color: #55FFFF; }
@@ -104,9 +106,8 @@ input[type="file"] { padding: 7px; background: var(--bg-color); font-size: 12px;
 
 
 /* ========================================= */
-/* MENÜ PLANER (PIXEL PERFECT DRAG & DROP)   */
+/* MENÜ PLANER                               */
 /* ========================================= */
-
 .palette-item { display: flex; align-items: center; gap: 10px; background: #2a2a2a; padding: 10px; border-radius: 6px; cursor: grab; border: 1px solid #555; transition: transform 0.1s, background 0.1s; }
 .palette-item:hover { background: #444; transform: translateY(-2px); }
 .palette-item:active { cursor: grabbing; }
@@ -120,13 +121,11 @@ input[type="file"] { padding: 7px; background: var(--bg-color); font-size: 12px;
 
 
 /* ========================================= */
-/* GUI EDITOR CSS                            */
+/* GUI EDITOR                                */
 /* ========================================= */
-
 #gui-editor { font-family: 'Segoe UI', sans-serif; height: calc(100vh - 80px); overflow: hidden; }
 .main-container-editor { display: flex; gap: 20px; align-items: flex-start; height: 100%; }
 .sidebar-editor { display: flex; flex-direction: column; gap: 10px; width: 300px; height: 100%; overflow-y: auto; padding-right: 5px; flex-shrink: 0; }
-
 .panel-editor { background: #3c3c3c; padding: 12px; border-radius: 8px; border: 1px solid #555; text-align: left; }
 .panel-editor h3 { margin: 0 0 8px 0; font-size: 0.95rem; color: #aaa; border-bottom: 1px solid #555; padding-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
 
