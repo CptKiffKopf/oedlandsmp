@@ -349,28 +349,24 @@
             </section>
 
             <section id="werbung" class="category-section">
-                <h2>Werbung & Banner</h2>
+                <h2>Werbung & Kampagnen</h2>
                 <div class="form-card">
-                    <h3 id="ad-form-title">Neue Werbung erstellen</h3>
-                    <input type="hidden" id="ad-edit-id">
+                    <h3>Neue Werbe-Kampagne erstellen</h3>
                     <div class="input-group">
-                        <input type="text" id="ad-title" placeholder="Titel der Kampagne">
-                        <input type="text" id="ad-link" placeholder="Link (URL)">
-                        <input type="file" id="ad-image" accept="image/png, image/jpeg">
+                        <input type="text" id="ad-campaign-name" placeholder="Kampagnen Name (z.B. Herbst Sale)">
                     </div>
                     <div class="button-group">
-                        <button id="btn-save-ad" class="btn btn-primary">Werbung speichern</button>
-                        <button id="btn-cancel-ad" class="btn btn-secondary" style="display:none;" onclick="window.resetAdForm()">Abbrechen</button>
+                        <button id="btn-save-ad-campaign" class="btn btn-primary">Kampagne erstellen</button>
                     </div>
-                    <p id="ad-status" class="status-text"></p>
+                    <p id="ad-campaign-status" class="status-text"></p>
                 </div>
-                <div id="ad-list" class="gui-grid"></div>
+                <div id="ad-campaigns-container" class="crates-layout"></div>
             </section>
 
         </main>
     </div>
 
-    <!-- Modals (Kisten Simulator etc.) -->
+    <!-- Modals -->
     <div id="crate-test-modal" class="modal">
         <div class="modal-content" style="max-width: 500px;">
             <h3>🎲 Kisten-Simulator (1.000 Öffnungen)</h3>
@@ -416,6 +412,23 @@
                 <button onclick="document.getElementById('gui-upload-modal').classList.remove('active')" class="btn btn-secondary">Abbrechen</button>
             </div>
             <p id="modal-gui-status" class="status-text"></p>
+        </div>
+    </div>
+
+    <div id="ad-upload-modal" class="modal">
+        <div class="modal-content">
+            <h3>Werbung zur Kampagne hinzufügen</h3>
+            <input type="hidden" id="modal-ad-campaign-id">
+            <div class="input-group" style="flex-direction: column; gap: 10px; margin-top: 15px;">
+                <input type="text" id="modal-ad-title" placeholder="Titel / Beschreibung" style="width:100%;">
+                <input type="text" id="modal-ad-link" placeholder="Link (URL) (Optional)" style="width:100%;">
+                <input type="file" id="modal-ad-image" accept="image/png, image/jpeg, image/gif" style="width:100%;">
+            </div>
+            <div class="button-group" style="margin-top: 20px;">
+                <button id="btn-save-ad-upload" class="btn btn-primary">Werbung speichern</button>
+                <button onclick="document.getElementById('ad-upload-modal').classList.remove('active')" class="btn btn-secondary">Abbrechen</button>
+            </div>
+            <p id="modal-ad-status" class="status-text"></p>
         </div>
     </div>
 
