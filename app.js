@@ -18,11 +18,10 @@ const storage = getStorage(app);
 const auth = getAuth(app);
 
 let allRanks = [], allGUIs = [], allCrates = [], allShop = [], allAds = [], allPlugins = [], allBroadcasts = [];
-let allQuests = [], allHolograms = [];
+let allQuestBatches = [], allHolograms = [];
 let editingRankId = null, editingPluginId = null, editingShopId = null;
 let listenersActive = false; 
 
-// Zustandsspeicher für eingeklappte Menüs
 window.crateCollapsed = {};
 window.crateSortModes = {};
 window.pluginCollapsed = {};
@@ -84,7 +83,8 @@ function updateDashboard() {
     document.getElementById('stat-plugins').innerText = allPlugins.length;
     document.getElementById('stat-shop').innerText = allShop.length;
     document.getElementById('stat-guis').innerText = allGUIs.length; 
-    document.getElementById('stat-quests').innerText = allQuests.length; 
+    let questCount = 0; allQuestBatches.forEach(b => { questCount += (b.quests || []).length; });
+    document.getElementById('stat-quests').innerText = questCount; 
     document.getElementById('stat-holograms').innerText = allHolograms.length; 
 }
 
@@ -227,7 +227,7 @@ function startRealtimeListeners() {
         updateDashboard();
     });
 
-    // WERBUNG KAMPAGNEN
+    // WERBUNG KAMPAGNEN (NEU)
     onSnapshot(collection(db, "ads"), (snap) => {
         allAds = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const container = document.getElementById('ad-campaigns-container');
@@ -261,7 +261,7 @@ function startRealtimeListeners() {
                             <h3 style="font-size: 18px; margin: 0;">${camp.name || 'Unbenannte Kampagne'}</h3>
                         </div>
                         <div class="button-group" onclick="event.stopPropagation()">
-                            <button class="btn btn-primary btn-sm" onclick="window.openAdUploadModal('${camp.id}')">🖼️ Werbung hinzufügen</button>
+                            <button class="btn btn-primary btn-sm" onclick="window.openAdItemModal('${camp.id}')">🖼️ Werbung hinzufügen</button>
                             <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('ads', '${camp.id}')">Kampagne löschen</button>
                         </div>
                     </div>
@@ -276,31 +276,20 @@ function startRealtimeListeners() {
     onSnapshot(collection(db, "guis"), (snap) => {
         allGUIs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const container = document.getElementById('gui-packages-container');
-        
         const editorSelect = document.getElementById('editor-pkg-select');
         const plannerSelect = document.getElementById('planner-pkg-select'); 
         const plannerBgSelect = document.getElementById('planner-bg-select');
         
         if(!container) return; container.innerHTML = '';
         
-        const currentEditorVal = editorSelect ? editorSelect.value : ''; 
-        const currentPlannerVal = plannerSelect ? plannerSelect.value : ''; 
-        const currentBgVal = plannerBgSelect ? plannerBgSelect.value : '';
-        
-        if(editorSelect) editorSelect.innerHTML = '<option value="">Ziel-Paket wählen...</option>'; 
-        if(plannerSelect) plannerSelect.innerHTML = '<option value="">Ziel-Paket wählen...</option>';
-        if(plannerBgSelect) plannerBgSelect.innerHTML = '<option value="">Kein Bild (Nur Grid)</option>';
+        const currentEditorVal = editorSelect ? editorSelect.value : ''; const currentPlannerVal = plannerSelect ? plannerSelect.value : ''; const currentBgVal = plannerBgSelect ? plannerBgSelect.value : '';
+        if(editorSelect) editorSelect.innerHTML = '<option value="">Ziel-Paket wählen...</option>'; if(plannerSelect) plannerSelect.innerHTML = '<option value="">Ziel-Paket wählen...</option>'; if(plannerBgSelect) plannerBgSelect.innerHTML = '<option value="">Kein Bild (Nur Grid)</option>';
 
         allGUIs.forEach(pkg => {
-            if(editorSelect) editorSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`; 
-            if(plannerSelect) plannerSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`;
-            
+            if(editorSelect) editorSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`; if(plannerSelect) plannerSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`;
             let items = pkg.items || [];
             let itemsHtml = items.map(item => {
-                if (plannerBgSelect && item.type !== 'layout' && item.image_url) { 
-                    plannerBgSelect.innerHTML += `<option value="${item.image_url}">${pkg.name} - ${item.name}</option>`; 
-                }
-
+                if (plannerBgSelect && item.type !== 'layout' && item.image_url) { plannerBgSelect.innerHTML += `<option value="${item.image_url}">${pkg.name} - ${item.name}</option>`; }
                 if (item.type === 'layout') {
                     return `<div class="gui-card"><div class="gui-card-header"><span>${item.name}</span><div><button class="btn btn-secondary btn-sm" onclick="window.editLayoutInPlanner('${pkg.id}', '${item.id}')" title="Im Planer bearbeiten">✏️</button><button class="btn btn-danger btn-sm" onclick="window.deleteGuiItem('${pkg.id}', '${item.id}')">Löschen</button></div></div><div style="width:100%; height:120px; background:#1e1e1e; border: 2px solid #555; border-radius:6px; display:flex; align-items:center; justify-content:center; flex-direction: column;"><span style="font-size: 30px; margin-bottom: 10px;">📋</span><span style="color:#4CAF50; font-size:12px; font-weight:bold;">Menü Layout (${item.rows} Reihen)</span></div></div>`;
                 } else {
@@ -308,83 +297,74 @@ function startRealtimeListeners() {
                 }
             }).join('');
 
-            let isCollapsed = window.guiCollapsed[pkg.id] !== false; // Standard eingeklappt
-            let displayStyle = isCollapsed ? 'none' : 'block';
-            let iconText = isCollapsed ? '▶️' : '🔽';
+            let isCollapsed = window.guiCollapsed[pkg.id] !== false; let displayStyle = isCollapsed ? 'none' : 'block'; let iconText = isCollapsed ? '▶️' : '🔽';
 
             container.innerHTML += `
                 <div class="crate-box">
                     <div class="crate-header" style="cursor: pointer; margin-bottom: 0; padding-bottom: ${isCollapsed ? '0' : '15px'}; border-bottom: ${isCollapsed ? 'none' : '1px solid var(--border-color)'};" onclick="window.toggleGuiPackage('${pkg.id}')">
-                        <div class="crate-header-left">
-                            <span id="gui-icon-${pkg.id}" style="margin-right: 8px; font-size: 14px;">${iconText}</span>
-                            <h3 style="font-size: 18px; margin: 0;">${pkg.name}</h3>
-                        </div>
-                        <div class="button-group" onclick="event.stopPropagation()">
-                            <button class="btn btn-info btn-sm" onclick="window.openMenuPlannerForPkg('${pkg.id}')">📋 Menü planen</button>
-                            <button class="btn btn-secondary btn-sm" onclick="window.openGuiEditorForPkg('${pkg.id}')">🖌️ Pixel Editor</button>
-                            <button class="btn btn-primary btn-sm" onclick="window.openGuiUploadModal('${pkg.id}')">🖼️ Upload</button>
-                            <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('guis', '${pkg.id}')">Paket löschen</button>
-                        </div>
+                        <div class="crate-header-left"><span id="gui-icon-${pkg.id}" style="margin-right: 8px; font-size: 14px;">${iconText}</span><h3 style="font-size: 18px; margin: 0;">${pkg.name}</h3></div>
+                        <div class="button-group" onclick="event.stopPropagation()"><button class="btn btn-info btn-sm" onclick="window.openMenuPlannerForPkg('${pkg.id}')">📋 Menü planen</button><button class="btn btn-secondary btn-sm" onclick="window.openGuiEditorForPkg('${pkg.id}')">🖌️ Pixel Editor</button><button class="btn btn-primary btn-sm" onclick="window.openGuiUploadModal('${pkg.id}')">🖼️ Upload</button><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('guis', '${pkg.id}')">Paket löschen</button></div>
                     </div>
-                    <div id="gui-content-${pkg.id}" style="display: ${displayStyle}; margin-top: 15px;">
-                        ${items.length > 0 ? `<div class="gui-grid">${itemsHtml}</div>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine GUIs in diesem Paket.</p>'}
-                    </div>
+                    <div id="gui-content-${pkg.id}" style="display: ${displayStyle}; margin-top: 15px;">${items.length > 0 ? `<div class="gui-grid">${itemsHtml}</div>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine GUIs in diesem Paket.</p>'}</div>
                 </div>`;
         });
         
-        if(editorSelect && currentEditorVal) editorSelect.value = currentEditorVal; 
-        if(plannerSelect && currentPlannerVal) plannerSelect.value = currentPlannerVal; 
-        if(plannerBgSelect && currentBgVal) plannerBgSelect.value = currentBgVal;
-        
+        if(editorSelect && currentEditorVal) editorSelect.value = currentEditorVal; if(plannerSelect && currentPlannerVal) plannerSelect.value = currentPlannerVal; if(plannerBgSelect && currentBgVal) plannerBgSelect.value = currentBgVal;
         updateDashboard();
     });
 
     // QUESTS (NEU)
-    onSnapshot(collection(db, "quests"), (snap) => {
-        allQuests = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const container = document.getElementById('quests-container');
+    onSnapshot(collection(db, "quest_batches"), (snap) => {
+        allQuestBatches = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const container = document.getElementById('quest-batches-container');
         if(!container) return; container.innerHTML = '';
 
-        allQuests.forEach(quest => {
-            let tasksHtml = (quest.tasks || []).map(task => {
-                let typeText = task.type;
-                if(task.type === 'FARMING') typeText = '⛏️ Abbauen';
-                if(task.type === 'CRAFTING') typeText = '🛠️ Craften';
-                if(task.type === 'KILL_MOB') typeText = '🧟 Mob töten';
-                if(task.type === 'KILL_PLAYER') typeText = '⚔️ Spieler töten';
+        allQuestBatches.forEach(batch => {
+            let questsHtml = (batch.quests || []).map(quest => {
+                let tasksHtml = (quest.tasks || []).map(task => {
+                    let typeText = task.type;
+                    if(task.type === 'FARMING') typeText = '⛏️ Abbauen';
+                    if(task.type === 'CRAFTING') typeText = '🛠️ Craften';
+                    if(task.type === 'KILL_MOB') typeText = '🧟 Mob töten';
+                    if(task.type === 'KILL_PLAYER') typeText = '⚔️ Spieler töten';
+                    return `<tr><td><span class="perm-badge">${typeText}</span></td><td><strong>${task.target}</strong></td><td>${task.amount}x</td><td style="text-align: right;"><button class="btn btn-danger btn-sm" onclick="window.deleteQuestTask('${batch.id}', '${quest.id}', '${task.id}')">Löschen</button></td></tr>`;
+                }).join('');
 
-                return `<tr>
-                    <td><span class="perm-badge">${typeText}</span></td>
-                    <td><strong>${task.target}</strong></td>
-                    <td>${task.amount}x</td>
-                    <td style="text-align: right;">
-                        <button class="btn btn-danger btn-sm" onclick="window.deleteQuestTask('${quest.id}', '${task.id}')">Löschen</button>
-                    </td>
-                </tr>`;
+                return `
+                <div style="background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 6px; padding: 15px; margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+                        <h4 style="margin:0; font-size:16px;">${quest.name}</h4>
+                        <div class="button-group">
+                            <button class="btn btn-primary btn-sm" onclick="window.openQuestTaskModal('${batch.id}', '${quest.id}')">+ Aufgabe</button>
+                            <button class="btn btn-secondary btn-sm" onclick="window.editQuest('${batch.id}', '${quest.id}')">✏️ Bearbeiten</button>
+                            <button class="btn btn-danger btn-sm" onclick="window.deleteQuest('${batch.id}', '${quest.id}')">🗑️ Löschen</button>
+                        </div>
+                    </div>
+                    <p style="font-size:13px; color:var(--text-muted); margin-bottom:5px;"><strong>Beschreibung:</strong> ${window.formatMcText(quest.desc || '-')}</p>
+                    <p style="font-size:13px; color:var(--text-muted); margin-bottom:15px;"><strong>Belohnung:</strong> ${quest.reward || '-'}</p>
+                    ${(quest.tasks && quest.tasks.length > 0) ? `<table class="crate-items-table" style="background: var(--bg-color);"><thead><tr><th style="width: 120px;">Typ</th><th>Ziel</th><th>Anzahl</th><th style="text-align: right;">Aktion</th></tr></thead><tbody>${tasksHtml}</tbody></table>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Aufgaben.</p>'}
+                </div>`;
             }).join('');
 
-            let isCollapsed = window.questCollapsed[quest.id] !== false; // Standard eingeklappt
+            let isCollapsed = window.questCollapsed[batch.id] !== false; 
             let displayStyle = isCollapsed ? 'none' : 'block';
             let iconText = isCollapsed ? '▶️' : '🔽';
 
             container.innerHTML += `
                 <div class="crate-box">
-                    <div class="crate-header" style="cursor: pointer; margin-bottom: 0; padding-bottom: ${isCollapsed ? '0' : '15px'}; border-bottom: ${isCollapsed ? 'none' : '1px solid var(--border-color)'};" onclick="window.toggleQuest('${quest.id}')">
+                    <div class="crate-header" style="cursor: pointer; margin-bottom: 0; padding-bottom: ${isCollapsed ? '0' : '15px'}; border-bottom: ${isCollapsed ? 'none' : '1px solid var(--border-color)'};" onclick="window.toggleQuestBatch('${batch.id}')">
                         <div class="crate-header-left">
-                            <span id="quest-icon-${quest.id}" style="margin-right: 8px; font-size: 14px;">${iconText}</span>
-                            <h3 style="font-size: 18px; margin: 0;">${quest.name}</h3>
+                            <span id="quest-icon-${batch.id}" style="margin-right: 8px; font-size: 14px;">${iconText}</span>
+                            <h3 style="font-size: 18px; margin: 0;">${batch.name}</h3>
                         </div>
                         <div class="button-group" onclick="event.stopPropagation()">
-                            <button class="btn btn-info btn-sm" onclick="window.exportQuestYaml('${quest.id}')">📥 Quest Export</button>
-                            <button class="btn btn-primary btn-sm" onclick="window.openQuestTaskModal('${quest.id}')">+ Aufgabe</button>
-                            <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('quests', '${quest.id}')">Quest löschen</button>
+                            <button class="btn btn-info btn-sm" onclick="window.exportQuestYaml('${batch.id}')">📥 Quest Export</button>
+                            <button class="btn btn-primary btn-sm" onclick="window.openQuestModal('${batch.id}')">+ Quest erstellen</button>
+                            <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('quest_batches', '${batch.id}')">Batch löschen</button>
                         </div>
                     </div>
-                    <div id="quest-content-${quest.id}" style="display: ${displayStyle}; margin-top: 15px;">
-                        <p style="font-size:13px; color:var(--text-muted); margin-bottom:10px;"><strong>Beschreibung:</strong> ${window.formatMcText(quest.description || '-')}</p>
-                        <p style="font-size:13px; color:var(--text-muted); margin-bottom:15px;"><strong>Belohnung:</strong> ${quest.reward || '-'}</p>
-                        
-                        ${(quest.tasks && quest.tasks.length > 0) ? `<table class="crate-items-table"><thead><tr><th style="width: 120px;">Typ</th><th>Ziel (Block/Mob)</th><th>Anzahl</th><th style="text-align: right;">Aktion</th></tr></thead><tbody>${tasksHtml}</tbody></table>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Aufgaben. Klicke auf "+ Aufgabe".</p>'}
+                    <div id="quest-content-${batch.id}" style="display: ${displayStyle}; margin-top: 15px; padding: 15px; background: var(--bg-color); border-radius: 8px;">
+                        ${(batch.quests && batch.quests.length > 0) ? questsHtml : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Quests in diesem Batch.</p>'}
                     </div>
                 </div>`;
         });
@@ -402,25 +382,16 @@ function startRealtimeListeners() {
             let linesTableHtml = '';
 
             (holo.lines || []).forEach(line => {
-                // Vorschau Generierung
                 if(line.type === 'item') {
                     linesPreviewHtml += `<div class="holo-item">💎</div><div style="font-size:10px; color:#aaa; margin-top:-5px;">[ITEM: ${line.content}]</div>`;
                 } else {
                     linesPreviewHtml += `<div class="holo-line">${window.formatMcText(line.content)}</div>`;
                 }
-
-                // Tabellen Generierung
                 let typeBadge = line.type === 'item' ? '💎 Item' : '📝 Text';
-                linesTableHtml += `<tr>
-                    <td><span class="perm-badge">${typeBadge}</span></td>
-                    <td>${line.content}</td>
-                    <td style="text-align: right;">
-                        <button class="btn btn-danger btn-sm" onclick="window.deleteHoloLine('${holo.id}', '${line.id}')">Löschen</button>
-                    </td>
-                </tr>`;
+                linesTableHtml += `<tr><td><span class="perm-badge">${typeBadge}</span></td><td>${line.content}</td><td style="text-align: right;"><button class="btn btn-danger btn-sm" onclick="window.deleteHoloLine('${holo.id}', '${line.id}')">Löschen</button></td></tr>`;
             });
 
-            let isCollapsed = window.holoCollapsed[holo.id] !== false; // Standard eingeklappt
+            let isCollapsed = window.holoCollapsed[holo.id] !== false; 
             let displayStyle = isCollapsed ? 'none' : 'flex';
             let iconText = isCollapsed ? '▶️' : '🔽';
 
@@ -460,78 +431,145 @@ function startRealtimeListeners() {
 window.toggleGuiPackage = (id) => { window.guiCollapsed[id] = window.guiCollapsed[id] === false ? true : false; const content = document.getElementById(`gui-content-${id}`); const icon = document.getElementById(`gui-icon-${id}`); const header = content.previousElementSibling; if (window.guiCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } else { content.style.display = 'block'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; } };
 window.togglePlugin = (id) => { window.pluginCollapsed[id] = window.pluginCollapsed[id] === false ? true : false; const content = document.getElementById(`plugin-content-${id}`); const icon = document.getElementById(`plugin-icon-${id}`); const header = content.previousElementSibling; if (window.pluginCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } else { content.style.display = 'block'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; } };
 window.toggleAdCampaign = (id) => { window.adCollapsed[id] = window.adCollapsed[id] === false ? true : false; const content = document.getElementById(`ad-content-${id}`); const icon = document.getElementById(`ad-icon-${id}`); const header = content.previousElementSibling; if (window.adCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } else { content.style.display = 'block'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; } };
-window.toggleQuest = (id) => { window.questCollapsed[id] = window.questCollapsed[id] === false ? true : false; const content = document.getElementById(`quest-content-${id}`); const icon = document.getElementById(`quest-icon-${id}`); const header = content.previousElementSibling; if (window.questCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } else { content.style.display = 'block'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; } };
+window.toggleQuestBatch = (id) => { window.questCollapsed[id] = window.questCollapsed[id] === false ? true : false; const content = document.getElementById(`quest-content-${id}`); const icon = document.getElementById(`quest-icon-${id}`); const header = content.previousElementSibling; if (window.questCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } else { content.style.display = 'block'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; } };
 window.toggleHolo = (id) => { window.holoCollapsed[id] = window.holoCollapsed[id] === false ? true : false; const content = document.getElementById(`holo-content-${id}`); const icon = document.getElementById(`holo-icon-${id}`); const header = content.previousElementSibling; if (window.holoCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } else { content.style.display = 'flex'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; } };
 
 window.deleteEntry = async (collectionName, id) => { if(confirm('Wirklich komplett löschen?')) { await deleteDoc(doc(db, collectionName, id)); } };
 
 
 // ==========================================
-// QUESTS LOGIK (NEU)
+// QUESTS LOGIK (NEU BATCHES)
 // ==========================================
-document.getElementById('btn-save-quest').addEventListener('click', async () => {
-    const name = document.getElementById('quest-name').value;
-    const desc = document.getElementById('quest-desc').value;
-    const reward = document.getElementById('quest-reward').value;
-    const status = document.getElementById('quest-status');
-    if(!name) return alert("Bitte Quest-Namen eingeben!");
-    status.innerText = "Erstelle Quest...";
-    await addDoc(collection(db, "quests"), { name: name, description: desc, reward: reward, tasks: [] });
-    status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000);
-    document.getElementById('quest-name').value = ''; document.getElementById('quest-desc').value = ''; document.getElementById('quest-reward').value = '';
+document.getElementById('btn-create-quest-batch').addEventListener('click', async () => {
+    const name = document.getElementById('quest-batch-name').value;
+    if(!name) return alert("Bitte Kategorien-Namen eingeben!");
+    await addDoc(collection(db, "quest_batches"), { name: name, quests: [] });
+    document.getElementById('quest-batch-name').value = '';
 });
 
-window.openQuestTaskModal = (questId) => {
-    document.getElementById('modal-quest-id').value = questId;
+window.openQuestModal = (batchId) => {
+    document.getElementById('quest-modal-title').innerText = "Neue Quest erstellen";
+    document.getElementById('modal-quest-batch-id').value = batchId;
+    document.getElementById('modal-quest-edit-id').value = '';
+    document.getElementById('modal-quest-name').value = '';
+    document.getElementById('modal-quest-desc').value = '';
+    document.getElementById('modal-quest-reward').value = '';
+    document.getElementById('quest-modal').classList.add('active');
+};
+
+window.editQuest = (batchId, questId) => {
+    const batch = allQuestBatches.find(b => b.id === batchId); if(!batch) return;
+    const quest = (batch.quests || []).find(q => q.id === questId); if(!quest) return;
+    document.getElementById('quest-modal-title').innerText = "Quest bearbeiten";
+    document.getElementById('modal-quest-batch-id').value = batchId;
+    document.getElementById('modal-quest-edit-id').value = questId;
+    document.getElementById('modal-quest-name').value = quest.name || '';
+    document.getElementById('modal-quest-desc').value = quest.desc || '';
+    document.getElementById('modal-quest-reward').value = quest.reward || '';
+    document.getElementById('quest-modal').classList.add('active');
+};
+
+document.getElementById('btn-save-quest-data').addEventListener('click', async () => {
+    const batchId = document.getElementById('modal-quest-batch-id').value;
+    const editQuestId = document.getElementById('modal-quest-edit-id').value;
+    const name = document.getElementById('modal-quest-name').value;
+    const desc = document.getElementById('modal-quest-desc').value;
+    const reward = document.getElementById('modal-quest-reward').value;
+    if(!name) return alert("Quest Name darf nicht leer sein!");
+    
+    const bRef = doc(db, "quest_batches", batchId);
+    const batch = allQuestBatches.find(b => b.id === batchId);
+    let updatedQuests = [...(batch.quests || [])];
+    
+    if(editQuestId) {
+        const idx = updatedQuests.findIndex(q => q.id === editQuestId);
+        if(idx > -1) { updatedQuests[idx].name = name; updatedQuests[idx].desc = desc; updatedQuests[idx].reward = reward; }
+    } else {
+        updatedQuests.push({ id: Date.now().toString(), name, desc, reward, tasks: [] });
+    }
+    
+    await updateDoc(bRef, { quests: updatedQuests });
+    document.getElementById('quest-modal').classList.remove('active');
+});
+
+window.deleteQuest = async (batchId, questId) => {
+    if(confirm("Quest löschen?")) {
+        const bRef = doc(db, "quest_batches", batchId);
+        const batch = allQuestBatches.find(b => b.id === batchId);
+        await updateDoc(bRef, { quests: (batch.quests || []).filter(q => q.id !== questId) });
+    }
+};
+
+window.openQuestTaskModal = (batchId, questId) => {
+    document.getElementById('modal-task-batch-id').value = batchId;
+    document.getElementById('modal-task-quest-id').value = questId;
     document.getElementById('modal-quest-task-target').value = '';
     document.getElementById('modal-quest-task-amount').value = '1';
     document.getElementById('quest-task-modal').classList.add('active');
 };
 
 document.getElementById('btn-save-quest-task').addEventListener('click', async () => {
-    const questId = document.getElementById('modal-quest-id').value;
+    const batchId = document.getElementById('modal-task-batch-id').value;
+    const questId = document.getElementById('modal-task-quest-id').value;
     const type = document.getElementById('modal-quest-task-type').value;
     const target = document.getElementById('modal-quest-task-target').value;
     const amount = document.getElementById('modal-quest-task-amount').value;
     if(!target || !amount) return alert("Ziel und Anzahl ausfüllen!");
     
-    const newTask = { id: Date.now().toString(), type, target, amount: Number(amount) };
-    const qRef = doc(db, "quests", questId);
-    const quest = allQuests.find(q => q.id === questId);
-    await updateDoc(qRef, { tasks: [...(quest.tasks || []), newTask] });
+    const bRef = doc(db, "quest_batches", batchId);
+    const batch = allQuestBatches.find(b => b.id === batchId);
+    let updatedQuests = [...(batch.quests || [])];
+    const qIdx = updatedQuests.findIndex(q => q.id === questId);
     
+    if(qIdx > -1) {
+        let updatedTasks = [...(updatedQuests[qIdx].tasks || [])];
+        updatedTasks.push({ id: Date.now().toString(), type, target, amount: Number(amount) });
+        updatedQuests[qIdx].tasks = updatedTasks;
+        await updateDoc(bRef, { quests: updatedQuests });
+    }
     document.getElementById('quest-task-modal').classList.remove('active');
 });
 
-window.deleteQuestTask = async (questId, taskId) => {
+window.deleteQuestTask = async (batchId, questId, taskId) => {
     if(confirm("Aufgabe löschen?")) {
-        const qRef = doc(db, "quests", questId);
-        const quest = allQuests.find(q => q.id === questId);
-        await updateDoc(qRef, { tasks: (quest.tasks || []).filter(t => t.id !== taskId) });
+        const bRef = doc(db, "quest_batches", batchId);
+        const batch = allQuestBatches.find(b => b.id === batchId);
+        let updatedQuests = [...(batch.quests || [])];
+        const qIdx = updatedQuests.findIndex(q => q.id === questId);
+        if(qIdx > -1) {
+            updatedQuests[qIdx].tasks = (updatedQuests[qIdx].tasks || []).filter(t => t.id !== taskId);
+            await updateDoc(bRef, { quests: updatedQuests });
+        }
     }
 };
 
-window.exportQuestYaml = function(questId) {
-    const quest = allQuests.find(q => q.id === questId); if(!quest) return;
-    let safeName = quest.name ? quest.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'quest';
+window.exportQuestYaml = function(batchId) {
+    const batch = allQuestBatches.find(b => b.id === batchId); if(!batch) return;
+    if(!batch.quests || batch.quests.length === 0) return alert("Dieser Batch hat keine Quests!");
     
-    let yaml = `${safeName}:\n`;
-    yaml += `  name: '${quest.name}'\n`;
-    yaml += `  ask-message: '${quest.description || 'Schließe diese Quest ab!'}'\n`;
-    yaml += `  finish-message: '&aQuest abgeschlossen!'\n`;
-    yaml += `  tasks:\n`;
+    let safeBatchName = batch.name ? batch.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'quest_batch';
+    let yaml = ``;
     
-    (quest.tasks || []).forEach(task => {
-        if(task.type === 'FARMING') yaml += `    mining:\n      - ${task.target}:${task.amount}\n`;
-        if(task.type === 'CRAFTING') yaml += `    crafting:\n      - ${task.target}:${task.amount}\n`;
-        if(task.type === 'KILL_MOB') yaml += `    mob-killing:\n      - ${task.target}:${task.amount}\n`;
-        if(task.type === 'KILL_PLAYER') yaml += `    player-killing: ${task.amount}\n`;
+    batch.quests.forEach(quest => {
+        let safeQuestName = quest.name ? quest.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'quest';
+        yaml += `${safeQuestName}:\n`;
+        yaml += `  name: '${quest.name}'\n`;
+        yaml += `  ask-message: '${quest.desc || 'Schließe diese Quest ab!'}'\n`;
+        yaml += `  finish-message: '&aQuest abgeschlossen!'\n`;
+        yaml += `  tasks:\n`;
+        
+        (quest.tasks || []).forEach(task => {
+            if(task.type === 'FARMING') yaml += `    mining:\n      - ${task.target}:${task.amount}\n`;
+            if(task.type === 'CRAFTING') yaml += `    crafting:\n      - ${task.target}:${task.amount}\n`;
+            if(task.type === 'KILL_MOB') yaml += `    mob-killing:\n      - ${task.target}:${task.amount}\n`;
+            if(task.type === 'KILL_PLAYER') yaml += `    player-killing: ${task.amount}\n`;
+        });
+        
+        yaml += `  rewards:\n    commands:\n      - 'say %player% hat ${quest.reward || 'nichts'} bekommen!'\n\n`;
     });
-    
-    yaml += `  rewards:\n    commands:\n      - 'say %player% hat ${quest.reward || 'nichts'} bekommen!'\n`;
 
     const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `${safeName}.yml`; a.click(); URL.revokeObjectURL(url);
+    const a = document.createElement('a'); a.href = url; a.download = `${safeBatchName}.yml`; a.click(); URL.revokeObjectURL(url);
 };
 
 // ==========================================
@@ -552,13 +590,8 @@ window.changeHoloLineType = () => {
     const type = document.getElementById('modal-holo-line-type').value;
     const input = document.getElementById('modal-holo-line-content');
     const hint = document.getElementById('holo-line-hint');
-    if(type === 'item') {
-        input.placeholder = "Material Name (z.B. DIAMOND_SWORD)";
-        hint.innerText = "Gib den genauen Minecraft Material-Namen ein.";
-    } else {
-        input.placeholder = "Text (z.B. &aWillkommen!)";
-        hint.innerText = "Nutze Minecraft Color-Codes wie &c oder &l.";
-    }
+    if(type === 'item') { input.placeholder = "Material Name (z.B. DIAMOND_SWORD)"; hint.innerText = "Gib den genauen Minecraft Material-Namen ein."; } 
+    else { input.placeholder = "Text (z.B. &aWillkommen!)"; hint.innerText = "Nutze Minecraft Color-Codes wie &c oder &l."; }
 };
 
 window.openHoloLineModal = (holoId) => {
@@ -597,11 +630,8 @@ window.exportHoloYaml = function(holoId) {
     
     let yaml = `holos:\n  ${safeName}:\n    location: ${holo.location || 'world:0:100:0'}\n    lines:\n`;
     (holo.lines || []).forEach(line => {
-        if(line.type === 'item') {
-            yaml += `      - content: '#ICON:${line.content}'\n`;
-        } else {
-            yaml += `      - content: '${line.content}'\n`;
-        }
+        if(line.type === 'item') { yaml += `      - content: '#ICON:${line.content}'\n`; } 
+        else { yaml += `      - content: '${line.content}'\n`; }
     });
 
     const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob);
@@ -628,9 +658,9 @@ window.formatMcText = function(text) {
     return html;
 };
 
-window.updateMcPreview = function() {
-    let text = document.getElementById('bc-message').value;
-    document.getElementById('bc-preview').innerHTML = window.formatMcText(text) || 'Vorschau...';
+window.updateMcPreview = function(inputId = 'bc-message', previewId = 'bc-preview') {
+    let text = document.getElementById(inputId).value;
+    document.getElementById(previewId).innerHTML = window.formatMcText(text) || 'Vorschau...';
 };
 
 window.editBroadcast = function(id) {
@@ -745,7 +775,10 @@ document.getElementById('btn-save-plugin').addEventListener('click', async () =>
         if(!name) return alert("Bitte gib einen Plugin-Namen ein!"); 
         status.innerText = "Speichere..."; 
         
-        const pluginData = { name: name, perms: perms, info: perms, settingsType: settingsType, settingsText: settingsText, dailyDays: Number(dailyDays), dailyRewards: dailyRewards };
+        const pluginData = { 
+            name: name, perms: perms, info: perms, settingsType: settingsType, settingsText: settingsText,
+            dailyDays: Number(dailyDays), dailyRewards: dailyRewards
+        };
 
         if (editingPluginId) { await updateDoc(doc(db, "plugins", editingPluginId), pluginData); } 
         else { await addDoc(collection(db, "plugins"), pluginData); } 
@@ -952,22 +985,19 @@ window.exportShopYaml = function() { if(allShop.length === 0) return alert("Der 
 // ==========================================
 // WERBUNG & KAMPAGNEN
 // ==========================================
-document.getElementById('btn-save-ad-campaign').addEventListener('click', async () => {
+document.getElementById('btn-create-ad-campaign').addEventListener('click', async () => {
     const name = document.getElementById('ad-campaign-name').value;
-    const status = document.getElementById('ad-campaign-status');
     if(!name) return alert("Bitte Kampagnen-Namen eingeben!");
-    status.innerText = "Erstelle Kampagne...";
     await addDoc(collection(db, "ads"), { name: name, items: [] });
-    status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000);
     document.getElementById('ad-campaign-name').value = '';
 });
 
-window.openAdUploadModal = (id) => {
+window.openAdItemModal = (id) => {
     document.getElementById('modal-ad-campaign-id').value = id;
     document.getElementById('ad-upload-modal').classList.add('active');
 };
 
-document.getElementById('btn-save-ad-upload').addEventListener('click', async () => {
+document.getElementById('btn-save-ad-item').addEventListener('click', async () => {
     const campId = document.getElementById('modal-ad-campaign-id').value;
     const title = document.getElementById('modal-ad-title').value;
     const link = document.getElementById('modal-ad-link').value;

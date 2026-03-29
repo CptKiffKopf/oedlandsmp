@@ -54,7 +54,7 @@
                     <div class="stat-card"><h3>Ränge</h3><p class="stat-number" id="stat-ranks">0</p></div>
                     <div class="stat-card"><h3>Kisten</h3><p class="stat-number" id="stat-crates">0</p></div>
                     <div class="stat-card"><h3>Shop-Items</h3><p class="stat-number" id="stat-shop">0</p></div>
-                    <div class="stat-card"><h3>Quests</h3><p class="stat-number" id="stat-quests">0</p></div>
+                    <div class="stat-card"><h3>Quest-Batches</h3><p class="stat-number" id="stat-quests">0</p></div>
                     <div class="stat-card"><h3>Hologramme</h3><p class="stat-number" id="stat-holograms">0</p></div>
                     <div class="stat-card"><h3>Plugins</h3><p class="stat-number" id="stat-plugins">0</p></div>
                     <div class="stat-card"><h3>GUI Pakete</h3><p class="stat-number" id="stat-guis">0</p></div>
@@ -124,23 +124,21 @@
                 <div class="table-container"><table class="data-table"><thead><tr><th>Bild</th><th>Item Name</th><th>Preis</th><th style="text-align: right;">Aktionen</th></tr></thead><tbody id="shop-list"></tbody></table></div>
             </section>
 
-            <!-- QUESTS (NEU) -->
+            <!-- QUESTS (NEU: BATCHES) -->
             <section id="quests" class="category-section">
-                <h2>📜 Quest Editor</h2>
+                <h2>📜 Quest Editor (Batches)</h2>
                 <div class="form-card">
-                    <h3>Neue Quest erstellen</h3>
+                    <h3>Neuen Quest-Batch (Kategorie) erstellen</h3>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">Gruppiere deine Quests in Batches wie "Tägliche Quests" oder "Tutorial".</p>
                     <div class="input-group">
-                        <input type="text" id="quest-name" placeholder="Quest Name (z.B. Der Holzfäller)" style="flex: 2;">
-                        <input type="text" id="quest-reward" placeholder="Belohnung (z.B. 1000 Taler)" style="flex: 1;">
+                        <input type="text" id="quest-batch-name" placeholder="Batch Name (z.B. Story Quests)">
+                        <button id="btn-create-quest-batch" class="btn btn-primary">Batch erstellen</button>
                     </div>
-                    <textarea id="quest-desc" placeholder="Quest Beschreibung (z.B. &7Fälle 100 Bäume für das Dorf...)" rows="2"></textarea>
-                    <div class="button-group" style="margin-top: 15px;"><button id="btn-save-quest" class="btn btn-primary">Quest erstellen</button></div>
-                    <p id="quest-status" class="status-text"></p>
                 </div>
-                <div id="quests-container" class="crates-layout"></div>
+                <div id="quest-batches-container" class="crates-layout"></div>
             </section>
 
-            <!-- HOLOGRAMME (NEU) -->
+            <!-- HOLOGRAMME -->
             <section id="holograms" class="category-section">
                 <h2>🪄 DecentHolograms Creator</h2>
                 <div class="form-card">
@@ -167,7 +165,7 @@
                     <div style="display: flex; gap: 20px; flex-wrap: wrap;">
                         <div style="flex: 1; min-width: 300px;">
                             <input type="hidden" id="bc-edit-id">
-                            <textarea id="bc-message" placeholder="&8[&cSystem&8] &7Vergesst nicht im Shop vorbeizuschauen!" rows="4" oninput="window.updateMcPreview('bc-message', 'bc-preview')"></textarea>
+                            <textarea id="bc-message" placeholder="&8[&cSystem&8] &7Vergesst nicht im Shop vorbeizuschauen!" rows="4" oninput="window.updateMcPreview()"></textarea>
                             <div class="input-group" style="margin-top: 10px;"><input type="number" id="bc-interval" placeholder="Intervall (Sekunden)" value="300" style="width: 200px;"><button class="btn btn-primary" id="btn-save-bc" onclick="window.saveBroadcast()">Speichern</button><button class="btn btn-secondary" id="btn-cancel-bc" style="display: none;" onclick="window.cancelEditBroadcast()">Abbrechen</button></div>
                             <p id="bc-status" class="status-text"></p>
                         </div>
@@ -195,14 +193,15 @@
                 <div id="plugins-container" class="crates-layout" style="margin-top: 20px;"></div>
             </section>
 
-            <!-- WERBUNG -->
+            <!-- WERBUNG (NEU) -->
             <section id="werbung" class="category-section">
                 <h2>Werbung & Kampagnen</h2>
                 <div class="form-card">
                     <h3>Neue Werbe-Kampagne erstellen</h3>
-                    <div class="input-group"><input type="text" id="ad-campaign-name" placeholder="Kampagnen Name (z.B. Herbst Sale)"></div>
-                    <div class="button-group"><button id="btn-save-ad-campaign" class="btn btn-primary">Kampagne erstellen</button></div>
-                    <p id="ad-campaign-status" class="status-text"></p>
+                    <div class="input-group">
+                        <input type="text" id="ad-campaign-name" placeholder="Kampagnen Name (z.B. Herbst Sale)">
+                        <button id="btn-create-ad-campaign" class="btn btn-primary">Kampagne erstellen</button>
+                    </div>
                 </div>
                 <div id="ad-campaigns-container" class="crates-layout"></div>
             </section>
@@ -323,21 +322,47 @@
         </div>
     </div>
 
+    <!-- WERBUNG MODAL -->
     <div id="ad-upload-modal" class="modal">
         <div class="modal-content">
             <h3>Werbung zur Kampagne hinzufügen</h3>
             <input type="hidden" id="modal-ad-campaign-id">
-            <div class="input-group" style="flex-direction: column; gap: 10px; margin-top: 15px;"><input type="text" id="modal-ad-title" placeholder="Titel / Beschreibung" style="width:100%;"><input type="text" id="modal-ad-link" placeholder="Link (URL) (Optional)" style="width:100%;"><input type="file" id="modal-ad-image" accept="image/png, image/jpeg, image/gif" style="width:100%;"></div>
-            <div class="button-group" style="margin-top: 20px;"><button id="btn-save-ad-upload" class="btn btn-primary">Werbung speichern</button><button onclick="document.getElementById('ad-upload-modal').classList.remove('active')" class="btn btn-secondary">Abbrechen</button></div>
+            <div class="input-group" style="flex-direction: column; gap: 10px; margin-top: 15px;">
+                <input type="text" id="modal-ad-title" placeholder="Titel / Beschreibung" style="width:100%;">
+                <input type="text" id="modal-ad-link" placeholder="Link (URL) (Optional)" style="width:100%;">
+                <input type="file" id="modal-ad-image" accept="image/png, image/jpeg, image/gif" style="width:100%;">
+            </div>
+            <div class="button-group" style="margin-top: 20px;">
+                <button id="btn-save-ad-item" class="btn btn-primary">Werbung speichern</button>
+                <button onclick="document.getElementById('ad-upload-modal').classList.remove('active')" class="btn btn-secondary">Abbrechen</button>
+            </div>
             <p id="modal-ad-status" class="status-text"></p>
         </div>
     </div>
 
-    <!-- QUEST TASK MODAL (NEU) -->
+    <!-- QUEST MODALS -->
+    <div id="quest-modal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h3 id="quest-modal-title">Neue Quest erstellen</h3>
+            <input type="hidden" id="modal-quest-batch-id">
+            <input type="hidden" id="modal-quest-edit-id">
+            <div class="input-group" style="flex-direction: column; gap: 10px; margin-top: 15px;">
+                <input type="text" id="modal-quest-name" placeholder="Quest Name (z.B. Der Holzfäller)" style="width:100%;">
+                <textarea id="modal-quest-desc" placeholder="Quest Beschreibung (Nutze & Farben)" rows="3"></textarea>
+                <input type="text" id="modal-quest-reward" placeholder="Belohnung (z.B. 1000 Taler)" style="width:100%;">
+            </div>
+            <div class="button-group" style="margin-top: 20px;">
+                <button id="btn-save-quest-data" class="btn btn-primary">Quest speichern</button>
+                <button onclick="document.getElementById('quest-modal').classList.remove('active')" class="btn btn-secondary">Abbrechen</button>
+            </div>
+        </div>
+    </div>
+
     <div id="quest-task-modal" class="modal">
         <div class="modal-content">
             <h3>Aufgabe zur Quest hinzufügen</h3>
-            <input type="hidden" id="modal-quest-id">
+            <input type="hidden" id="modal-task-batch-id">
+            <input type="hidden" id="modal-task-quest-id">
             <div class="input-group" style="flex-direction: column; gap: 10px; margin-top: 15px;">
                 <select id="modal-quest-task-type" style="width:100%; padding: 6px; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
                     <option value="FARMING">⛏️ Abbauen (Farming)</option>
@@ -355,7 +380,7 @@
         </div>
     </div>
 
-    <!-- HOLOGRAM LINE MODAL (NEU) -->
+    <!-- HOLOGRAM LINE MODAL -->
     <div id="holo-line-modal" class="modal">
         <div class="modal-content">
             <h3>Zeile zum Hologramm hinzufügen</h3>
