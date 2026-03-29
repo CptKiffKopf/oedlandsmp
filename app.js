@@ -18,6 +18,7 @@ const storage = getStorage(app);
 const auth = getAuth(app);
 
 let allRanks = [], allGUIs = [], allCrates = [], allShop = [], allAds = [], allPlugins = [], allBroadcasts = [];
+let allQuests = [], allHolograms = [];
 let editingRankId = null, editingPluginId = null, editingShopId = null;
 let listenersActive = false; 
 
@@ -27,6 +28,8 @@ window.crateSortModes = {};
 window.pluginCollapsed = {};
 window.adCollapsed = {};
 window.guiCollapsed = {};
+window.questCollapsed = {};
+window.holoCollapsed = {};
 let draggedCrateBox = null; 
 
 // ==========================================
@@ -81,6 +84,8 @@ function updateDashboard() {
     document.getElementById('stat-plugins').innerText = allPlugins.length;
     document.getElementById('stat-shop').innerText = allShop.length;
     document.getElementById('stat-guis').innerText = allGUIs.length; 
+    document.getElementById('stat-quests').innerText = allQuests.length; 
+    document.getElementById('stat-holograms').innerText = allHolograms.length; 
 }
 
 function sortRanksHierarchically(ranks) {
@@ -153,8 +158,7 @@ function startRealtimeListeners() {
     onSnapshot(collection(db, "plugins"), (snap) => {
         allPlugins = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const container = document.getElementById('plugins-container');
-        if(!container) return;
-        container.innerHTML = '';
+        if(!container) return; container.innerHTML = '';
         
         allPlugins.forEach(plugin => { 
             let permsText = plugin.perms || plugin.info || '-';
@@ -227,8 +231,7 @@ function startRealtimeListeners() {
     onSnapshot(collection(db, "ads"), (snap) => {
         allAds = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const container = document.getElementById('ad-campaigns-container');
-        if(!container) return; 
-        container.innerHTML = '';
+        if(!container) return; container.innerHTML = '';
         
         allAds.forEach(camp => {
             let itemsHtml = (camp.items || []).map(item => {
@@ -274,13 +277,11 @@ function startRealtimeListeners() {
         allGUIs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const container = document.getElementById('gui-packages-container');
         
-        // Die Dropdowns sichern, damit JS nicht abstürzt, wenn man auf einem anderen Tab ist
         const editorSelect = document.getElementById('editor-pkg-select');
         const plannerSelect = document.getElementById('planner-pkg-select'); 
         const plannerBgSelect = document.getElementById('planner-bg-select');
         
-        if(!container) return; 
-        container.innerHTML = '';
+        if(!container) return; container.innerHTML = '';
         
         const currentEditorVal = editorSelect ? editorSelect.value : ''; 
         const currentPlannerVal = plannerSelect ? plannerSelect.value : ''; 
@@ -337,35 +338,274 @@ function startRealtimeListeners() {
         
         updateDashboard();
     });
+
+    // QUESTS (NEU)
+    onSnapshot(collection(db, "quests"), (snap) => {
+        allQuests = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const container = document.getElementById('quests-container');
+        if(!container) return; container.innerHTML = '';
+
+        allQuests.forEach(quest => {
+            let tasksHtml = (quest.tasks || []).map(task => {
+                let typeText = task.type;
+                if(task.type === 'FARMING') typeText = '⛏️ Abbauen';
+                if(task.type === 'CRAFTING') typeText = '🛠️ Craften';
+                if(task.type === 'KILL_MOB') typeText = '🧟 Mob töten';
+                if(task.type === 'KILL_PLAYER') typeText = '⚔️ Spieler töten';
+
+                return `<tr>
+                    <td><span class="perm-badge">${typeText}</span></td>
+                    <td><strong>${task.target}</strong></td>
+                    <td>${task.amount}x</td>
+                    <td style="text-align: right;">
+                        <button class="btn btn-danger btn-sm" onclick="window.deleteQuestTask('${quest.id}', '${task.id}')">Löschen</button>
+                    </td>
+                </tr>`;
+            }).join('');
+
+            let isCollapsed = window.questCollapsed[quest.id] !== false; // Standard eingeklappt
+            let displayStyle = isCollapsed ? 'none' : 'block';
+            let iconText = isCollapsed ? '▶️' : '🔽';
+
+            container.innerHTML += `
+                <div class="crate-box">
+                    <div class="crate-header" style="cursor: pointer; margin-bottom: 0; padding-bottom: ${isCollapsed ? '0' : '15px'}; border-bottom: ${isCollapsed ? 'none' : '1px solid var(--border-color)'};" onclick="window.toggleQuest('${quest.id}')">
+                        <div class="crate-header-left">
+                            <span id="quest-icon-${quest.id}" style="margin-right: 8px; font-size: 14px;">${iconText}</span>
+                            <h3 style="font-size: 18px; margin: 0;">${quest.name}</h3>
+                        </div>
+                        <div class="button-group" onclick="event.stopPropagation()">
+                            <button class="btn btn-info btn-sm" onclick="window.exportQuestYaml('${quest.id}')">📥 Quest Export</button>
+                            <button class="btn btn-primary btn-sm" onclick="window.openQuestTaskModal('${quest.id}')">+ Aufgabe</button>
+                            <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('quests', '${quest.id}')">Quest löschen</button>
+                        </div>
+                    </div>
+                    <div id="quest-content-${quest.id}" style="display: ${displayStyle}; margin-top: 15px;">
+                        <p style="font-size:13px; color:var(--text-muted); margin-bottom:10px;"><strong>Beschreibung:</strong> ${window.formatMcText(quest.description || '-')}</p>
+                        <p style="font-size:13px; color:var(--text-muted); margin-bottom:15px;"><strong>Belohnung:</strong> ${quest.reward || '-'}</p>
+                        
+                        ${(quest.tasks && quest.tasks.length > 0) ? `<table class="crate-items-table"><thead><tr><th style="width: 120px;">Typ</th><th>Ziel (Block/Mob)</th><th>Anzahl</th><th style="text-align: right;">Aktion</th></tr></thead><tbody>${tasksHtml}</tbody></table>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Aufgaben. Klicke auf "+ Aufgabe".</p>'}
+                    </div>
+                </div>`;
+        });
+        updateDashboard();
+    });
+
+    // HOLOGRAMME (NEU)
+    onSnapshot(collection(db, "holograms"), (snap) => {
+        allHolograms = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const container = document.getElementById('holograms-container');
+        if(!container) return; container.innerHTML = '';
+
+        allHolograms.forEach(holo => {
+            let linesPreviewHtml = '';
+            let linesTableHtml = '';
+
+            (holo.lines || []).forEach(line => {
+                // Vorschau Generierung
+                if(line.type === 'item') {
+                    linesPreviewHtml += `<div class="holo-item">💎</div><div style="font-size:10px; color:#aaa; margin-top:-5px;">[ITEM: ${line.content}]</div>`;
+                } else {
+                    linesPreviewHtml += `<div class="holo-line">${window.formatMcText(line.content)}</div>`;
+                }
+
+                // Tabellen Generierung
+                let typeBadge = line.type === 'item' ? '💎 Item' : '📝 Text';
+                linesTableHtml += `<tr>
+                    <td><span class="perm-badge">${typeBadge}</span></td>
+                    <td>${line.content}</td>
+                    <td style="text-align: right;">
+                        <button class="btn btn-danger btn-sm" onclick="window.deleteHoloLine('${holo.id}', '${line.id}')">Löschen</button>
+                    </td>
+                </tr>`;
+            });
+
+            let isCollapsed = window.holoCollapsed[holo.id] !== false; // Standard eingeklappt
+            let displayStyle = isCollapsed ? 'none' : 'flex';
+            let iconText = isCollapsed ? '▶️' : '🔽';
+
+            container.innerHTML += `
+                <div class="crate-box">
+                    <div class="crate-header" style="cursor: pointer; margin-bottom: 0; padding-bottom: ${isCollapsed ? '0' : '15px'}; border-bottom: ${isCollapsed ? 'none' : '1px solid var(--border-color)'};" onclick="window.toggleHolo('${holo.id}')">
+                        <div class="crate-header-left">
+                            <span id="holo-icon-${holo.id}" style="margin-right: 8px; font-size: 14px;">${iconText}</span>
+                            <h3 style="font-size: 18px; margin: 0;">${holo.name}</h3>
+                        </div>
+                        <div class="button-group" onclick="event.stopPropagation()">
+                            <button class="btn btn-info btn-sm" onclick="window.exportHoloYaml('${holo.id}')">📥 DH Export</button>
+                            <button class="btn btn-primary btn-sm" onclick="window.openHoloLineModal('${holo.id}')">+ Zeile</button>
+                            <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('holograms', '${holo.id}')">Holo löschen</button>
+                        </div>
+                    </div>
+                    <div id="holo-content-${holo.id}" style="display: ${displayStyle}; margin-top: 15px; gap: 20px;">
+                        <div style="flex: 1;">
+                            <p style="font-size:13px; color:var(--text-muted); margin-bottom:10px;"><strong>Location:</strong> ${holo.location || '-'}</p>
+                            ${(holo.lines && holo.lines.length > 0) ? `<table class="crate-items-table"><thead><tr><th style="width: 100px;">Typ</th><th>Inhalt</th><th style="text-align: right;">Aktion</th></tr></thead><tbody>${linesTableHtml}</tbody></table>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Zeilen. Klicke auf "+ Zeile".</p>'}
+                        </div>
+                        <div style="width: 250px; flex-shrink: 0;">
+                            <h4 style="font-size: 12px; color: var(--text-muted); margin-bottom: 5px;">In-Game Vorschau:</h4>
+                            <div class="holo-preview-container">${linesPreviewHtml || '<span style="color:#555;">Leer</span>'}</div>
+                        </div>
+                    </div>
+                </div>`;
+        });
+        updateDashboard();
+    });
 }
 
 // ==========================================
 // ALLGEMEINE TOGGLE & DELETE FUNKTIONEN
 // ==========================================
 
-window.toggleGuiPackage = (id) => {
-    window.guiCollapsed[id] = window.guiCollapsed[id] === false ? true : false;
-    const content = document.getElementById(`gui-content-${id}`); const icon = document.getElementById(`gui-icon-${id}`); const header = content.previousElementSibling;
-    if (window.guiCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } 
-    else { content.style.display = 'block'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; }
+window.toggleGuiPackage = (id) => { window.guiCollapsed[id] = window.guiCollapsed[id] === false ? true : false; const content = document.getElementById(`gui-content-${id}`); const icon = document.getElementById(`gui-icon-${id}`); const header = content.previousElementSibling; if (window.guiCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } else { content.style.display = 'block'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; } };
+window.togglePlugin = (id) => { window.pluginCollapsed[id] = window.pluginCollapsed[id] === false ? true : false; const content = document.getElementById(`plugin-content-${id}`); const icon = document.getElementById(`plugin-icon-${id}`); const header = content.previousElementSibling; if (window.pluginCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } else { content.style.display = 'block'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; } };
+window.toggleAdCampaign = (id) => { window.adCollapsed[id] = window.adCollapsed[id] === false ? true : false; const content = document.getElementById(`ad-content-${id}`); const icon = document.getElementById(`ad-icon-${id}`); const header = content.previousElementSibling; if (window.adCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } else { content.style.display = 'block'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; } };
+window.toggleQuest = (id) => { window.questCollapsed[id] = window.questCollapsed[id] === false ? true : false; const content = document.getElementById(`quest-content-${id}`); const icon = document.getElementById(`quest-icon-${id}`); const header = content.previousElementSibling; if (window.questCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } else { content.style.display = 'block'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; } };
+window.toggleHolo = (id) => { window.holoCollapsed[id] = window.holoCollapsed[id] === false ? true : false; const content = document.getElementById(`holo-content-${id}`); const icon = document.getElementById(`holo-icon-${id}`); const header = content.previousElementSibling; if (window.holoCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } else { content.style.display = 'flex'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; } };
+
+window.deleteEntry = async (collectionName, id) => { if(confirm('Wirklich komplett löschen?')) { await deleteDoc(doc(db, collectionName, id)); } };
+
+
+// ==========================================
+// QUESTS LOGIK (NEU)
+// ==========================================
+document.getElementById('btn-save-quest').addEventListener('click', async () => {
+    const name = document.getElementById('quest-name').value;
+    const desc = document.getElementById('quest-desc').value;
+    const reward = document.getElementById('quest-reward').value;
+    const status = document.getElementById('quest-status');
+    if(!name) return alert("Bitte Quest-Namen eingeben!");
+    status.innerText = "Erstelle Quest...";
+    await addDoc(collection(db, "quests"), { name: name, description: desc, reward: reward, tasks: [] });
+    status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000);
+    document.getElementById('quest-name').value = ''; document.getElementById('quest-desc').value = ''; document.getElementById('quest-reward').value = '';
+});
+
+window.openQuestTaskModal = (questId) => {
+    document.getElementById('modal-quest-id').value = questId;
+    document.getElementById('modal-quest-task-target').value = '';
+    document.getElementById('modal-quest-task-amount').value = '1';
+    document.getElementById('quest-task-modal').classList.add('active');
 };
 
-window.togglePlugin = (id) => {
-    window.pluginCollapsed[id] = window.pluginCollapsed[id] === false ? true : false;
-    const content = document.getElementById(`plugin-content-${id}`); const icon = document.getElementById(`plugin-icon-${id}`); const header = content.previousElementSibling;
-    if (window.pluginCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } 
-    else { content.style.display = 'block'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; }
+document.getElementById('btn-save-quest-task').addEventListener('click', async () => {
+    const questId = document.getElementById('modal-quest-id').value;
+    const type = document.getElementById('modal-quest-task-type').value;
+    const target = document.getElementById('modal-quest-task-target').value;
+    const amount = document.getElementById('modal-quest-task-amount').value;
+    if(!target || !amount) return alert("Ziel und Anzahl ausfüllen!");
+    
+    const newTask = { id: Date.now().toString(), type, target, amount: Number(amount) };
+    const qRef = doc(db, "quests", questId);
+    const quest = allQuests.find(q => q.id === questId);
+    await updateDoc(qRef, { tasks: [...(quest.tasks || []), newTask] });
+    
+    document.getElementById('quest-task-modal').classList.remove('active');
+});
+
+window.deleteQuestTask = async (questId, taskId) => {
+    if(confirm("Aufgabe löschen?")) {
+        const qRef = doc(db, "quests", questId);
+        const quest = allQuests.find(q => q.id === questId);
+        await updateDoc(qRef, { tasks: (quest.tasks || []).filter(t => t.id !== taskId) });
+    }
 };
 
-window.toggleAdCampaign = (id) => {
-    window.adCollapsed[id] = window.adCollapsed[id] === false ? true : false;
-    const content = document.getElementById(`ad-content-${id}`); const icon = document.getElementById(`ad-icon-${id}`); const header = content.previousElementSibling;
-    if (window.adCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } 
-    else { content.style.display = 'block'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; }
+window.exportQuestYaml = function(questId) {
+    const quest = allQuests.find(q => q.id === questId); if(!quest) return;
+    let safeName = quest.name ? quest.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'quest';
+    
+    let yaml = `${safeName}:\n`;
+    yaml += `  name: '${quest.name}'\n`;
+    yaml += `  ask-message: '${quest.description || 'Schließe diese Quest ab!'}'\n`;
+    yaml += `  finish-message: '&aQuest abgeschlossen!'\n`;
+    yaml += `  tasks:\n`;
+    
+    (quest.tasks || []).forEach(task => {
+        if(task.type === 'FARMING') yaml += `    mining:\n      - ${task.target}:${task.amount}\n`;
+        if(task.type === 'CRAFTING') yaml += `    crafting:\n      - ${task.target}:${task.amount}\n`;
+        if(task.type === 'KILL_MOB') yaml += `    mob-killing:\n      - ${task.target}:${task.amount}\n`;
+        if(task.type === 'KILL_PLAYER') yaml += `    player-killing: ${task.amount}\n`;
+    });
+    
+    yaml += `  rewards:\n    commands:\n      - 'say %player% hat ${quest.reward || 'nichts'} bekommen!'\n`;
+
+    const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `${safeName}.yml`; a.click(); URL.revokeObjectURL(url);
 };
 
-window.deleteEntry = async (collectionName, id) => {
-    if(confirm('Wirklich komplett löschen?')) { await deleteDoc(doc(db, collectionName, id)); }
+// ==========================================
+// HOLOGRAMME LOGIK (NEU)
+// ==========================================
+document.getElementById('btn-save-holo').addEventListener('click', async () => {
+    const name = document.getElementById('holo-name').value;
+    const loc = document.getElementById('holo-location').value;
+    const status = document.getElementById('holo-status');
+    if(!name) return alert("Bitte Namen eingeben!");
+    status.innerText = "Erstelle...";
+    await addDoc(collection(db, "holograms"), { name: name, location: loc, lines: [] });
+    status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000);
+    document.getElementById('holo-name').value = ''; document.getElementById('holo-location').value = '';
+});
+
+window.changeHoloLineType = () => {
+    const type = document.getElementById('modal-holo-line-type').value;
+    const input = document.getElementById('modal-holo-line-content');
+    const hint = document.getElementById('holo-line-hint');
+    if(type === 'item') {
+        input.placeholder = "Material Name (z.B. DIAMOND_SWORD)";
+        hint.innerText = "Gib den genauen Minecraft Material-Namen ein.";
+    } else {
+        input.placeholder = "Text (z.B. &aWillkommen!)";
+        hint.innerText = "Nutze Minecraft Color-Codes wie &c oder &l.";
+    }
+};
+
+window.openHoloLineModal = (holoId) => {
+    document.getElementById('modal-holo-id').value = holoId;
+    document.getElementById('modal-holo-line-type').value = 'text';
+    document.getElementById('modal-holo-line-content').value = '';
+    window.changeHoloLineType();
+    document.getElementById('holo-line-modal').classList.add('active');
+};
+
+document.getElementById('btn-save-holo-line').addEventListener('click', async () => {
+    const holoId = document.getElementById('modal-holo-id').value;
+    const type = document.getElementById('modal-holo-line-type').value;
+    const content = document.getElementById('modal-holo-line-content').value;
+    if(!content) return alert("Inhalt darf nicht leer sein!");
+    
+    const newLine = { id: Date.now().toString(), type, content };
+    const hRef = doc(db, "holograms", holoId);
+    const holo = allHolograms.find(h => h.id === holoId);
+    await updateDoc(hRef, { lines: [...(holo.lines || []), newLine] });
+    
+    document.getElementById('holo-line-modal').classList.remove('active');
+});
+
+window.deleteHoloLine = async (holoId, lineId) => {
+    if(confirm("Zeile löschen?")) {
+        const hRef = doc(db, "holograms", holoId);
+        const holo = allHolograms.find(h => h.id === holoId);
+        await updateDoc(hRef, { lines: (holo.lines || []).filter(l => l.id !== lineId) });
+    }
+};
+
+window.exportHoloYaml = function(holoId) {
+    const holo = allHolograms.find(h => h.id === holoId); if(!holo) return;
+    let safeName = holo.name ? holo.name.replace(/[^a-zA-Z0-9]/g, '') : 'Hologram';
+    
+    let yaml = `holos:\n  ${safeName}:\n    location: ${holo.location || 'world:0:100:0'}\n    lines:\n`;
+    (holo.lines || []).forEach(line => {
+        if(line.type === 'item') {
+            yaml += `      - content: '#ICON:${line.content}'\n`;
+        } else {
+            yaml += `      - content: '${line.content}'\n`;
+        }
+    });
+
+    const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `${safeName}.yml`; a.click(); URL.revokeObjectURL(url);
 };
 
 
@@ -505,10 +745,7 @@ document.getElementById('btn-save-plugin').addEventListener('click', async () =>
         if(!name) return alert("Bitte gib einen Plugin-Namen ein!"); 
         status.innerText = "Speichere..."; 
         
-        const pluginData = { 
-            name: name, perms: perms, info: perms, settingsType: settingsType, settingsText: settingsText,
-            dailyDays: Number(dailyDays), dailyRewards: dailyRewards
-        };
+        const pluginData = { name: name, perms: perms, info: perms, settingsType: settingsType, settingsText: settingsText, dailyDays: Number(dailyDays), dailyRewards: dailyRewards };
 
         if (editingPluginId) { await updateDoc(doc(db, "plugins", editingPluginId), pluginData); } 
         else { await addDoc(collection(db, "plugins"), pluginData); } 
@@ -540,7 +777,7 @@ window.importPluginPerms = () => {
 };
 
 // ==========================================
-// KISTEN LOGIK
+// KISTEN LOGIK (MIT UMBENNEN & DRAG DROP)
 // ==========================================
 
 window.renderCrates = function() {
@@ -643,10 +880,50 @@ window.changeCrateSort = (crateId, mode) => { window.crateSortModes[crateId] = m
 
 document.getElementById('btn-save-crate').addEventListener('click', async () => { try { const crate_name = document.getElementById('crate-name').value; const fileInput = document.getElementById('crate-image'); const file = fileInput ? fileInput.files[0] : null; const status = document.getElementById('crate-status'); if(!crate_name) return alert("Name fehlt!"); status.innerText = "Erstelle Kiste..."; let imageUrl = null; if (file) imageUrl = await uploadImage(file, 'crates'); await addDoc(collection(db, "crates"), { name: crate_name, image_url: imageUrl, items: [], order: allCrates.length }); status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('crate-name').value = ''; if(fileInput) fileInput.value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
 
-window.changeCrateItemType = () => { const type = document.getElementById('modal-item-type').value; const nameInput = document.getElementById('modal-item-name'); const enchSection = document.getElementById('enchantment-section'); if(type === 'money') { nameInput.placeholder = "Geld-Betrag (z.B. 1000)"; nameInput.value = ""; enchSection.style.display = 'none'; } else if(type === 'perk') { nameInput.value = "Platzhalter Perk"; enchSection.style.display = 'none'; } else if(type === 'special') { nameInput.value = "Platzhalter Spezial"; enchSection.style.display = 'none'; } else { nameInput.placeholder = "Item Name (z.B. Diamant)"; nameInput.value = ""; enchSection.style.display = 'block'; } };
+window.changeCrateItemType = (preserveName = false) => { 
+    const type = document.getElementById('modal-item-type').value; 
+    const nameInput = document.getElementById('modal-item-name'); 
+    const enchSection = document.getElementById('enchantment-section'); 
+    if(type === 'money') { 
+        nameInput.placeholder = "Geld-Betrag (z.B. 1000)"; 
+        if(!preserveName) nameInput.value = ""; 
+        enchSection.style.display = 'none'; 
+    } 
+    else if(type === 'perk') { 
+        if(!preserveName) nameInput.value = "Platzhalter Perk"; 
+        enchSection.style.display = 'none'; 
+    } 
+    else if(type === 'special') { 
+        if(!preserveName) nameInput.value = "Platzhalter Spezial"; 
+        enchSection.style.display = 'none'; 
+    } 
+    else { 
+        nameInput.placeholder = "Item Name (z.B. Diamant)"; 
+        if(!preserveName) nameInput.value = ""; 
+        enchSection.style.display = 'block'; 
+    } 
+};
+
 window.addEnchantmentField = (val = '') => { const container = document.getElementById('enchantments-container'); const row = document.createElement('div'); row.style.display = 'flex'; row.style.gap = '5px'; row.innerHTML = `<input type="text" class="ench-input" placeholder="z.B. sharpness:5" value="${val}" style="flex-grow:1; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-color); color: var(--text-main);"><button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">X</button>`; container.appendChild(row); };
-window.openItemModal = (crateId) => { document.getElementById('item-modal-title').innerText = "Neues Item hinzufügen"; document.getElementById('modal-crate-id').value = crateId; document.getElementById('modal-edit-item-id').value = ''; document.getElementById('modal-item-type').value = 'item'; document.getElementById('modal-item-name').value = ''; document.getElementById('modal-item-quantity').value = '1'; document.getElementById('modal-item-chance').value = ''; document.getElementById('enchantments-container').innerHTML = ''; window.changeCrateItemType(); document.getElementById('item-modal').classList.add('active'); };
-window.editCrateItem = (crateId, itemId) => { const crate = allCrates.find(c => c.id === crateId); if (!crate) return; const item = (crate.items || []).find(i => i.id === itemId); if (!item) return; document.getElementById('item-modal-title').innerText = "Item bearbeiten"; document.getElementById('modal-crate-id').value = crateId; document.getElementById('modal-edit-item-id').value = item.id; document.getElementById('modal-item-type').value = item.type || 'item'; document.getElementById('modal-item-name').value = item.name || ''; document.getElementById('modal-item-quantity').value = item.quantity || 1; document.getElementById('modal-item-chance').value = item.chance || ''; window.changeCrateItemType(); const enchContainer = document.getElementById('enchantments-container'); enchContainer.innerHTML = ''; if (item.enchantments && item.enchantments.length > 0) { item.enchantments.forEach(ench => window.addEnchantmentField(ench)); } document.getElementById('item-modal').classList.add('active'); };
+window.openItemModal = (crateId) => { document.getElementById('item-modal-title').innerText = "Neues Item hinzufügen"; document.getElementById('modal-crate-id').value = crateId; document.getElementById('modal-edit-item-id').value = ''; document.getElementById('modal-item-type').value = 'item'; document.getElementById('modal-item-name').value = ''; document.getElementById('modal-item-quantity').value = '1'; document.getElementById('modal-item-chance').value = ''; document.getElementById('enchantments-container').innerHTML = ''; window.changeCrateItemType(false); document.getElementById('item-modal').classList.add('active'); };
+window.editCrateItem = (crateId, itemId) => { 
+    const crate = allCrates.find(c => c.id === crateId); if (!crate) return; 
+    const item = (crate.items || []).find(i => i.id === itemId); if (!item) return; 
+    document.getElementById('item-modal-title').innerText = "Item bearbeiten"; 
+    document.getElementById('modal-crate-id').value = crateId; 
+    document.getElementById('modal-edit-item-id').value = item.id; 
+    document.getElementById('modal-item-type').value = item.type || 'item'; 
+    
+    window.changeCrateItemType(true); 
+    
+    document.getElementById('modal-item-name').value = item.name || ''; 
+    document.getElementById('modal-item-quantity').value = item.quantity || 1; 
+    document.getElementById('modal-item-chance').value = item.chance || ''; 
+    
+    const enchContainer = document.getElementById('enchantments-container'); enchContainer.innerHTML = ''; 
+    if (item.enchantments && item.enchantments.length > 0) { item.enchantments.forEach(ench => window.addEnchantmentField(ench)); } 
+    document.getElementById('item-modal').classList.add('active'); 
+};
 document.getElementById('btn-save-item').addEventListener('click', async () => {
     try {
         const crateId = document.getElementById('modal-crate-id').value; const editItemId = document.getElementById('modal-edit-item-id').value; const type = document.getElementById('modal-item-type').value; const name = document.getElementById('modal-item-name').value; const quantity = document.getElementById('modal-item-quantity').value; const chance = document.getElementById('modal-item-chance').value; const file = document.getElementById('modal-item-image').files[0]; const status = document.getElementById('modal-status');
@@ -673,7 +950,7 @@ window.exportShopYaml = function() { if(allShop.length === 0) return alert("Der 
 
 
 // ==========================================
-// WERBUNG & KAMPAGNEN (NEU)
+// WERBUNG & KAMPAGNEN
 // ==========================================
 document.getElementById('btn-save-ad-campaign').addEventListener('click', async () => {
     const name = document.getElementById('ad-campaign-name').value;
@@ -728,7 +1005,25 @@ window.deleteAdItem = async (campId, itemId) => {
 };
 
 // ==========================================
-// MENÜ PLANER LOGIK
+// 5. GUI PAKETE & UPLOAD LOGIK
+// ==========================================
+
+document.getElementById('btn-save-gui-package').addEventListener('click', async () => {
+    try {
+        const pkgName = document.getElementById('gui-package-name').value; const status = document.getElementById('gui-package-status');
+        if(!pkgName) return alert("Bitte gib dem GUI Paket einen Namen!"); status.innerText = "Erstelle Paket...";
+        await addDoc(collection(db, "guis"), { name: pkgName, items: [] });
+        status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('gui-package-name').value = '';
+    } catch (e) { console.error(e); alert("Fehler: " + e.message); }
+});
+
+window.openGuiUploadModal = (pkgId) => { document.getElementById('modal-gui-package-id').value = pkgId; document.getElementById('gui-upload-modal').classList.add('active'); };
+document.getElementById('btn-save-gui-upload').addEventListener('click', async () => { const status = document.getElementById('modal-gui-status'); try { const pkgId = document.getElementById('modal-gui-package-id').value; const name = document.getElementById('modal-gui-name').value; const file = document.getElementById('modal-gui-image').files[0]; if(!name || !file) return alert("Bitte Name und Bild angeben!"); status.innerText = "Lade hoch (Bitte warten)..."; const imageUrl = await uploadImage(file, 'guis/images'); if(!imageUrl) throw new Error("Upload fehlgeschlagen."); status.innerText = "Speichere in Paket..."; const newItem = { id: Date.now().toString(), name: name, image_url: imageUrl }; const pkgRef = doc(db, "guis", pkgId); const pkg = allGUIs.find(g => g.id === pkgId); await updateDoc(pkgRef, { items: [...(pkg.items || []), newItem] }); status.innerText = "Erfolgreich!"; setTimeout(() => { status.innerText = ""; document.getElementById('modal-gui-name').value = ''; document.getElementById('modal-gui-image').value = ''; document.getElementById('gui-upload-modal').classList.remove('active'); }, 1500); } catch (e) { console.error("Upload Error:", e); status.innerText = "Fehler!"; alert("Fehler beim Hochladen: " + e.message); } });
+window.deleteGuiItem = async (pkgId, itemId) => { if(confirm("Element wirklich löschen?")) { try { const pkgRef = doc(db, "guis", pkgId); const pkg = allGUIs.find(g => g.id === pkgId); await updateDoc(pkgRef, { items: (pkg.items || []).filter(i => i.id !== itemId) }); } catch (error) { console.error(error); alert("Fehler: " + error.message); } } };
+
+
+// ==========================================
+// 6. MENÜ PLANER LOGIK
 // ==========================================
 
 const plannerPresets = [ { id: 'btn_next', text: 'Nächste Seite', icon: '▶️' }, { id: 'btn_prev', text: 'Letzte Seite', icon: '◀️' }, { id: 'btn_close', text: 'Schließen', icon: '❌' }, { id: 'btn_money', text: 'Geld / Eco', icon: '💰' }, { id: 'btn_info', text: 'Information', icon: 'ℹ️' }, { id: 'btn_item', text: 'Item-Platz', icon: '📦' } ];
@@ -769,6 +1064,7 @@ window.exportMenuYaml = function() {
     for(let slot in currentMenuLayout) { const itemId = currentMenuLayout[slot]; const preset = plannerPresets.find(p => p.id === itemId); if(!preset) continue; yaml += `  '${itemId}_${slot}':\n`; if(itemId === 'btn_next') { yaml += `    material: arrow\n    slot: ${slot}\n    display_name: '&aNächste Seite'\n    left_click_commands:\n      - '[player] menu open nächste_seite'\n`; } else if(itemId === 'btn_prev') { yaml += `    material: arrow\n    slot: ${slot}\n    display_name: '&cLetzte Seite'\n    left_click_commands:\n      - '[player] menu open vorherige_seite'\n`; } else if(itemId === 'btn_close') { yaml += `    material: barrier\n    slot: ${slot}\n    display_name: '&cSchließen'\n    left_click_commands:\n      - '[close]'\n`; } else if(itemId === 'btn_money') { yaml += `    material: gold_ingot\n    slot: ${slot}\n    display_name: '&eDein Guthaben'\n    lore:\n      - '&7Du hast: %vault_eco_balance%'\n`; } else { yaml += `    material: stone\n    slot: ${slot}\n    display_name: '&f${preset.text}'\n`; } }
     const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${name.toLowerCase().replace(/\s+/g, '_')}.yml`; a.click(); URL.revokeObjectURL(url);
 };
+
 
 // ==========================================
 // 7. GUI PIXEL EDITOR LOGIK (ISOLIERT)
@@ -917,8 +1213,4 @@ function initEditor() {
             alert("FEHLER BEIM SPEICHERN:\n" + error.message);
         }
     }
-
-    const myColors = ['#a49e95', '#766f6a', '#483f46', '#231c2c', '#1e1829', '#539d33', '#ffffff', '#000000'];
-    myColors.forEach(c => window.createPaletteSwatch(c));
-    window.resizeCanvas(); saveState(); refreshSnapshot();
 }
