@@ -24,7 +24,7 @@ let listenersActive = false;
 
 window.crateCollapsed = {}; window.crateSortModes = {}; window.pluginCollapsed = {}; window.adCollapsed = {}; window.guiCollapsed = {}; window.questCollapsed = {}; window.holoCollapsed = {};
 let draggedCrateBox = null; 
-window.dragDropActive = false; // Neu: Default gesperrt
+window.dragDropActive = false;
 
 // --- DARK MODE LOGIK ---
 const savedTheme = localStorage.getItem('theme');
@@ -54,7 +54,6 @@ onAuthStateChanged(auth, (user) => {
         document.getElementById('main-app').style.display = 'flex';
         if (!listenersActive) { 
             startRealtimeListeners(); 
-            // Fix: Initialisiere den Editor erst, wenn man auf den Tab klickt (sonst Canvas-Fehler)
             listenersActive = true; 
         }
     } else {
@@ -73,7 +72,6 @@ document.getElementById('btn-login').addEventListener('click', async () => {
 
 document.getElementById('btn-logout').addEventListener('click', () => { signOut(auth); });
 
-// Navigation logic repariert: InitEditor erst bei Klick!
 document.querySelectorAll('.nav-item:not(#btn-logout):not(#btn-darkmode)').forEach(item => {
     item.addEventListener('click', (e) => {
         document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active')); e.target.classList.add('active');
@@ -81,7 +79,6 @@ document.querySelectorAll('.nav-item:not(#btn-logout):not(#btn-darkmode)').forEa
         document.querySelectorAll('.category-section').forEach(sec => sec.classList.remove('active')); 
         document.getElementById(targetId).classList.add('active');
         
-        // Sicherer Start der Editoren
         if(targetId === 'gui-editor') { 
             setTimeout(() => { initEditor(); if(window.resizeCanvas) window.resizeCanvas(); }, 100); 
         }
@@ -109,10 +106,9 @@ function updateDashboard() {
 
 function startRealtimeListeners() {
     
-    // EVENTS (NEU)
+    // EVENTS
     onSnapshot(collection(db, "events"), (snap) => {
         allEvents = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        // Sortieren nach Datum aufsteigend
         allEvents.sort((a, b) => new Date(a.date + 'T' + (a.time || '00:00')) - new Date(b.date + 'T' + (b.time || '00:00')));
         
         const container = document.getElementById('events-container');
@@ -146,13 +142,11 @@ function startRealtimeListeners() {
         updateDashboard();
     });
 
-    // SHOP, RÄNGE, GUIS etc. wie gehabt
     onSnapshot(collection(db, "shop"), (snap) => { allShop = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); updateDashboard(); });
     onSnapshot(collection(db, "ranks"), (snap) => { allRanks = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); updateDashboard(); });
     onSnapshot(collection(db, "guis"), (snap) => { 
         allGUIs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); 
         updateDashboard(); 
-        // Lade Auswahlboxen für Editor und Planner neu
         const editorSelect = document.getElementById('editor-pkg-select');
         const plannerSelect = document.getElementById('planner-pkg-select');
         if(editorSelect) { editorSelect.innerHTML = '<option value="">Ziel-Paket wählen...</option>'; allGUIs.forEach(pkg => editorSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`); }
@@ -223,7 +217,7 @@ window.toggleDragDrop = function() {
         btn.innerText = "🔒 Drag & Drop: AUS";
         btn.style.borderColor = "var(--border-color)"; btn.style.color = "var(--text-main)";
     }
-    window.renderCrates(); // Neu rendern mit aktualisiertem Attribut
+    window.renderCrates();
 };
 
 window.renderCrates = function() {
@@ -262,7 +256,6 @@ window.renderCrates = function() {
         let displayStyle = isCollapsed ? 'none' : 'block';
         let iconText = isCollapsed ? '▶️' : '🔽';
 
-        // Setze das draggable attribut basierend auf dem Lock
         let dragAttr = window.dragDropActive ? 'draggable="true"' : '';
 
         container.innerHTML += `
@@ -288,7 +281,6 @@ window.renderCrates = function() {
             </div>`;
     });
 
-    // Nur Drag Events anhängen, wenn aktiv
     if(window.dragDropActive) {
         const boxes = document.querySelectorAll('.crate-box[data-crate-id]');
         boxes.forEach(box => {
@@ -318,7 +310,6 @@ window.toggleCrate = (id) => {
 };
 window.changeCrateSort = (crateId, mode) => { window.crateSortModes[crateId] = mode; window.renderCrates(); };
 
-// Enchantment Felder getrennt!
 window.addEnchantmentField = (name = '', level = '1') => { 
     const container = document.getElementById('enchantments-container'); 
     const row = document.createElement('div'); 
@@ -374,7 +365,6 @@ document.getElementById('btn-save-item').addEventListener('click', async () => {
         
         if(!name || !chance || !quantity) return alert("Pflichtfelder fehlen!"); 
         
-        // Enchantment Felder auslesen
         const enchNames = document.querySelectorAll('.ench-name'); 
         const enchLevels = document.querySelectorAll('.ench-level'); 
         let enchantments = [];
@@ -405,7 +395,7 @@ document.getElementById('btn-save-item').addEventListener('click', async () => {
 
 
 // ==========================================
-// MENÜ PLANER & GUI EDITOR LOGIK (Repariert)
+// MENÜ PLANER & GUI EDITOR LOGIK
 // ==========================================
 const plannerPresets = [ { id: 'btn_next', text: 'Nächste', icon: '▶️' }, { id: 'btn_close', text: 'Schließen', icon: '❌' } ];
 let currentMenuLayout = {}; let plannerBgImage = null;
@@ -444,7 +434,6 @@ window.editGuiItemInEditor = async (pkgId, itemId) => {
     const item = (pkg.items || []).find(i => i.id === itemId); if(!item) return; 
     document.querySelector('[data-target="gui-editor"]').click(); 
     
-    // Warte kurz bis UI da ist
     setTimeout(async () => {
         document.getElementById('editor-pkg-select').value = pkgId; 
         document.getElementById('editor-gui-name').value = item.name; 
@@ -465,23 +454,20 @@ window.editGuiItemInEditor = async (pkgId, itemId) => {
     }, 200);
 };
 
-// Canvas Editor Kapselung (Nur 1x laden)
 let editorInitialized = false;
 function initEditor() {
     if (editorInitialized) return; 
     const canvas = document.getElementById('pixelCanvas'); 
-    if(!canvas) return; // Verhindert Abstürze falls versteckt
+    if(!canvas) return;
     
     editorInitialized = true;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    let currentZoom = 2; let currentTool = 'brush'; let selectedColor = '#a49e95'; 
-    let isDrawing = false; let isEraseMode = false; let startPos = {x:0, y:0}; 
-    const undoStack = [];
+    let currentZoom = 2; let selectedColor = '#a49e95'; 
+    let isDrawing = false; 
     
     window.clearCanvasSilent = function() { ctx.clearRect(0,0,canvas.width,canvas.height); }
     window.clearCanvas = function(){if(confirm("Löschen?")){window.clearCanvasSilent();}}
     
-    // Einfache Brush Logik zur Demo (Rest deiner Logik greift hier nativ weiter, ich hab sie nur abgesichert)
     function getMousePos(evt) { const r = canvas.getBoundingClientRect(); return { x: Math.floor((evt.clientX - r.left)/currentZoom), y: Math.floor((evt.clientY - r.top)/currentZoom) }; }
     
     canvas.addEventListener('mousedown', function(e) { 
