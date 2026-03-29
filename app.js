@@ -113,6 +113,30 @@ window.checkServerStatus = async function() {
     } catch(e) { resDiv.innerHTML = "<span style='color:var(--danger);'>❌ Fehler beim Abrufen der API.</span>"; }
 }
 
+// ==========================================
+// GLOBAL MC TEXT FORMATTER (mit § und &)
+// ==========================================
+window.formatMcText = function(text) {
+    if(!text) return '';
+    let safeText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    let html = ''; 
+    // Unterstützt jetzt & und §
+    let parts = safeText.split(/([&§][0-9a-fl-or])/i); 
+    let currentClasses = ['mc-f'];
+    
+    for(let part of parts) {
+        if(/^[&§][0-9a-fl-or]$/i.test(part)) {
+            let code = part.charAt(1).toLowerCase();
+            if(code === 'r') { currentClasses = ['mc-f']; }
+            else if(/[0-9a-f]/.test(code)) { currentClasses = [`mc-${code}`]; } 
+            else { currentClasses.push(`mc-${code}`); } 
+        } else if(part) { 
+            html += `<span class="${currentClasses.join(' ')}">${part}</span>`; 
+        }
+    }
+    return html;
+};
+
 
 // ==========================================
 // DATEN LADEN (REALTIME LISTENER)
@@ -227,7 +251,7 @@ function startRealtimeListeners() {
         updateDashboard();
     });
 
-    // WERBUNG KAMPAGNEN (NEU)
+    // WERBUNG KAMPAGNEN
     onSnapshot(collection(db, "ads"), (snap) => {
         allAds = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const container = document.getElementById('ad-campaigns-container');
@@ -261,7 +285,7 @@ function startRealtimeListeners() {
                             <h3 style="font-size: 18px; margin: 0;">${camp.name || 'Unbenannte Kampagne'}</h3>
                         </div>
                         <div class="button-group" onclick="event.stopPropagation()">
-                            <button class="btn btn-primary btn-sm" onclick="window.openAdItemModal('${camp.id}')">🖼️ Werbung hinzufügen</button>
+                            <button class="btn btn-primary btn-sm" onclick="window.openAdUploadModal('${camp.id}')">🖼️ Werbung hinzufügen</button>
                             <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('ads', '${camp.id}')">Kampagne löschen</button>
                         </div>
                     </div>
@@ -282,14 +306,24 @@ function startRealtimeListeners() {
         
         if(!container) return; container.innerHTML = '';
         
-        const currentEditorVal = editorSelect ? editorSelect.value : ''; const currentPlannerVal = plannerSelect ? plannerSelect.value : ''; const currentBgVal = plannerBgSelect ? plannerBgSelect.value : '';
-        if(editorSelect) editorSelect.innerHTML = '<option value="">Ziel-Paket wählen...</option>'; if(plannerSelect) plannerSelect.innerHTML = '<option value="">Ziel-Paket wählen...</option>'; if(plannerBgSelect) plannerBgSelect.innerHTML = '<option value="">Kein Bild (Nur Grid)</option>';
+        const currentEditorVal = editorSelect ? editorSelect.value : ''; 
+        const currentPlannerVal = plannerSelect ? plannerSelect.value : ''; 
+        const currentBgVal = plannerBgSelect ? plannerBgSelect.value : '';
+        
+        if(editorSelect) editorSelect.innerHTML = '<option value="">Ziel-Paket wählen...</option>'; 
+        if(plannerSelect) plannerSelect.innerHTML = '<option value="">Ziel-Paket wählen...</option>';
+        if(plannerBgSelect) plannerBgSelect.innerHTML = '<option value="">Kein Bild (Nur Grid)</option>';
 
         allGUIs.forEach(pkg => {
-            if(editorSelect) editorSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`; if(plannerSelect) plannerSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`;
+            if(editorSelect) editorSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`; 
+            if(plannerSelect) plannerSelect.innerHTML += `<option value="${pkg.id}">${pkg.name}</option>`;
+            
             let items = pkg.items || [];
             let itemsHtml = items.map(item => {
-                if (plannerBgSelect && item.type !== 'layout' && item.image_url) { plannerBgSelect.innerHTML += `<option value="${item.image_url}">${pkg.name} - ${item.name}</option>`; }
+                if (plannerBgSelect && item.type !== 'layout' && item.image_url) { 
+                    plannerBgSelect.innerHTML += `<option value="${item.image_url}">${pkg.name} - ${item.name}</option>`; 
+                }
+
                 if (item.type === 'layout') {
                     return `<div class="gui-card"><div class="gui-card-header"><span>${item.name}</span><div><button class="btn btn-secondary btn-sm" onclick="window.editLayoutInPlanner('${pkg.id}', '${item.id}')" title="Im Planer bearbeiten">✏️</button><button class="btn btn-danger btn-sm" onclick="window.deleteGuiItem('${pkg.id}', '${item.id}')">Löschen</button></div></div><div style="width:100%; height:120px; background:#1e1e1e; border: 2px solid #555; border-radius:6px; display:flex; align-items:center; justify-content:center; flex-direction: column;"><span style="font-size: 30px; margin-bottom: 10px;">📋</span><span style="color:#4CAF50; font-size:12px; font-weight:bold;">Menü Layout (${item.rows} Reihen)</span></div></div>`;
                 } else {
@@ -297,23 +331,38 @@ function startRealtimeListeners() {
                 }
             }).join('');
 
-            let isCollapsed = window.guiCollapsed[pkg.id] !== false; let displayStyle = isCollapsed ? 'none' : 'block'; let iconText = isCollapsed ? '▶️' : '🔽';
+            let isCollapsed = window.guiCollapsed[pkg.id] !== false; // Standard eingeklappt
+            let displayStyle = isCollapsed ? 'none' : 'block';
+            let iconText = isCollapsed ? '▶️' : '🔽';
 
             container.innerHTML += `
                 <div class="crate-box">
                     <div class="crate-header" style="cursor: pointer; margin-bottom: 0; padding-bottom: ${isCollapsed ? '0' : '15px'}; border-bottom: ${isCollapsed ? 'none' : '1px solid var(--border-color)'};" onclick="window.toggleGuiPackage('${pkg.id}')">
-                        <div class="crate-header-left"><span id="gui-icon-${pkg.id}" style="margin-right: 8px; font-size: 14px;">${iconText}</span><h3 style="font-size: 18px; margin: 0;">${pkg.name}</h3></div>
-                        <div class="button-group" onclick="event.stopPropagation()"><button class="btn btn-info btn-sm" onclick="window.openMenuPlannerForPkg('${pkg.id}')">📋 Menü planen</button><button class="btn btn-secondary btn-sm" onclick="window.openGuiEditorForPkg('${pkg.id}')">🖌️ Pixel Editor</button><button class="btn btn-primary btn-sm" onclick="window.openGuiUploadModal('${pkg.id}')">🖼️ Upload</button><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('guis', '${pkg.id}')">Paket löschen</button></div>
+                        <div class="crate-header-left">
+                            <span id="gui-icon-${pkg.id}" style="margin-right: 8px; font-size: 14px;">${iconText}</span>
+                            <h3 style="font-size: 18px; margin: 0;">${pkg.name}</h3>
+                        </div>
+                        <div class="button-group" onclick="event.stopPropagation()">
+                            <button class="btn btn-info btn-sm" onclick="window.openMenuPlannerForPkg('${pkg.id}')">📋 Menü planen</button>
+                            <button class="btn btn-secondary btn-sm" onclick="window.openGuiEditorForPkg('${pkg.id}')">🖌️ Pixel Editor</button>
+                            <button class="btn btn-primary btn-sm" onclick="window.openGuiUploadModal('${pkg.id}')">🖼️ Upload</button>
+                            <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('guis', '${pkg.id}')">Paket löschen</button>
+                        </div>
                     </div>
-                    <div id="gui-content-${pkg.id}" style="display: ${displayStyle}; margin-top: 15px;">${items.length > 0 ? `<div class="gui-grid">${itemsHtml}</div>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine GUIs in diesem Paket.</p>'}</div>
+                    <div id="gui-content-${pkg.id}" style="display: ${displayStyle}; margin-top: 15px;">
+                        ${items.length > 0 ? `<div class="gui-grid">${itemsHtml}</div>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine GUIs in diesem Paket.</p>'}
+                    </div>
                 </div>`;
         });
         
-        if(editorSelect && currentEditorVal) editorSelect.value = currentEditorVal; if(plannerSelect && currentPlannerVal) plannerSelect.value = currentPlannerVal; if(plannerBgSelect && currentBgVal) plannerBgSelect.value = currentBgVal;
+        if(editorSelect && currentEditorVal) editorSelect.value = currentEditorVal; 
+        if(plannerSelect && currentPlannerVal) plannerSelect.value = currentPlannerVal; 
+        if(plannerBgSelect && currentBgVal) plannerBgSelect.value = currentBgVal;
+        
         updateDashboard();
     });
 
-    // QUESTS (NEU)
+    // QUESTS
     onSnapshot(collection(db, "quest_batches"), (snap) => {
         allQuestBatches = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const container = document.getElementById('quest-batches-container');
@@ -371,7 +420,7 @@ function startRealtimeListeners() {
         updateDashboard();
     });
 
-    // HOLOGRAMME (NEU)
+    // HOLOGRAMME 
     onSnapshot(collection(db, "holograms"), (snap) => {
         allHolograms = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const container = document.getElementById('holograms-container');
@@ -438,7 +487,7 @@ window.deleteEntry = async (collectionName, id) => { if(confirm('Wirklich komple
 
 
 // ==========================================
-// QUESTS LOGIK (NEU BATCHES)
+// QUESTS LOGIK (BATCHES)
 // ==========================================
 document.getElementById('btn-create-quest-batch').addEventListener('click', async () => {
     const name = document.getElementById('quest-batch-name').value;
@@ -573,7 +622,7 @@ window.exportQuestYaml = function(batchId) {
 };
 
 // ==========================================
-// HOLOGRAMME LOGIK (NEU)
+// HOLOGRAMME LOGIK 
 // ==========================================
 document.getElementById('btn-save-holo').addEventListener('click', async () => {
     const name = document.getElementById('holo-name').value;
@@ -642,21 +691,6 @@ window.exportHoloYaml = function(holoId) {
 // ==========================================
 // AUTO-BROADCASTER LOGIK
 // ==========================================
-
-window.formatMcText = function(text) {
-    if(!text) return '';
-    let safeText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    let html = ''; let parts = safeText.split(/(&[0-9a-fl-or])/i); let currentClasses = ['mc-f'];
-    for(let part of parts) {
-        if(/^&[0-9a-fl-or]$/i.test(part)) {
-            let code = part.charAt(1).toLowerCase();
-            if(code === 'r') { currentClasses = ['mc-f']; }
-            else if(/[0-9a-f]/.test(code)) { currentClasses = [`mc-${code}`]; } 
-            else { currentClasses.push(`mc-${code}`); } 
-        } else if(part) { html += `<span class="${currentClasses.join(' ')}">${part}</span>`; }
-    }
-    return html;
-};
 
 window.updateMcPreview = function(inputId = 'bc-message', previewId = 'bc-preview') {
     let text = document.getElementById(inputId).value;
@@ -810,7 +844,7 @@ window.importPluginPerms = () => {
 };
 
 // ==========================================
-// KISTEN LOGIK (MIT UMBENNEN & DRAG DROP)
+// KISTEN LOGIK
 // ==========================================
 
 window.renderCrates = function() {
@@ -985,19 +1019,22 @@ window.exportShopYaml = function() { if(allShop.length === 0) return alert("Der 
 // ==========================================
 // WERBUNG & KAMPAGNEN
 // ==========================================
-document.getElementById('btn-create-ad-campaign').addEventListener('click', async () => {
+document.getElementById('btn-save-ad-campaign').addEventListener('click', async () => {
     const name = document.getElementById('ad-campaign-name').value;
+    const status = document.getElementById('ad-campaign-status');
     if(!name) return alert("Bitte Kampagnen-Namen eingeben!");
+    status.innerText = "Erstelle Kampagne...";
     await addDoc(collection(db, "ads"), { name: name, items: [] });
+    status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000);
     document.getElementById('ad-campaign-name').value = '';
 });
 
-window.openAdItemModal = (id) => {
+window.openAdUploadModal = (id) => {
     document.getElementById('modal-ad-campaign-id').value = id;
     document.getElementById('ad-upload-modal').classList.add('active');
 };
 
-document.getElementById('btn-save-ad-item').addEventListener('click', async () => {
+document.getElementById('btn-save-ad-upload').addEventListener('click', async () => {
     const campId = document.getElementById('modal-ad-campaign-id').value;
     const title = document.getElementById('modal-ad-title').value;
     const link = document.getElementById('modal-ad-link').value;
@@ -1050,7 +1087,6 @@ document.getElementById('btn-save-gui-package').addEventListener('click', async 
 window.openGuiUploadModal = (pkgId) => { document.getElementById('modal-gui-package-id').value = pkgId; document.getElementById('gui-upload-modal').classList.add('active'); };
 document.getElementById('btn-save-gui-upload').addEventListener('click', async () => { const status = document.getElementById('modal-gui-status'); try { const pkgId = document.getElementById('modal-gui-package-id').value; const name = document.getElementById('modal-gui-name').value; const file = document.getElementById('modal-gui-image').files[0]; if(!name || !file) return alert("Bitte Name und Bild angeben!"); status.innerText = "Lade hoch (Bitte warten)..."; const imageUrl = await uploadImage(file, 'guis/images'); if(!imageUrl) throw new Error("Upload fehlgeschlagen."); status.innerText = "Speichere in Paket..."; const newItem = { id: Date.now().toString(), name: name, image_url: imageUrl }; const pkgRef = doc(db, "guis", pkgId); const pkg = allGUIs.find(g => g.id === pkgId); await updateDoc(pkgRef, { items: [...(pkg.items || []), newItem] }); status.innerText = "Erfolgreich!"; setTimeout(() => { status.innerText = ""; document.getElementById('modal-gui-name').value = ''; document.getElementById('modal-gui-image').value = ''; document.getElementById('gui-upload-modal').classList.remove('active'); }, 1500); } catch (e) { console.error("Upload Error:", e); status.innerText = "Fehler!"; alert("Fehler beim Hochladen: " + e.message); } });
 window.deleteGuiItem = async (pkgId, itemId) => { if(confirm("Element wirklich löschen?")) { try { const pkgRef = doc(db, "guis", pkgId); const pkg = allGUIs.find(g => g.id === pkgId); await updateDoc(pkgRef, { items: (pkg.items || []).filter(i => i.id !== itemId) }); } catch (error) { console.error(error); alert("Fehler: " + error.message); } } };
-
 
 // ==========================================
 // 6. MENÜ PLANER LOGIK
