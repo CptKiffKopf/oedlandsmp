@@ -97,6 +97,7 @@ function updateDashboard() {
     document.getElementById('stat-events').innerText = allEvents.length;
     let questCount = 0; allQuestBatches.forEach(b => { questCount += (b.quests || []).length; });
     document.getElementById('stat-quests').innerText = questCount; 
+    document.getElementById('stat-holograms').innerText = allHolograms.length; 
 }
 
 function sortRanksHierarchically(ranks) {
@@ -288,7 +289,7 @@ function startRealtimeListeners() {
                     </div>`;
             }).join('');
 
-            let isCollapsed = window.adCollapsed[camp.id] !== false;
+            let isCollapsed = window.adCollapsed[camp.id] !== false; 
             let displayStyle = isCollapsed ? 'none' : 'block';
             let iconText = isCollapsed ? '▶️' : '🔽';
 
@@ -490,8 +491,244 @@ function startRealtimeListeners() {
 
 window.deleteEntry = async (collectionName, id) => { if(confirm('Wirklich komplett löschen?')) { await deleteDoc(doc(db, collectionName, id)); } };
 
+
 // ==========================================
-// ALLGEMEINE TOGGLE FUNKTIONEN
+// KISTEN LOGIK (MIT DRAG & DROP)
+// ==========================================
+window.toggleDragDrop = function() {
+    window.dragDropActive = !window.dragDropActive;
+    const btn = document.getElementById('btn-toggle-drag');
+    if(window.dragDropActive) {
+        btn.innerText = "🔓 Drag & Drop: AN";
+        btn.style.borderColor = "#4CAF50"; btn.style.color = "#4CAF50";
+    } else {
+        btn.innerText = "🔒 Drag & Drop: AUS";
+        btn.style.borderColor = "var(--border-color)"; btn.style.color = "var(--text-main)";
+    }
+    window.renderCrates(); 
+};
+
+window.renderCrates = function() {
+    const container = document.getElementById('crates-container');
+    if(!container) return;
+    container.innerHTML = '';
+    
+    allCrates.forEach(crate => {
+        let items = [...(crate.items || [])];
+        const sortMode = window.crateSortModes[crate.id] || 'default';
+        if (sortMode === 'chance') { items.sort((a, b) => (Number(b.chance) || 0) - (Number(a.chance) || 0)); } 
+        else if (sortMode === 'name') { items.sort((a, b) => (a.name || '').localeCompare(b.name || '')); }
+
+        let crateImgHtml = crate.image_url ? `<img src="${crate.image_url}" class="thumbnail" style="width:50px;height:50px;">` : `<div class="thumbnail" style="width:50px;height:50px; display:flex; align-items:center; justify-content:center; font-size:24px;">📦</div>`;
+        
+        let itemsHtml = items.map(item => {
+            let typeIcon = '📦';
+            if(item.type === 'money') typeIcon = '<span style="font-size:20px;">💰</span>';
+            if(item.type === 'perk') typeIcon = '<span style="font-size:20px;">🌟</span>';
+            if(item.type === 'special') typeIcon = '<span style="font-size:20px;">✨</span>';
+            
+            let imgContent = item.image_url ? `<img src="${item.image_url}" class="thumbnail" style="width:30px;height:30px;">` : typeIcon;
+            let enchHtml = (item.enchantments && item.enchantments.length > 0) ? `<div style="font-size: 11px; color: #a855f7; margin-top: 4px;">🪄 ${item.enchantments.join(', ')}</div>` : '';
+            
+            return `<tr>
+                <td style="text-align: center;">${imgContent}</td>
+                <td><strong>${item.name}</strong>${enchHtml}</td>
+                <td>${item.quantity || 1}x</td>
+                <td>${item.chance}%</td>
+                <td style="text-align: right;">
+                    <button class="btn btn-secondary btn-sm" onclick="window.editCrateItem('${crate.id}', '${item.id}')">✏️ Bearbeiten</button>
+                    <button class="btn btn-danger btn-sm" onclick="window.deleteCrateItem('${crate.id}', '${item.id}')">🗑️ Löschen</button>
+                </td>
+            </tr>`;
+        }).join('');
+        
+        let isCollapsed = window.crateCollapsed[crate.id] !== false; 
+        let displayStyle = isCollapsed ? 'none' : 'block';
+        let iconText = isCollapsed ? '▶️' : '🔽';
+        let dragAttr = window.dragDropActive ? 'draggable="true"' : '';
+
+        container.innerHTML += `
+            <div class="crate-box" ${dragAttr} data-crate-id="${crate.id}">
+                <div class="crate-header" style="cursor: pointer; margin-bottom: 0; padding-bottom: ${isCollapsed ? '0' : '15px'}; border-bottom: ${isCollapsed ? 'none' : '1px solid var(--border-color)'};" onclick="window.toggleCrate('${crate.id}')">
+                    <div class="crate-header-left" ${dragAttr} title="${window.dragDropActive ? 'Halten um Kiste zu verschieben' : 'Drag & Drop ist gesperrt'}">
+                        <span id="crate-icon-${crate.id}" style="margin-right: 8px; font-size: 14px;">${iconText}</span>
+                        ${crateImgHtml}
+                        <h3 style="font-size: 18px; margin: 0;">${crate.name || 'Unbenannte Kiste'}</h3>
+                    </div>
+                    <div class="button-group" onclick="event.stopPropagation()">
+                        <select onchange="window.changeCrateSort('${crate.id}', this.value)" style="padding: 6px; border-radius: 4px; background: var(--surface-color); color: var(--text-main); border: 1px solid var(--border-color); font-size: 12px; outline: none;">
+                            <option value="default" ${sortMode === 'default' ? 'selected' : ''}>Sortierung: Standard</option>
+                            <option value="chance" ${sortMode === 'chance' ? 'selected' : ''}>Sortierung: Chance</option>
+                            <option value="name" ${sortMode === 'name' ? 'selected' : ''}>Sortierung: A-Z</option>
+                        </select>
+                        <button class="btn btn-secondary btn-sm" style="border-color:#FF9800; color:#FF9800;" onclick="window.simulateCrate('${crate.id}')">🎲 Test-Öffnen</button>
+                        <button class="btn btn-info btn-sm" onclick="window.exportCrateYaml('${crate.id}')">📥 CrazyCrates Export</button>
+                        <button class="btn btn-primary btn-sm" onclick="window.openItemModal('${crate.id}')">+ Item</button>
+                        <button class="btn btn-secondary btn-sm" onclick="window.renameCrate('${crate.id}')">✏️ Name ändern</button>
+                        <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('crates', '${crate.id}')">Löschen</button>
+                    </div>
+                </div>
+                <div id="crate-content-${crate.id}" style="display: ${displayStyle}; margin-top: 15px;">
+                    ${items.length > 0 ? `<table class="crate-items-table"><thead><tr><th style="width: 50px;">Art</th><th>Item Name</th><th>Menge</th><th>Chance</th><th style="text-align: right;">Aktion</th></tr></thead><tbody>${itemsHtml}</tbody></table>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Items in dieser Kiste.</p>'}
+                </div>
+            </div>`;
+    });
+
+    if(window.dragDropActive) {
+        const boxes = document.querySelectorAll('.crate-box[data-crate-id]');
+        boxes.forEach(box => {
+            box.addEventListener('dragstart', function(e) { draggedCrateBox = this; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/html', this.innerHTML); this.style.opacity = '0.4'; });
+            box.addEventListener('dragover', function(e) { e.preventDefault(); this.classList.add('drag-over'); return false; });
+            box.addEventListener('dragleave', function(e) { this.classList.remove('drag-over'); });
+            box.addEventListener('drop', function(e) {
+                e.stopPropagation(); this.classList.remove('drag-over');
+                if (draggedCrateBox !== this) {
+                    let parent = this.parentNode; let children = Array.from(parent.children); let srcIndex = children.indexOf(draggedCrateBox); let targetIndex = children.indexOf(this);
+                    if (srcIndex < targetIndex) { this.after(draggedCrateBox); } else { this.before(draggedCrateBox); }
+                    let newOrderIds = Array.from(parent.children).map(el => el.getAttribute('data-crate-id')).filter(id => id);
+                    newOrderIds.forEach((id, index) => { updateDoc(doc(db, "crates", id), { order: index }); });
+                }
+                return false;
+            });
+            box.addEventListener('dragend', function(e) { this.style.opacity = '1'; boxes.forEach(b => b.classList.remove('drag-over')); });
+        });
+    }
+};
+
+window.renameCrate = async (id) => {
+    const crate = allCrates.find(c => c.id === id); if(!crate) return;
+    const newName = prompt("Bitte gib einen neuen Namen für die Kiste ein:", crate.name);
+    if(newName && newName.trim() !== "" && newName !== crate.name) { await updateDoc(doc(db, "crates", id), { name: newName.trim() }); }
+}
+
+window.toggleCrate = (id) => { 
+    window.crateCollapsed[id] = window.crateCollapsed[id] === false ? true : false; 
+    const content = document.getElementById(`crate-content-${id}`); const icon = document.getElementById(`crate-icon-${id}`); const header = content.previousElementSibling;
+    if (window.crateCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } 
+    else { content.style.display = 'block'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; } 
+};
+window.changeCrateSort = (crateId, mode) => { window.crateSortModes[crateId] = mode; window.renderCrates(); };
+
+document.getElementById('btn-save-crate').addEventListener('click', async () => { try { const crate_name = document.getElementById('crate-name').value; const fileInput = document.getElementById('crate-image'); const file = fileInput ? fileInput.files[0] : null; const status = document.getElementById('crate-status'); if(!crate_name) return alert("Name fehlt!"); status.innerText = "Erstelle Kiste..."; let imageUrl = null; if (file) imageUrl = await uploadImage(file, 'crates'); await addDoc(collection(db, "crates"), { name: crate_name, image_url: imageUrl, items: [], order: allCrates.length }); status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('crate-name').value = ''; if(fileInput) fileInput.value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
+
+window.changeCrateItemType = (preserveName = false) => { 
+    const type = document.getElementById('modal-item-type').value; 
+    const nameInput = document.getElementById('modal-item-name'); 
+    const enchSection = document.getElementById('enchantment-section'); 
+    if(type === 'money') { 
+        nameInput.placeholder = "Geld-Betrag (z.B. 1000)"; 
+        if(!preserveName) nameInput.value = ""; 
+        enchSection.style.display = 'none'; 
+    } 
+    else if(type === 'perk') { 
+        if(!preserveName) nameInput.value = "Platzhalter Perk"; 
+        enchSection.style.display = 'none'; 
+    } 
+    else if(type === 'special') { 
+        if(!preserveName) nameInput.value = "Platzhalter Spezial"; 
+        enchSection.style.display = 'none'; 
+    } 
+    else { 
+        nameInput.placeholder = "Item Name (z.B. Diamant)"; 
+        if(!preserveName) nameInput.value = ""; 
+        enchSection.style.display = 'block'; 
+    } 
+};
+
+window.addEnchantmentField = (name = '', level = '1') => { 
+    const container = document.getElementById('enchantments-container'); 
+    const row = document.createElement('div'); 
+    row.style.display = 'flex'; row.style.gap = '5px'; 
+    row.innerHTML = `
+        <input type="text" class="ench-name" placeholder="z.B. sharpness" value="${name}" style="flex:2; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-color); color: var(--text-main);">
+        <input type="number" class="ench-level" placeholder="Lvl" value="${level}" style="flex:1; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-color); color: var(--text-main);">
+        <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">X</button>
+    `; 
+    container.appendChild(row); 
+};
+
+window.openItemModal = (crateId) => { 
+    document.getElementById('item-modal-title').innerText = "Neues Item hinzufügen"; 
+    document.getElementById('modal-crate-id').value = crateId; 
+    document.getElementById('modal-edit-item-id').value = ''; 
+    document.getElementById('modal-item-name').value = ''; 
+    document.getElementById('modal-item-quantity').value = '1'; 
+    document.getElementById('modal-item-chance').value = ''; 
+    document.getElementById('enchantments-container').innerHTML = ''; 
+    document.getElementById('item-modal').classList.add('active'); 
+};
+
+window.editCrateItem = (crateId, itemId) => { 
+    const crate = allCrates.find(c => c.id === crateId); if (!crate) return; 
+    const item = (crate.items || []).find(i => i.id === itemId); if (!item) return; 
+    document.getElementById('item-modal-title').innerText = "Item bearbeiten"; 
+    document.getElementById('modal-crate-id').value = crateId; 
+    document.getElementById('modal-edit-item-id').value = item.id; 
+    document.getElementById('modal-item-type').value = item.type || 'item'; 
+    
+    window.changeCrateItemType(true); 
+    
+    document.getElementById('modal-item-name').value = item.name || ''; 
+    document.getElementById('modal-item-quantity').value = item.quantity || 1; 
+    document.getElementById('modal-item-chance').value = item.chance || ''; 
+    
+    const enchContainer = document.getElementById('enchantments-container'); enchContainer.innerHTML = ''; 
+    if (item.enchantments && item.enchantments.length > 0) { 
+        item.enchantments.forEach(ench => {
+            const parts = ench.split(':');
+            window.addEnchantmentField(parts[0], parts[1] || '1');
+        }); 
+    } 
+    document.getElementById('item-modal').classList.add('active'); 
+};
+
+document.getElementById('btn-save-item').addEventListener('click', async () => {
+    try {
+        const crateId = document.getElementById('modal-crate-id').value; 
+        const editItemId = document.getElementById('modal-edit-item-id').value; 
+        const type = document.getElementById('modal-item-type').value; 
+        const name = document.getElementById('modal-item-name').value; 
+        const quantity = document.getElementById('modal-item-quantity').value; 
+        const chance = document.getElementById('modal-item-chance').value; 
+        const file = document.getElementById('modal-item-image').files[0]; 
+        
+        if(!name || !chance || !quantity) return alert("Pflichtfelder fehlen!"); 
+        
+        const enchNames = document.querySelectorAll('.ench-name'); 
+        const enchLevels = document.querySelectorAll('.ench-level'); 
+        let enchantments = [];
+        for(let i=0; i<enchNames.length; i++) {
+            const eName = enchNames[i].value.trim();
+            const eLevel = enchLevels[i].value.trim() || '1';
+            if(eName) enchantments.push(`${eName}:${eLevel}`);
+        }
+
+        let imageUrl = null; if(file) imageUrl = await uploadImage(file, 'crates/items');
+        const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId);
+        let updatedItems = [...(crate.items || [])];
+        if(editItemId) { 
+            const idx = updatedItems.findIndex(i => i.id === editItemId); 
+            if(idx > -1) { 
+                updatedItems[idx].type = type; updatedItems[idx].name = name; 
+                updatedItems[idx].quantity = Number(quantity); updatedItems[idx].chance = Number(chance); 
+                updatedItems[idx].enchantments = enchantments; 
+                if(file) updatedItems[idx].image_url = imageUrl; 
+            } 
+        } else { 
+            updatedItems.push({ id: Date.now().toString(), type, name, quantity: Number(quantity), chance: Number(chance), enchantments, image_url: imageUrl }); 
+        }
+        await updateDoc(crateRef, { items: updatedItems });
+        document.getElementById('item-modal').classList.remove('active');
+    } catch (error) { console.error(error); alert("Fehler: " + error.message); }
+});
+
+window.deleteCrateItem = async (crateId, itemId) => { if(confirm("Item entfernen?")) { try { const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId); await updateDoc(crateRef, { items: (crate.items || []).filter(i => i.id !== itemId) }); } catch (error) { console.error(error); } } };
+window.simulateCrate = function(crateId) { const crate = allCrates.find(c => c.id === crateId); if(!crate || !crate.items || crate.items.length === 0) return alert("Die Kiste hat noch keine Items!"); let totalChance = crate.items.reduce((sum, item) => sum + (Number(item.chance) || 0), 0); if(totalChance === 0) return alert("Die Items in dieser Kiste haben keine Wahrscheinlichkeit (0%)!"); let results = {}; crate.items.forEach(i => results[i.id] = 0); for(let i=0; i<1000; i++) { let rand = Math.random() * totalChance; let current = 0; for(let item of crate.items) { current += (Number(item.chance) || 0); if(rand <= current) { results[item.id]++; break; } } } let html = `<ul style="list-style:none; padding:0; margin:0;">`; let sortedItems = [...crate.items].sort((a, b) => results[b.id] - results[a.id]); sortedItems.forEach(item => { let count = results[item.id]; let realPercent = ((count / 1000) * 100).toFixed(1); html += `<li style="padding: 8px 0; border-bottom: 1px solid var(--border-color); display:flex; justify-content:space-between;"><span><strong>${item.name}</strong></span><span style="color:var(--text-muted);">${count}x gezogen <b style="color:#00BCD4;">(${realPercent}%)</b></span></li>`; }); html += `</ul>`; document.getElementById('crate-test-result').innerHTML = html; document.getElementById('crate-test-modal').classList.add('active'); };
+window.exportCrateYaml = function(crateId) { const crate = allCrates.find(c => c.id === crateId); if(!crate) return alert("Kiste nicht gefunden!"); let safeName = crate.name ? crate.name.replace(/[^a-zA-Z0-9]/g, '') : 'CustomCrate'; let yaml = `Crate:\n  CrateType: CSGO\n  CrateName: '&8${crate.name || 'Unbenannte Kiste'}'\n  Preview-Name: '&8${crate.name || 'Unbenannte Kiste'} Preview'\n  StartingKeys: 0\n  InGUI: true\n  Slot: 14\nPrizes:\n`; let items = crate.items || []; items.forEach((item, index) => { yaml += `  '${index + 1}':\n    DisplayName: '&f${item.name}'\n    DisplayAmount: ${item.quantity || 1}\n    MaxRange: 100\n    Chance: ${item.chance}\n`; if(item.type === 'money') { yaml += `    DisplayItem: 'SUNFLOWER'\n    Commands:\n      - 'eco give %player% ${item.quantity || 1000}'\n`; } else if(item.type === 'perk' || item.type === 'special') { yaml += `    DisplayItem: 'NETHER_STAR'\n    Commands:\n      - 'lp user %player% permission set <deine_permission> true'\n`; } else { yaml += `    DisplayItem: 'STONE'\n    Items:\n      - 'Item:STONE, Amount:${item.quantity || 1}'\n`; } if(item.enchantments && item.enchantments.length > 0) { yaml += `    DisplayEnchantments:\n`; item.enchantments.forEach(ench => { yaml += `      - '${ench}'\n`; }); } }); const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${safeName}.yml`; a.click(); URL.revokeObjectURL(url); };
+
+
+// ==========================================
+// ALLGEMEINE TOGGLE & DELETE FUNKTIONEN
 // ==========================================
 
 window.toggleGuiPackage = (id) => {
@@ -529,51 +766,132 @@ window.toggleHolo = (id) => {
     else { content.style.display = 'flex'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; } 
 };
 
+
 // ==========================================
-// EVENTS LOGIK
+// AUTO-BROADCASTER LOGIK
 // ==========================================
-window.resetEventForm = () => {
-    editingEventId = null;
-    document.getElementById('event-form-title').innerText = "Neues Event eintragen";
-    document.getElementById('btn-save-event').innerText = "Event speichern";
-    document.getElementById('btn-cancel-event').style.display = "none";
-    document.getElementById('event-name').value = '';
-    document.getElementById('event-date').value = '';
-    document.getElementById('event-time').value = '';
-    document.getElementById('event-desc').value = '';
+
+window.formatMcText = function(text) {
+    if(!text) return '';
+    let safeText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    let html = ''; let parts = safeText.split(/(&[0-9a-fl-or])/i); let currentClasses = ['mc-f'];
+    for(let part of parts) {
+        if(/^&[0-9a-fl-or]$/i.test(part)) {
+            let code = part.charAt(1).toLowerCase();
+            if(code === 'r') { currentClasses = ['mc-f']; }
+            else if(/[0-9a-f]/.test(code)) { currentClasses = [`mc-${code}`]; } 
+            else { currentClasses.push(`mc-${code}`); } 
+        } else if(part) { html += `<span class="${currentClasses.join(' ')}">${part}</span>`; }
+    }
+    return html;
 };
 
-window.editEvent = (id) => {
-    const ev = allEvents.find(e => e.id === id); if(!ev) return;
-    editingEventId = id;
-    document.getElementById('event-form-title').innerText = "Event bearbeiten: " + ev.name;
-    document.getElementById('event-name').value = ev.name;
-    document.getElementById('event-date').value = ev.date;
-    document.getElementById('event-time').value = ev.time || '';
-    document.getElementById('event-desc').value = ev.description || '';
-    document.getElementById('btn-save-event').innerText = "Änderungen speichern";
-    document.getElementById('btn-cancel-event').style.display = "inline-block";
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+window.updateMcPreview = function() {
+    let text = document.getElementById('bc-message').value;
+    document.getElementById('bc-preview').innerHTML = window.formatMcText(text) || 'Vorschau...';
 };
 
-document.getElementById('btn-save-event').addEventListener('click', async () => {
-    const name = document.getElementById('event-name').value;
-    const date = document.getElementById('event-date').value;
-    const time = document.getElementById('event-time').value;
-    const desc = document.getElementById('event-desc').value;
-    if(!name || !date) return alert("Name und Datum sind Pflichtfelder!");
-    document.getElementById('event-status').innerText = "Speichere...";
-    const eventData = { name, date, time, description: desc };
+window.editBroadcast = function(id) {
+    const bc = allBroadcasts.find(b => b.id === id); if(!bc) return;
+    document.getElementById('bc-edit-id').value = bc.id; document.getElementById('bc-message').value = bc.message; document.getElementById('bc-interval').value = bc.interval; document.getElementById('btn-save-bc').innerText = "Änderungen speichern"; document.getElementById('btn-cancel-bc').style.display = "inline-block"; window.updateMcPreview(); window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+window.cancelEditBroadcast = function() {
+    document.getElementById('bc-edit-id').value = ''; document.getElementById('bc-message').value = ''; document.getElementById('bc-interval').value = '300'; document.getElementById('btn-save-bc').innerText = "Speichern"; document.getElementById('btn-cancel-bc').style.display = "none"; window.updateMcPreview();
+};
+
+window.saveBroadcast = async function() {
+    const msg = document.getElementById('bc-message').value; const interval = document.getElementById('bc-interval').value; const editId = document.getElementById('bc-edit-id').value;
+    if(!msg || !interval) return alert("Bitte Nachricht und Intervall ausfüllen!");
+    document.getElementById('bc-status').innerText = "Speichere...";
     try {
-        if(editingEventId) { await updateDoc(doc(db, "events", editingEventId), eventData); } 
-        else { await addDoc(collection(db, "events"), eventData); }
-        document.getElementById('event-status').innerText = "Erfolgreich!"; setTimeout(() => document.getElementById('event-status').innerText = "", 2000);
-        window.resetEventForm();
-    } catch(e) { console.error(e); alert("Fehler beim Speichern!"); }
+        if(editId) { await updateDoc(doc(db, "broadcasts", editId), { message: msg, interval: Number(interval) }); } else { await addDoc(collection(db, "broadcasts"), { message: msg, interval: Number(interval) }); }
+        document.getElementById('bc-status').innerText = "Gespeichert!"; setTimeout(() => document.getElementById('bc-status').innerText = "", 2000); window.cancelEditBroadcast();
+    } catch(e) { console.error(e); alert("Fehler!"); }
+};
+
+window.exportBroadcastYaml = function() {
+    if(allBroadcasts.length === 0) return alert("Keine Nachrichten vorhanden!");
+    let yaml = `settings:\n  interval: 300\n  prefix: '&8[&cServer&8] &7'\nbroadcasts:\n`;
+    allBroadcasts.forEach((bc, i) => { yaml += `  'msg${i + 1}':\n    text:\n`; bc.message.split('\n').forEach(line => { yaml += `      - '${line}'\n`; }); yaml += `    interval: ${bc.interval}\n`; });
+    const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'autobroadcaster.yml'; a.click(); URL.revokeObjectURL(url);
+};
+
+
+// ==========================================
+// RÄNGE & PLUGINS LOGIK 
+// ==========================================
+
+window.togglePluginSettings = function() {
+    const type = document.getElementById('plugin-settings-type').value;
+    if (type === 'daily') { document.getElementById('plugin-settings-text-container').style.display = 'none'; document.getElementById('plugin-settings-daily-container').style.display = 'block'; window.generateDailyFields(); } 
+    else { document.getElementById('plugin-settings-text-container').style.display = 'block'; document.getElementById('plugin-settings-daily-container').style.display = 'none'; }
+};
+
+window.generateDailyFields = () => {
+    const days = parseInt(document.getElementById('plugin-daily-days').value) || 0;
+    const grid = document.getElementById('plugin-daily-grid'); grid.innerHTML = '';
+    for(let i=1; i<=days; i++) {
+        grid.innerHTML += `<div style="display:flex; align-items:center; gap:5px;">
+            <span style="width:50px; color:var(--text-muted); font-size:12px;">Tag ${i}:</span>
+            <input type="text" class="daily-reward-input" data-day="${i}" placeholder="z.B. eco give %player% 1000" style="flex:1; padding:6px; border-radius:4px; border:1px solid var(--border-color); background:var(--surface-color); color:var(--text-main);">
+        </div>`;
+    }
+};
+
+function resetPluginForm() {
+    editingPluginId = null; document.getElementById('plugin-form-title').innerText = "Neues Plugin hinzufügen"; document.getElementById('btn-save-plugin').innerText = "Plugin speichern"; document.getElementById('btn-cancel-plugin').style.display = "none"; document.getElementById('plugin-name').value = ''; document.getElementById('plugin-perms').value = ''; document.getElementById('plugin-settings-type').value = 'text'; document.getElementById('plugin-settings-text').value = ''; document.getElementById('plugin-daily-days').value = ''; window.togglePluginSettings();
+}
+
+window.editPlugin = (id) => {
+    const plugin = allPlugins.find(p => p.id === id); if(!plugin) return;
+    editingPluginId = id; document.getElementById('plugin-name').value = plugin.name; document.getElementById('plugin-perms').value = plugin.perms || plugin.info || ''; document.getElementById('plugin-settings-type').value = plugin.settingsType || 'text'; window.togglePluginSettings();
+    if (plugin.settingsType === 'daily') {
+        document.getElementById('plugin-daily-days').value = plugin.dailyDays || 0; window.generateDailyFields();
+        const inputs = document.querySelectorAll('.daily-reward-input'); inputs.forEach((input, idx) => { input.value = plugin.dailyRewards[idx] || ''; });
+    } else { document.getElementById('plugin-settings-text').value = plugin.settingsText || ''; }
+    document.getElementById('plugin-form-title').innerText = "Plugin bearbeiten: " + plugin.name; document.getElementById('btn-save-plugin').innerText = "Änderungen speichern"; document.getElementById('btn-cancel-plugin').style.display = "inline-block"; window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+document.getElementById('btn-cancel-plugin').addEventListener('click', resetPluginForm);
+
+document.getElementById('btn-save-plugin').addEventListener('click', async () => {
+    try { 
+        const name = document.getElementById('plugin-name').value; const perms = document.getElementById('plugin-perms').value; const settingsType = document.getElementById('plugin-settings-type').value; const settingsText = document.getElementById('plugin-settings-text').value; const dailyDays = document.getElementById('plugin-daily-days').value;
+        let dailyRewards = []; if (settingsType === 'daily') { const inputs = document.querySelectorAll('.daily-reward-input'); inputs.forEach(input => dailyRewards.push(input.value)); }
+        const status = document.getElementById('plugin-status'); if(!name) return alert("Bitte gib einen Plugin-Namen ein!"); status.innerText = "Speichere..."; 
+        const pluginData = { name: name, perms: perms, info: perms, settingsType: settingsType, settingsText: settingsText, dailyDays: Number(dailyDays), dailyRewards: dailyRewards };
+        if (editingPluginId) { await updateDoc(doc(db, "plugins", editingPluginId), pluginData); } else { await addDoc(collection(db, "plugins"), pluginData); } 
+        status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); resetPluginForm(); 
+    } catch (error) { console.error(error); alert("Fehler: " + error.message); }
 });
 
+document.getElementById('btn-save-rank').addEventListener('click', async () => {
+    const name = document.getElementById('rank-name').value; const perms = document.getElementById('rank-perms').value.split('\n').map(p => p.trim()).filter(p => p !== ""); const inherits = document.getElementById('rank-inherit').value; const file = document.getElementById('rank-image').files[0]; const status = document.getElementById('rank-status');
+    if(!name) return alert("Name fehlt!"); status.innerText = "Speichere..."; const rankData = { name: name, permissions: perms, inherits_from: inherits || null }; if (file) { rankData.image_url = await uploadImage(file, 'ranks'); }
+    if (editingRankId) { await updateDoc(doc(db, "ranks", editingRankId), rankData); } else { await addDoc(collection(db, "ranks"), rankData); }
+    status.innerText = "Gespeichert!"; setTimeout(() => status.innerText = "", 2000);
+    editingRankId = null; document.getElementById('rank-form-title').innerText = "Neuen Rang erstellen"; document.getElementById('btn-save-rank').innerText = "Rang speichern"; document.getElementById('btn-cancel-rank').style.display = "none"; document.getElementById('rank-name').value = ''; document.getElementById('rank-perms').value = ''; document.getElementById('rank-inherit').value = ''; if(document.getElementById('rank-image')) document.getElementById('rank-image').value = '';
+});
+
+window.editRank = (id) => { const rank = allRanks.find(r => r.id === id); if (!rank) return; editingRankId = id; document.getElementById('rank-name').value = rank.name; document.getElementById('rank-perms').value = (rank.permissions || []).join('\n'); document.getElementById('rank-inherit').value = rank.inherits_from || ''; document.getElementById('rank-form-title').innerText = "Rang bearbeiten: " + rank.name; document.getElementById('btn-save-rank').innerText = "Änderungen speichern"; document.getElementById('btn-cancel-rank').style.display = "inline-block"; window.scrollTo({ top: 0, behavior: 'smooth' }); };
+document.getElementById('btn-cancel-rank').addEventListener('click', () => { editingRankId = null; document.getElementById('rank-form-title').innerText = "Neuen Rang erstellen"; document.getElementById('btn-save-rank').innerText = "Rang speichern"; document.getElementById('btn-cancel-rank').style.display = "none"; document.getElementById('rank-name').value = ''; document.getElementById('rank-perms').value = ''; document.getElementById('rank-inherit').value = ''; if(document.getElementById('rank-image')) document.getElementById('rank-image').value = '';});
+
+document.getElementById('btn-export-ranks').addEventListener('click', () => { if(allRanks.length === 0) return alert("Keine Ränge!"); let yamlContent = "groups:\n"; allRanks.forEach(rank => { const safeName = rank.name.toLowerCase().replace(/[^a-z0-9_-]/g, ''); yamlContent += `  ${safeName}:\n`; if (rank.permissions && rank.permissions.length > 0) { yamlContent += `    permissions:\n`; rank.permissions.forEach(p => { yamlContent += `      - ${p}: true\n`; }); } if (rank.inherits_from) { const safeInherit = rank.inherits_from.toLowerCase().replace(/[^a-z0-9_-]/g, ''); yamlContent += `    parents:\n`; yamlContent += `      - ${safeInherit}\n`; } }); const blob = new Blob([yamlContent], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'luckperms_ranks.yml'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); });
+
+window.importPluginPerms = () => {
+    if(allPlugins.length === 0) return alert("Es sind noch keine Plugins gespeichert!");
+    let currentPerms = document.getElementById('rank-perms').value.split('\n').map(p => p.trim()).filter(p => p !== "");
+    allPlugins.forEach(pl => { 
+        let text = pl.perms || pl.info;
+        if(text) { let pluginLines = text.split('\n').map(p => p.trim()).filter(p => p !== ""); currentPerms = currentPerms.concat(pluginLines); } 
+    });
+    let uniquePerms = [...new Set(currentPerms)]; document.getElementById('rank-perms').value = uniquePerms.join('\n'); alert("Permissions erfolgreich importiert!");
+};
+
 // ==========================================
-// QUESTS LOGIK
+// QUESTS LOGIK (BATCHES)
 // ==========================================
 document.getElementById('btn-create-quest-batch').addEventListener('click', async () => {
     const name = document.getElementById('quest-batch-name').value;
@@ -765,370 +1083,81 @@ window.exportHoloYaml = function(holoId) {
     const a = document.createElement('a'); a.href = url; a.download = `${safeName}.yml`; a.click(); URL.revokeObjectURL(url);
 };
 
-
 // ==========================================
-// AUTO-BROADCASTER LOGIK
+// WERBUNG & KAMPAGNEN
 // ==========================================
+document.getElementById('btn-create-ad-campaign').addEventListener('click', async () => {
+    const name = document.getElementById('ad-campaign-name').value;
+    if(!name) return alert("Bitte Kampagnen-Namen eingeben!");
+    await addDoc(collection(db, "ads"), { name: name, items: [] });
+    document.getElementById('ad-campaign-name').value = '';
+});
 
-window.formatMcText = function(text) {
-    if(!text) return '';
-    let safeText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    let html = ''; let parts = safeText.split(/(&[0-9a-fl-or])/i); let currentClasses = ['mc-f'];
-    for(let part of parts) {
-        if(/^&[0-9a-fl-or]$/i.test(part)) {
-            let code = part.charAt(1).toLowerCase();
-            if(code === 'r') { currentClasses = ['mc-f']; }
-            else if(/[0-9a-f]/.test(code)) { currentClasses = [`mc-${code}`]; } 
-            else { currentClasses.push(`mc-${code}`); } 
-        } else if(part) { html += `<span class="${currentClasses.join(' ')}">${part}</span>`; }
-    }
-    return html;
+window.openAdUploadModal = (id) => {
+    document.getElementById('modal-ad-campaign-id').value = id;
+    document.getElementById('ad-upload-modal').classList.add('active');
 };
 
-window.updateMcPreview = function() {
-    let text = document.getElementById('bc-message').value;
-    document.getElementById('bc-preview').innerHTML = window.formatMcText(text) || 'Vorschau...';
-};
-
-window.editBroadcast = function(id) {
-    const bc = allBroadcasts.find(b => b.id === id); if(!bc) return;
-    document.getElementById('bc-edit-id').value = bc.id; document.getElementById('bc-message').value = bc.message; document.getElementById('bc-interval').value = bc.interval; document.getElementById('btn-save-bc').innerText = "Änderungen speichern"; document.getElementById('btn-cancel-bc').style.display = "inline-block"; window.updateMcPreview(); window.scrollTo({ top: 0, behavior: 'smooth' });
-};
-
-window.cancelEditBroadcast = function() {
-    document.getElementById('bc-edit-id').value = ''; document.getElementById('bc-message').value = ''; document.getElementById('bc-interval').value = '300'; document.getElementById('btn-save-bc').innerText = "Speichern"; document.getElementById('btn-cancel-bc').style.display = "none"; window.updateMcPreview();
-};
-
-window.saveBroadcast = async function() {
-    const msg = document.getElementById('bc-message').value; const interval = document.getElementById('bc-interval').value; const editId = document.getElementById('bc-edit-id').value;
-    if(!msg || !interval) return alert("Bitte Nachricht und Intervall ausfüllen!");
-    document.getElementById('bc-status').innerText = "Speichere...";
+document.getElementById('btn-save-ad-upload').addEventListener('click', async () => {
+    const campId = document.getElementById('modal-ad-campaign-id').value;
+    const title = document.getElementById('modal-ad-title').value;
+    const link = document.getElementById('modal-ad-link').value;
+    const file = document.getElementById('modal-ad-image').files[0];
+    const status = document.getElementById('modal-ad-status');
+    
+    if(!title || !file) return alert("Titel und Bild sind Pflicht!");
+    status.innerText = "Lade hoch...";
+    
     try {
-        if(editId) { await updateDoc(doc(db, "broadcasts", editId), { message: msg, interval: Number(interval) }); } else { await addDoc(collection(db, "broadcasts"), { message: msg, interval: Number(interval) }); }
-        document.getElementById('bc-status').innerText = "Gespeichert!"; setTimeout(() => document.getElementById('bc-status').innerText = "", 2000); window.cancelEditBroadcast();
-    } catch(e) { console.error(e); alert("Fehler!"); }
-};
-
-window.exportBroadcastYaml = function() {
-    if(allBroadcasts.length === 0) return alert("Keine Nachrichten vorhanden!");
-    let yaml = `settings:\n  interval: 300\n  prefix: '&8[&cServer&8] &7'\nbroadcasts:\n`;
-    allBroadcasts.forEach((bc, i) => { yaml += `  'msg${i + 1}':\n    text:\n`; bc.message.split('\n').forEach(line => { yaml += `      - '${line}'\n`; }); yaml += `    interval: ${bc.interval}\n`; });
-    const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = 'autobroadcaster.yml'; a.click(); URL.revokeObjectURL(url);
-};
-
-
-// ==========================================
-// RÄNGE & PLUGINS LOGIK 
-// ==========================================
-
-window.togglePluginSettings = function() {
-    const type = document.getElementById('plugin-settings-type').value;
-    if (type === 'daily') { document.getElementById('plugin-settings-text-container').style.display = 'none'; document.getElementById('plugin-settings-daily-container').style.display = 'block'; window.generateDailyFields(); } 
-    else { document.getElementById('plugin-settings-text-container').style.display = 'block'; document.getElementById('plugin-settings-daily-container').style.display = 'none'; }
-};
-
-window.generateDailyFields = () => {
-    const days = parseInt(document.getElementById('plugin-daily-days').value) || 0;
-    const grid = document.getElementById('plugin-daily-grid'); grid.innerHTML = '';
-    for(let i=1; i<=days; i++) {
-        grid.innerHTML += `<div style="display:flex; align-items:center; gap:5px;">
-            <span style="width:50px; color:var(--text-muted); font-size:12px;">Tag ${i}:</span>
-            <input type="text" class="daily-reward-input" data-day="${i}" placeholder="z.B. eco give %player% 1000" style="flex:1; padding:6px; border-radius:4px; border:1px solid var(--border-color); background:var(--surface-color); color:var(--text-main);">
-        </div>`;
-    }
-};
-
-function resetPluginForm() {
-    editingPluginId = null; document.getElementById('plugin-form-title').innerText = "Neues Plugin hinzufügen"; document.getElementById('btn-save-plugin').innerText = "Plugin speichern"; document.getElementById('btn-cancel-plugin').style.display = "none"; document.getElementById('plugin-name').value = ''; document.getElementById('plugin-perms').value = ''; document.getElementById('plugin-settings-type').value = 'text'; document.getElementById('plugin-settings-text').value = ''; document.getElementById('plugin-daily-days').value = ''; window.togglePluginSettings();
-}
-
-window.editPlugin = (id) => {
-    const plugin = allPlugins.find(p => p.id === id); if(!plugin) return;
-    editingPluginId = id; document.getElementById('plugin-name').value = plugin.name; document.getElementById('plugin-perms').value = plugin.perms || plugin.info || ''; document.getElementById('plugin-settings-type').value = plugin.settingsType || 'text'; window.togglePluginSettings();
-    if (plugin.settingsType === 'daily') {
-        document.getElementById('plugin-daily-days').value = plugin.dailyDays || 0; window.generateDailyFields();
-        const inputs = document.querySelectorAll('.daily-reward-input'); inputs.forEach((input, idx) => { input.value = plugin.dailyRewards[idx] || ''; });
-    } else { document.getElementById('plugin-settings-text').value = plugin.settingsText || ''; }
-    document.getElementById('plugin-form-title').innerText = "Plugin bearbeiten: " + plugin.name; document.getElementById('btn-save-plugin').innerText = "Änderungen speichern"; document.getElementById('btn-cancel-plugin').style.display = "inline-block"; window.scrollTo({ top: 0, behavior: 'smooth' });
-};
-
-document.getElementById('btn-cancel-plugin').addEventListener('click', resetPluginForm);
-
-document.getElementById('btn-save-plugin').addEventListener('click', async () => {
-    try { 
-        const name = document.getElementById('plugin-name').value; const perms = document.getElementById('plugin-perms').value; const settingsType = document.getElementById('plugin-settings-type').value; const settingsText = document.getElementById('plugin-settings-text').value; const dailyDays = document.getElementById('plugin-daily-days').value;
-        let dailyRewards = []; if (settingsType === 'daily') { const inputs = document.querySelectorAll('.daily-reward-input'); inputs.forEach(input => dailyRewards.push(input.value)); }
-        const status = document.getElementById('plugin-status'); if(!name) return alert("Bitte gib einen Plugin-Namen ein!"); status.innerText = "Speichere..."; 
-        const pluginData = { name: name, perms: perms, info: perms, settingsType: settingsType, settingsText: settingsText, dailyDays: Number(dailyDays), dailyRewards: dailyRewards };
-        if (editingPluginId) { await updateDoc(doc(db, "plugins", editingPluginId), pluginData); } else { await addDoc(collection(db, "plugins"), pluginData); } 
-        status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); resetPluginForm(); 
-    } catch (error) { console.error(error); alert("Fehler: " + error.message); }
+        const imageUrl = await uploadImage(file, 'ads/images');
+        const newItem = { id: Date.now().toString(), title, link, image_url: imageUrl };
+        
+        const campRef = doc(db, "ads", campId);
+        const camp = allAds.find(a => a.id === campId);
+        await updateDoc(campRef, { items: [...(camp.items || []), newItem] });
+        
+        status.innerText = "Erfolgreich!";
+        setTimeout(() => {
+            status.innerText = "";
+            document.getElementById('modal-ad-title').value = '';
+            document.getElementById('modal-ad-link').value = '';
+            document.getElementById('modal-ad-image').value = '';
+            document.getElementById('ad-upload-modal').classList.remove('active');
+        }, 1500);
+    } catch(e) { console.error(e); alert("Fehler beim Upload!"); }
 });
 
-document.getElementById('btn-save-rank').addEventListener('click', async () => {
-    const name = document.getElementById('rank-name').value; const perms = document.getElementById('rank-perms').value.split('\n').map(p => p.trim()).filter(p => p !== ""); const inherits = document.getElementById('rank-inherit').value; const file = document.getElementById('rank-image').files[0]; const status = document.getElementById('rank-status');
-    if(!name) return alert("Name fehlt!"); status.innerText = "Speichere..."; const rankData = { name: name, permissions: perms, inherits_from: inherits || null }; if (file) { rankData.image_url = await uploadImage(file, 'ranks'); }
-    if (editingRankId) { await updateDoc(doc(db, "ranks", editingRankId), rankData); } else { await addDoc(collection(db, "ranks"), rankData); }
-    status.innerText = "Gespeichert!"; setTimeout(() => status.innerText = "", 2000);
-    editingRankId = null; document.getElementById('rank-form-title').innerText = "Neuen Rang erstellen"; document.getElementById('btn-save-rank').innerText = "Rang speichern"; document.getElementById('btn-cancel-rank').style.display = "none"; document.getElementById('rank-name').value = ''; document.getElementById('rank-perms').value = ''; document.getElementById('rank-inherit').value = ''; if(document.getElementById('rank-image')) document.getElementById('rank-image').value = '';
-});
-
-window.editRank = (id) => { const rank = allRanks.find(r => r.id === id); if (!rank) return; editingRankId = id; document.getElementById('rank-name').value = rank.name; document.getElementById('rank-perms').value = (rank.permissions || []).join('\n'); document.getElementById('rank-inherit').value = rank.inherits_from || ''; document.getElementById('rank-form-title').innerText = "Rang bearbeiten: " + rank.name; document.getElementById('btn-save-rank').innerText = "Änderungen speichern"; document.getElementById('btn-cancel-rank').style.display = "inline-block"; window.scrollTo({ top: 0, behavior: 'smooth' }); };
-document.getElementById('btn-cancel-rank').addEventListener('click', () => { editingRankId = null; document.getElementById('rank-form-title').innerText = "Neuen Rang erstellen"; document.getElementById('btn-save-rank').innerText = "Rang speichern"; document.getElementById('btn-cancel-rank').style.display = "none"; document.getElementById('rank-name').value = ''; document.getElementById('rank-perms').value = ''; document.getElementById('rank-inherit').value = ''; if(document.getElementById('rank-image')) document.getElementById('rank-image').value = '';});
-
-document.getElementById('btn-export-ranks').addEventListener('click', () => { if(allRanks.length === 0) return alert("Keine Ränge!"); let yamlContent = "groups:\n"; allRanks.forEach(rank => { const safeName = rank.name.toLowerCase().replace(/[^a-z0-9_-]/g, ''); yamlContent += `  ${safeName}:\n`; if (rank.permissions && rank.permissions.length > 0) { yamlContent += `    permissions:\n`; rank.permissions.forEach(p => { yamlContent += `      - ${p}: true\n`; }); } if (rank.inherits_from) { const safeInherit = rank.inherits_from.toLowerCase().replace(/[^a-z0-9_-]/g, ''); yamlContent += `    parents:\n`; yamlContent += `      - ${safeInherit}\n`; } }); const blob = new Blob([yamlContent], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'luckperms_ranks.yml'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); });
-
-window.importPluginPerms = () => {
-    if(allPlugins.length === 0) return alert("Es sind noch keine Plugins gespeichert!");
-    let currentPerms = document.getElementById('rank-perms').value.split('\n').map(p => p.trim()).filter(p => p !== "");
-    allPlugins.forEach(pl => { 
-        let text = pl.perms || pl.info;
-        if(text) { let pluginLines = text.split('\n').map(p => p.trim()).filter(p => p !== ""); currentPerms = currentPerms.concat(pluginLines); } 
-    });
-    let uniquePerms = [...new Set(currentPerms)]; document.getElementById('rank-perms').value = uniquePerms.join('\n'); alert("Permissions erfolgreich importiert!");
-};
-
-// ==========================================
-// KISTEN LOGIK (MIT UMBENNEN & DRAG DROP)
-// ==========================================
-
-window.toggleDragDrop = function() {
-    window.dragDropActive = !window.dragDropActive;
-    const btn = document.getElementById('btn-toggle-drag');
-    if(window.dragDropActive) {
-        btn.innerText = "🔓 Drag & Drop: AN";
-        btn.style.borderColor = "#4CAF50"; btn.style.color = "#4CAF50";
-    } else {
-        btn.innerText = "🔒 Drag & Drop: AUS";
-        btn.style.borderColor = "var(--border-color)"; btn.style.color = "var(--text-main)";
-    }
-    window.renderCrates(); 
-};
-
-window.renderCrates = function() {
-    const container = document.getElementById('crates-container');
-    if(!container) return;
-    container.innerHTML = '';
-    
-    allCrates.forEach(crate => {
-        let items = [...(crate.items || [])];
-        const sortMode = window.crateSortModes[crate.id] || 'default';
-        if (sortMode === 'chance') { items.sort((a, b) => (Number(b.chance) || 0) - (Number(a.chance) || 0)); } 
-        else if (sortMode === 'name') { items.sort((a, b) => (a.name || '').localeCompare(b.name || '')); }
-
-        let crateImgHtml = crate.image_url ? `<img src="${crate.image_url}" class="thumbnail" style="width:50px;height:50px;">` : `<div class="thumbnail" style="width:50px;height:50px; display:flex; align-items:center; justify-content:center; font-size:24px;">📦</div>`;
-        
-        let itemsHtml = items.map(item => {
-            let typeIcon = '📦';
-            if(item.type === 'money') typeIcon = '<span style="font-size:20px;">💰</span>';
-            if(item.type === 'perk') typeIcon = '<span style="font-size:20px;">🌟</span>';
-            if(item.type === 'special') typeIcon = '<span style="font-size:20px;">✨</span>';
-            
-            let imgContent = item.image_url ? `<img src="${item.image_url}" class="thumbnail" style="width:30px;height:30px;">` : typeIcon;
-            let enchHtml = (item.enchantments && item.enchantments.length > 0) ? `<div style="font-size: 11px; color: #a855f7; margin-top: 4px;">🪄 ${item.enchantments.join(', ')}</div>` : '';
-            
-            return `<tr>
-                <td style="text-align: center;">${imgContent}</td>
-                <td><strong>${item.name}</strong>${enchHtml}</td>
-                <td>${item.quantity || 1}x</td>
-                <td>${item.chance}%</td>
-                <td style="text-align: right;">
-                    <button class="btn btn-secondary btn-sm" onclick="window.editCrateItem('${crate.id}', '${item.id}')">✏️ Bearbeiten</button>
-                    <button class="btn btn-danger btn-sm" onclick="window.deleteCrateItem('${crate.id}', '${item.id}')">🗑️ Löschen</button>
-                </td>
-            </tr>`;
-        }).join('');
-        
-        let isCollapsed = window.crateCollapsed[crate.id] !== false; 
-        let displayStyle = isCollapsed ? 'none' : 'block';
-        let iconText = isCollapsed ? '▶️' : '🔽';
-        let dragAttr = window.dragDropActive ? 'draggable="true"' : '';
-
-        container.innerHTML += `
-            <div class="crate-box" ${dragAttr} data-crate-id="${crate.id}">
-                <div class="crate-header" style="cursor: pointer; margin-bottom: 0; padding-bottom: ${isCollapsed ? '0' : '15px'}; border-bottom: ${isCollapsed ? 'none' : '1px solid var(--border-color)'};" onclick="window.toggleCrate('${crate.id}')">
-                    <div class="crate-header-left" ${dragAttr} title="${window.dragDropActive ? 'Halten um Kiste zu verschieben' : 'Drag & Drop ist gesperrt'}">
-                        <span id="crate-icon-${crate.id}" style="margin-right: 8px; font-size: 14px;">${iconText}</span>
-                        ${crateImgHtml}
-                        <h3 style="font-size: 18px; margin: 0;">${crate.name || 'Unbenannte Kiste'}</h3>
-                    </div>
-                    <div class="button-group" onclick="event.stopPropagation()">
-                        <select onchange="window.changeCrateSort('${crate.id}', this.value)" style="padding: 6px; border-radius: 4px; background: var(--surface-color); color: var(--text-main); border: 1px solid var(--border-color); font-size: 12px; outline: none;">
-                            <option value="default" ${sortMode === 'default' ? 'selected' : ''}>Sortierung: Standard</option>
-                            <option value="chance" ${sortMode === 'chance' ? 'selected' : ''}>Sortierung: Chance</option>
-                            <option value="name" ${sortMode === 'name' ? 'selected' : ''}>Sortierung: A-Z</option>
-                        </select>
-                        <button class="btn btn-secondary btn-sm" style="border-color:#FF9800; color:#FF9800;" onclick="window.simulateCrate('${crate.id}')">🎲 Test-Öffnen</button>
-                        <button class="btn btn-info btn-sm" onclick="window.exportCrateYaml('${crate.id}')">📥 CrazyCrates Export</button>
-                        <button class="btn btn-primary btn-sm" onclick="window.openItemModal('${crate.id}')">+ Item</button>
-                        <button class="btn btn-secondary btn-sm" onclick="window.renameCrate('${crate.id}')">✏️ Name ändern</button>
-                        <button class="btn btn-danger btn-sm" onclick="window.deleteEntry('crates', '${crate.id}')">Löschen</button>
-                    </div>
-                </div>
-                <div id="crate-content-${crate.id}" style="display: ${displayStyle}; margin-top: 15px;">
-                    ${items.length > 0 ? `<table class="crate-items-table"><thead><tr><th style="width: 50px;">Art</th><th>Item Name</th><th>Menge</th><th>Chance</th><th style="text-align: right;">Aktion</th></tr></thead><tbody>${itemsHtml}</tbody></table>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Items in dieser Kiste. Klicke auf "+ Item hinzufügen".</p>'}
-                </div>
-            </div>`;
-    });
-
-    if(window.dragDropActive) {
-        const boxes = document.querySelectorAll('.crate-box[data-crate-id]');
-        boxes.forEach(box => {
-            box.addEventListener('dragstart', function(e) { draggedCrateBox = this; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/html', this.innerHTML); this.style.opacity = '0.4'; });
-            box.addEventListener('dragover', function(e) { e.preventDefault(); this.classList.add('drag-over'); return false; });
-            box.addEventListener('dragleave', function(e) { this.classList.remove('drag-over'); });
-            box.addEventListener('drop', function(e) {
-                e.stopPropagation(); this.classList.remove('drag-over');
-                if (draggedCrateBox !== this) {
-                    let parent = this.parentNode; let children = Array.from(parent.children); let srcIndex = children.indexOf(draggedCrateBox); let targetIndex = children.indexOf(this);
-                    if (srcIndex < targetIndex) { this.after(draggedCrateBox); } else { this.before(draggedCrateBox); }
-                    let newOrderIds = Array.from(parent.children).map(el => el.getAttribute('data-crate-id')).filter(id => id);
-                    newOrderIds.forEach((id, index) => { updateDoc(doc(db, "crates", id), { order: index }); });
-                }
-                return false;
-            });
-            box.addEventListener('dragend', function(e) { this.style.opacity = '1'; boxes.forEach(b => b.classList.remove('drag-over')); });
-        });
+window.deleteAdItem = async (campId, itemId) => {
+    if(confirm("Werbung aus der Kampagne löschen?")) {
+        const campRef = doc(db, "ads", campId);
+        const camp = allAds.find(a => a.id === campId);
+        await updateDoc(campRef, { items: (camp.items || []).filter(i => i.id !== itemId) });
     }
 };
 
-window.renameCrate = async (id) => {
-    const crate = allCrates.find(c => c.id === id); if(!crate) return;
-    const newName = prompt("Bitte gib einen neuen Namen für die Kiste ein:", crate.name);
-    if(newName && newName.trim() !== "" && newName !== crate.name) { await updateDoc(doc(db, "crates", id), { name: newName.trim() }); }
-}
+// ==========================================
+// 5. GUI PAKETE & UPLOAD LOGIK
+// ==========================================
 
-window.toggleCrate = (id) => { 
-    window.crateCollapsed[id] = window.crateCollapsed[id] === false ? true : false; 
-    const content = document.getElementById(`crate-content-${id}`); const icon = document.getElementById(`crate-icon-${id}`); const header = content.previousElementSibling;
-    if (window.crateCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } 
-    else { content.style.display = 'block'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; } 
-};
-window.changeCrateSort = (crateId, mode) => { window.crateSortModes[crateId] = mode; window.renderCrates(); };
-
-document.getElementById('btn-save-crate').addEventListener('click', async () => { try { const crate_name = document.getElementById('crate-name').value; const fileInput = document.getElementById('crate-image'); const file = fileInput ? fileInput.files[0] : null; const status = document.getElementById('crate-status'); if(!crate_name) return alert("Name fehlt!"); status.innerText = "Erstelle Kiste..."; let imageUrl = null; if (file) imageUrl = await uploadImage(file, 'crates'); await addDoc(collection(db, "crates"), { name: crate_name, image_url: imageUrl, items: [], order: allCrates.length }); status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('crate-name').value = ''; if(fileInput) fileInput.value = ''; } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
-
-window.changeCrateItemType = (preserveName = false) => { 
-    const type = document.getElementById('modal-item-type').value; 
-    const nameInput = document.getElementById('modal-item-name'); 
-    const enchSection = document.getElementById('enchantment-section'); 
-    if(type === 'money') { 
-        nameInput.placeholder = "Geld-Betrag (z.B. 1000)"; 
-        if(!preserveName) nameInput.value = ""; 
-        enchSection.style.display = 'none'; 
-    } 
-    else if(type === 'perk') { 
-        if(!preserveName) nameInput.value = "Platzhalter Perk"; 
-        enchSection.style.display = 'none'; 
-    } 
-    else if(type === 'special') { 
-        if(!preserveName) nameInput.value = "Platzhalter Spezial"; 
-        enchSection.style.display = 'none'; 
-    } 
-    else { 
-        nameInput.placeholder = "Item Name (z.B. Diamant)"; 
-        if(!preserveName) nameInput.value = ""; 
-        enchSection.style.display = 'block'; 
-    } 
-};
-
-window.addEnchantmentField = (name = '', level = '1') => { 
-    const container = document.getElementById('enchantments-container'); 
-    const row = document.createElement('div'); 
-    row.style.display = 'flex'; row.style.gap = '5px'; 
-    row.innerHTML = `
-        <input type="text" class="ench-name" placeholder="z.B. sharpness" value="${name}" style="flex:2; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-color); color: var(--text-main);">
-        <input type="number" class="ench-level" placeholder="Lvl" value="${level}" style="flex:1; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-color); color: var(--text-main);">
-        <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">X</button>
-    `; 
-    container.appendChild(row); 
-};
-
-window.openItemModal = (crateId) => { 
-    document.getElementById('item-modal-title').innerText = "Neues Item hinzufügen"; 
-    document.getElementById('modal-crate-id').value = crateId; 
-    document.getElementById('modal-edit-item-id').value = ''; 
-    document.getElementById('modal-item-name').value = ''; 
-    document.getElementById('modal-item-quantity').value = '1'; 
-    document.getElementById('modal-item-chance').value = ''; 
-    document.getElementById('enchantments-container').innerHTML = ''; 
-    document.getElementById('item-modal').classList.add('active'); 
-};
-
-window.editCrateItem = (crateId, itemId) => { 
-    const crate = allCrates.find(c => c.id === crateId); if (!crate) return; 
-    const item = (crate.items || []).find(i => i.id === itemId); if (!item) return; 
-    document.getElementById('item-modal-title').innerText = "Item bearbeiten"; 
-    document.getElementById('modal-crate-id').value = crateId; 
-    document.getElementById('modal-edit-item-id').value = item.id; 
-    document.getElementById('modal-item-type').value = item.type || 'item'; 
-    
-    window.changeCrateItemType(true); 
-    
-    document.getElementById('modal-item-name').value = item.name || ''; 
-    document.getElementById('modal-item-quantity').value = item.quantity || 1; 
-    document.getElementById('modal-item-chance').value = item.chance || ''; 
-    
-    const enchContainer = document.getElementById('enchantments-container'); enchContainer.innerHTML = ''; 
-    if (item.enchantments && item.enchantments.length > 0) { 
-        item.enchantments.forEach(ench => {
-            const parts = ench.split(':');
-            window.addEnchantmentField(parts[0], parts[1] || '1');
-        }); 
-    } 
-    document.getElementById('item-modal').classList.add('active'); 
-};
-
-document.getElementById('btn-save-item').addEventListener('click', async () => {
+document.getElementById('btn-save-gui-package').addEventListener('click', async () => {
     try {
-        const crateId = document.getElementById('modal-crate-id').value; 
-        const editItemId = document.getElementById('modal-edit-item-id').value; 
-        const type = document.getElementById('modal-item-type').value; 
-        const name = document.getElementById('modal-item-name').value; 
-        const quantity = document.getElementById('modal-item-quantity').value; 
-        const chance = document.getElementById('modal-item-chance').value; 
-        const file = document.getElementById('modal-item-image').files[0]; 
-        
-        if(!name || !chance || !quantity) return alert("Pflichtfelder fehlen!"); 
-        
-        const enchNames = document.querySelectorAll('.ench-name'); 
-        const enchLevels = document.querySelectorAll('.ench-level'); 
-        let enchantments = [];
-        for(let i=0; i<enchNames.length; i++) {
-            const eName = enchNames[i].value.trim();
-            const eLevel = enchLevels[i].value.trim() || '1';
-            if(eName) enchantments.push(`${eName}:${eLevel}`);
-        }
-
-        let imageUrl = null; if(file) imageUrl = await uploadImage(file, 'crates/items');
-        const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId);
-        let updatedItems = [...(crate.items || [])];
-        if(editItemId) { 
-            const idx = updatedItems.findIndex(i => i.id === editItemId); 
-            if(idx > -1) { 
-                updatedItems[idx].type = type; updatedItems[idx].name = name; 
-                updatedItems[idx].quantity = Number(quantity); updatedItems[idx].chance = Number(chance); 
-                updatedItems[idx].enchantments = enchantments; 
-                if(file) updatedItems[idx].image_url = imageUrl; 
-            } 
-        } else { 
-            updatedItems.push({ id: Date.now().toString(), type, name, quantity: Number(quantity), chance: Number(chance), enchantments, image_url: imageUrl }); 
-        }
-        await updateDoc(crateRef, { items: updatedItems });
-        document.getElementById('item-modal').classList.remove('active');
-    } catch (error) { console.error(error); alert("Fehler: " + error.message); }
+        const pkgName = document.getElementById('gui-package-name').value; const status = document.getElementById('gui-package-status');
+        if(!pkgName) return alert("Bitte gib dem GUI Paket einen Namen!"); status.innerText = "Erstelle Paket...";
+        await addDoc(collection(db, "guis"), { name: pkgName, items: [] });
+        status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('gui-package-name').value = '';
+    } catch (e) { console.error(e); alert("Fehler: " + e.message); }
 });
 
-window.deleteCrateItem = async (crateId, itemId) => { if(confirm("Item entfernen?")) { try { const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId); await updateDoc(crateRef, { items: (crate.items || []).filter(i => i.id !== itemId) }); } catch (error) { console.error(error); } } };
-window.simulateCrate = function(crateId) { const crate = allCrates.find(c => c.id === crateId); if(!crate || !crate.items || crate.items.length === 0) return alert("Die Kiste hat noch keine Items!"); let totalChance = crate.items.reduce((sum, item) => sum + (Number(item.chance) || 0), 0); if(totalChance === 0) return alert("Die Items in dieser Kiste haben keine Wahrscheinlichkeit (0%)!"); let results = {}; crate.items.forEach(i => results[i.id] = 0); for(let i=0; i<1000; i++) { let rand = Math.random() * totalChance; let current = 0; for(let item of crate.items) { current += (Number(item.chance) || 0); if(rand <= current) { results[item.id]++; break; } } } let html = `<ul style="list-style:none; padding:0; margin:0;">`; let sortedItems = [...crate.items].sort((a, b) => results[b.id] - results[a.id]); sortedItems.forEach(item => { let count = results[item.id]; let realPercent = ((count / 1000) * 100).toFixed(1); html += `<li style="padding: 8px 0; border-bottom: 1px solid var(--border-color); display:flex; justify-content:space-between;"><span><strong>${item.name}</strong></span><span style="color:var(--text-muted);">${count}x gezogen <b style="color:#00BCD4;">(${realPercent}%)</b></span></li>`; }); html += `</ul>`; document.getElementById('crate-test-result').innerHTML = html; document.getElementById('crate-test-modal').classList.add('active'); };
-window.exportCrateYaml = function(crateId) { const crate = allCrates.find(c => c.id === crateId); if(!crate) return alert("Kiste nicht gefunden!"); let safeName = crate.name ? crate.name.replace(/[^a-zA-Z0-9]/g, '') : 'CustomCrate'; let yaml = `Crate:\n  CrateType: CSGO\n  CrateName: '&8${crate.name || 'Unbenannte Kiste'}'\n  Preview-Name: '&8${crate.name || 'Unbenannte Kiste'} Preview'\n  StartingKeys: 0\n  InGUI: true\n  Slot: 14\nPrizes:\n`; let items = crate.items || []; items.forEach((item, index) => { yaml += `  '${index + 1}':\n    DisplayName: '&f${item.name}'\n    DisplayAmount: ${item.quantity || 1}\n    MaxRange: 100\n    Chance: ${item.chance}\n`; if(item.type === 'money') { yaml += `    DisplayItem: 'SUNFLOWER'\n    Commands:\n      - 'eco give %player% ${item.quantity || 1000}'\n`; } else if(item.type === 'perk' || item.type === 'special') { yaml += `    DisplayItem: 'NETHER_STAR'\n    Commands:\n      - 'lp user %player% permission set <deine_permission> true'\n`; } else { yaml += `    DisplayItem: 'STONE'\n    Items:\n      - 'Item:STONE, Amount:${item.quantity || 1}'\n`; } if(item.enchantments && item.enchantments.length > 0) { yaml += `    DisplayEnchantments:\n`; item.enchantments.forEach(ench => { yaml += `      - '${ench}'\n`; }); } }); const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${safeName}.yml`; a.click(); URL.revokeObjectURL(url); };
+window.openGuiUploadModal = (pkgId) => { document.getElementById('modal-gui-package-id').value = pkgId; document.getElementById('gui-upload-modal').classList.add('active'); };
+document.getElementById('btn-save-gui-upload').addEventListener('click', async () => { const status = document.getElementById('modal-gui-status'); try { const pkgId = document.getElementById('modal-gui-package-id').value; const name = document.getElementById('modal-gui-name').value; const file = document.getElementById('modal-gui-image').files[0]; if(!name || !file) return alert("Bitte Name und Bild angeben!"); status.innerText = "Lade hoch (Bitte warten)..."; const imageUrl = await uploadImage(file, 'guis/images'); if(!imageUrl) throw new Error("Upload fehlgeschlagen."); status.innerText = "Speichere in Paket..."; const newItem = { id: Date.now().toString(), name: name, image_url: imageUrl }; const pkgRef = doc(db, "guis", pkgId); const pkg = allGUIs.find(g => g.id === pkgId); await updateDoc(pkgRef, { items: [...(pkg.items || []), newItem] }); status.innerText = "Erfolgreich!"; setTimeout(() => { status.innerText = ""; document.getElementById('modal-gui-name').value = ''; document.getElementById('modal-gui-image').value = ''; document.getElementById('gui-upload-modal').classList.remove('active'); }, 1500); } catch (e) { console.error("Upload Error:", e); status.innerText = "Fehler!"; alert("Fehler beim Hochladen: " + e.message); } });
+window.deleteGuiItem = async (pkgId, itemId) => { if(confirm("Element wirklich löschen?")) { try { const pkgRef = doc(db, "guis", pkgId); const pkg = allGUIs.find(g => g.id === pkgId); await updateDoc(pkgRef, { items: (pkg.items || []).filter(i => i.id !== itemId) }); } catch (error) { console.error(error); alert("Fehler: " + error.message); } } };
 
 
 // ==========================================
-// MENÜ PLANER & GUI EDITOR LOGIK (Repariert)
+// 6. MENÜ PLANER LOGIK
 // ==========================================
-const plannerPresets = [ { id: 'btn_next', text: 'Nächste', icon: '▶️' }, { id: 'btn_close', text: 'Schließen', icon: '❌' } ];
+
+const plannerPresets = [ { id: 'btn_next', text: 'Nächste', icon: '▶️' }, { id: 'btn_prev', text: 'Letzte', icon: '◀️' }, { id: 'btn_close', text: 'Schließen', icon: '❌' }, { id: 'btn_money', text: 'Geld / Eco', icon: '💰' }, { id: 'btn_info', text: 'Information', icon: 'ℹ️' }, { id: 'btn_item', text: 'Item-Platz', icon: '📦' } ];
 let currentMenuLayout = {}; let plannerBgImage = null;
 
 window.initMenuPlanner = function() {
@@ -1142,13 +1171,11 @@ window.initMenuPlanner = function() {
 window.updateMenuGrid = function() {
     try {
         const rowsElem = document.getElementById('menu-rows'); if(!rowsElem) return;
-        const rows = parseInt(rowsElem.value); const grid = document.getElementById('mc-inventory'); 
+        const rows = parseInt(rowsElem.value); const bgUrl = document.getElementById('planner-bg-select').value; const grid = document.getElementById('mc-inventory'); const canvasInner = document.getElementById('planner-inner-canvas'); const inputX = document.getElementById('planner-offset-x'); const inputY = document.getElementById('planner-offset-y');
         grid.innerHTML = '';
-        for(let i=0; i < rows * 9; i++) { 
-            const itemId = currentMenuLayout[i]; let icon = ''; 
-            if(itemId) { const preset = plannerPresets.find(p => p.id === itemId); if(preset) icon = preset.icon; } 
-            grid.innerHTML += `<div class="mc-slot" data-slot="${i}" ondragover="window.allowDrop(event)" ondragleave="window.dragLeave(event)" ondrop="window.drop(event)" onclick="window.clickSlot(${i})">${icon}</div>`; 
-        }
+        if (bgUrl) { canvasInner.style.backgroundImage = `url(${bgUrl})`; if (!plannerBgImage || plannerBgImage.src !== bgUrl) { plannerBgImage = new Image(); plannerBgImage.onload = () => { canvasInner.style.width = plannerBgImage.naturalWidth + 'px'; canvasInner.style.height = plannerBgImage.naturalHeight + 'px'; if(plannerBgImage.naturalWidth === 192) { inputX.value = 8; } else { inputX.value = 40; } grid.style.left = inputX.value + 'px'; }; plannerBgImage.src = bgUrl; } } else { canvasInner.style.backgroundImage = 'none'; canvasInner.style.width = '256px'; canvasInner.style.height = '256px'; }
+        grid.style.left = inputX.value + 'px'; grid.style.top = inputY.value + 'px';
+        for(let i=0; i < rows * 9; i++) { const itemId = currentMenuLayout[i]; let icon = ''; if(itemId) { const preset = plannerPresets.find(p => p.id === itemId); if(preset) icon = preset.icon; } grid.innerHTML += `<div class="mc-slot" data-slot="${i}" ondragover="window.allowDrop(event)" ondragleave="window.dragLeave(event)" ondrop="window.drop(event)" onclick="window.clickSlot(${i})">${icon}</div>`; }
     } catch(e) { console.error("Grid Update Error", e); }
 };
 
@@ -1173,6 +1200,11 @@ window.exportMenuYaml = function() {
     const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${name.toLowerCase().replace(/\s+/g, '_')}.yml`; a.click(); URL.revokeObjectURL(url);
 };
 
+
+// ==========================================
+// 7. GUI PIXEL EDITOR LOGIK (ISOLIERT)
+// ==========================================
+
 window.openGuiEditorForPkg = (pkgId) => { 
     document.querySelector('[data-target="gui-editor"]').click(); 
     document.getElementById('editor-pkg-select').value = pkgId; 
@@ -1186,7 +1218,6 @@ window.editGuiItemInEditor = async (pkgId, itemId) => {
     const item = (pkg.items || []).find(i => i.id === itemId); if(!item) return; 
     document.querySelector('[data-target="gui-editor"]').click(); 
     
-    // Warte kurz bis UI da ist
     setTimeout(async () => {
         document.getElementById('editor-pkg-select').value = pkgId; 
         document.getElementById('editor-gui-name').value = item.name; 
@@ -1207,56 +1238,144 @@ window.editGuiItemInEditor = async (pkgId, itemId) => {
     }, 200);
 };
 
-// Canvas Editor Kapselung (Nur 1x laden)
 let editorInitialized = false;
 function initEditor() {
     if (editorInitialized) return; 
-    const canvas = document.getElementById('pixelCanvas'); 
-    if(!canvas) return;
-    
     editorInitialized = true;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    let currentZoom = 2; let currentTool = 'brush'; let selectedColor = '#a49e95'; 
-    let isDrawing = false; let isEraseMode = false; let startPos = {x:0, y:0}; 
-    const undoStack = [];
-    
-    window.clearCanvasSilent = function() { ctx.clearRect(0,0,canvas.width,canvas.height); }
-    window.clearCanvas = function(){if(confirm("Löschen?")){window.clearCanvasSilent();}}
+
+    const fontMap={A:[[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],Ä:[[1,0,0,1],[0,0,0,0],[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],B:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,1],[1,1,1,0]],C:[[0,1,1,1],[1,0,0,0],[1,0,0,0],[1,0,0,0],[0,1,1,1]],D:[[1,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,0]],E:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,1,1,1]],F:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,0,0,0]],G:[[0,1,1,1],[1,0,0,0],[1,0,1,1],[1,0,0,1],[0,1,1,1]],H:[[1,0,0,1],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],I:[[1,1,1],[0,1,0],[0,1,0],[0,1,0],[1,1,1]],J:[[0,0,1,1],[0,0,0,1],[0,0,0,1],[1,0,0,1],[0,1,1,0]],K:[[1,0,0,1],[1,0,1,0],[1,1,0,0],[1,0,1,0],[1,0,0,1]],L:[[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,1,1,1]],M:[[1,0,0,0,1],[1,1,0,1,1],[1,0,1,0,1],[1,0,0,0,1],[1,0,0,0,1]],N:[[1,0,0,1],[1,1,0,1],[1,0,1,1],[1,0,0,1],[1,0,0,1]],O:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],Ö:[[1,0,0,1],[0,0,0,0],[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],P:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,0],[1,0,0,0]],Q:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,1,1],[0,1,1,1]],R:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,1,0],[1,0,0,1]],S:[[0,1,1,1],[1,0,0,0],[0,1,1,0],[0,0,0,1],[1,1,1,0]],T:[[1,1,1],[0,1,0],[0,1,0],[0,1,0],[0,1,0]],U:[[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],Ü:[[1,0,0,1],[0,0,0,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],V:[[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0],[0,0,1,0]],W:[[1,0,0,0,1],[1,0,0,0,1],[1,0,1,0,1],[1,1,0,1,1],[1,0,0,0,1]],X:[[1,0,0,1],[0,1,1,0],[0,1,1,0],[1,0,0,1]],Y:[[1,0,0,1],[0,1,1,0],[0,0,1,0],[0,0,1,0],[0,0,1,0]],Z:[[1,1,1,1],[0,0,0,1],[0,1,1,0],[1,0,0,0],[1,1,1,1]],0:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],1:[[0,1,0],[1,1,0],[0,1,0],[0,1,0],[1,1,1]],2:[[1,1,1,0],[0,0,0,1],[0,1,1,0],[1,0,0,0],[1,1,1,1]],3:[[1,1,1,0],[0,0,0,1],[0,1,1,0],[0,0,0,1],[1,1,1,0]],4:[[1,0,0,1],[1,0,0,1],[1,1,1,1],[0,0,0,1],[0,0,0,1]],5:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[0,0,0,1],[1,1,1,0]],6:[[0,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,1],[0,1,1,0]],7:[[1,1,1,1],[0,0,0,1],[0,0,1,0],[0,1,0,0],[0,1,0,0]],8:[[0,1,1,0],[1,0,0,1],[0,1,1,0],[1,0,0,1],[0,1,1,0]],9:[[0,1,1,0],[1,0,0,1],[0,1,1,1],[0,0,0,1],[0,1,1,0]],' ':[[0],[0],[0],[0],[0]],'.':[[0],[0],[0],[0],[1]],'ß':[[0,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,1],[1,1,1,0]]};
+
+    const canvas = document.getElementById('pixelCanvas'); const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    let currentZoom = 2; let currentTool = 'brush'; let selectedColor = '#a49e95'; window.currentStamp = 'slot'; let autoCenter = false; let isDrawing = false; let isEraseMode = false; let startPos = {x:0, y:0}; let canvasSnapshot; let selectionBuffer = null; let clipboardData = { img: null, x: 0, y: 0 }; let importedImage = null; const undoStack = []; const maxUndoSteps = 30;
+
+    function showToast(msg) { const t = document.getElementById('editor-toast'); t.innerText = msg; t.style.opacity = 1; setTimeout(() => t.style.opacity = 0, 2000); }
+    window.loadReference = function(input) { if(input.files && input.files[0]) { const reader = new FileReader(); reader.onload = function(e) { const img = document.getElementById('refOverlay'); img.src = e.target.result; img.style.display = 'block'; img.style.width = (canvas.width * currentZoom) + 'px'; img.style.height = (canvas.height * currentZoom) + 'px'; showToast("👻 Referenzbild geladen!"); }; reader.readAsDataURL(input.files[0]); } }
+    window.clearReference = function() { const img = document.getElementById('refOverlay'); img.style.display = 'none'; img.src = ''; document.getElementById('refInput').value = ''; showToast("🚫 Referenz entfernt"); }
+    window.deleteSelectedColor = function() { if(confirm("Farbe " + selectedColor + " löschen?")) { saveState(); const targetRgb = window.hexToRgb(selectedColor); if (!targetRgb) return; const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height); const d = imgData.data; let deletedCount = 0; for(let i = 0; i < d.length; i += 4) { if(d[i+3] > 0 && d[i] === targetRgb.r && d[i+1] === targetRgb.g && d[i+2] === targetRgb.b) { d[i+3] = 0; deletedCount++; } } if (deletedCount > 0) { ctx.putImageData(imgData, 0, 0); refreshSnapshot(); showToast("🧹 Pixel gelöscht!"); } else { undoStack.pop(); showToast("ℹ️ Farbe nicht gefunden."); } } }
+    window.handleImport = function(input) { if(input.files && input.files[0]) { const reader = new FileReader(); reader.onload = function(e) { const img = new Image(); img.onload = function() { importedImage = img; window.setTool('import'); showToast("🖼️ Bild geladen! Klicke zum Platzieren."); }; img.src = e.target.result; }; reader.readAsDataURL(input.files[0]); } }
+
+    function saveState() { undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height)); if (undoStack.length > maxUndoSteps) undoStack.shift(); refreshSnapshot(); }
+    window.triggerSaveState = saveState; function refreshSnapshot() { canvasSnapshot = ctx.getImageData(0,0,canvas.width,canvas.height); }
+    window.undo = function() { if (undoStack.length > 0) { const data = undoStack.pop(); ctx.putImageData(data, 0, 0); refreshSnapshot(); isDrawing = false; selectionBuffer = null; window.updateGuides(); } }
+    document.addEventListener('keydown', e => { if((e.ctrlKey||e.metaKey)&&e.key==='z') window.undo(); });
+
+    window.changeZoom = function(val) { currentZoom = parseInt(val); document.getElementById('zoomVal').innerText = currentZoom; canvas.style.width = (canvas.width * currentZoom) + 'px'; canvas.style.height = (canvas.height * currentZoom) + 'px'; window.updateGuides(); }
+    window.resizeCanvas = function() { saveState(); const s = document.querySelector('#gui-editor input[name="size"]:checked').value; const tempCanvas = document.createElement('canvas'); tempCanvas.width = canvas.width; tempCanvas.height = canvas.height; tempCanvas.getContext('2d').putImageData(ctx.getImageData(0,0,canvas.width, canvas.height), 0, 0); if (s === 'square') { canvas.width = 256; canvas.height = 256; } else if (s === 'rect') { canvas.width = 256; canvas.height = 128; } else if (s === 'tall') { canvas.width = 192; canvas.height = 256; } else if (s === 'mid') { canvas.width = 50; canvas.height = 50; } else if (s === 'icon') { canvas.width = 16; canvas.height = 16; } canvas.style.width = (canvas.width * currentZoom) + 'px'; canvas.style.height = (canvas.height * currentZoom) + 'px'; window.updateGuides(); ctx.imageSmoothingEnabled = false; ctx.drawImage(tempCanvas, 0, 0); saveState(); }
+    document.getElementById('uploadInput').addEventListener('change', e => { if(e.target.files[0]){ saveState(); const r = new FileReader(); r.onload = ev => { const i = new Image(); i.onload = () => { ctx.imageSmoothingEnabled = false; ctx.drawImage(i, 0, 0, canvas.width, canvas.height); saveState(); }; i.src = ev.target.result; }; r.readAsDataURL(e.target.files[0]); } });
+
+    window.setTool = function(tool) { currentTool = tool; document.querySelectorAll('#gui-editor .tool-grid .btn-editor').forEach(b => b.classList.remove('active')); const btn = document.getElementById('tool' + tool.charAt(0).toUpperCase() + tool.slice(1)); if(btn) btn.classList.add('active'); if(tool === 'import' && !importedImage) document.getElementById('toolImport')?.classList.remove('active'); document.getElementById('stampOptions').style.display = (tool === 'stamp') ? 'block' : 'none'; document.getElementById('textOptions').style.display = (tool === 'text') ? 'block' : 'none'; if (tool !== 'select') selectionBuffer = null; if(canvasSnapshot) ctx.putImageData(canvasSnapshot, 0, 0); refreshSnapshot(); }
+    window.toggleEraseMode = function() { isEraseMode = !isEraseMode; const btn = document.getElementById('btnEraseMode'); if (isEraseMode) { btn.classList.add('active'); btn.innerText = "🧽 Radier-Modus (AN)"; showToast("🧽 Alles ist Radierer!"); } else { btn.classList.remove('active'); btn.innerText = "🧽 Radier-Modus (AUS)"; } }
+    window.pasteFromClipboard = function() { if (!clipboardData.img) { showToast("⚠️ Leer!"); return; } saveState(); ctx.putImageData(clipboardData.img, clipboardData.x, clipboardData.y); refreshSnapshot(); showToast("📋 Eingefügt"); }
+    window.pasteClipboardMove = function() { if (!clipboardData.img) { showToast("⚠️ Leer!"); return; } window.setTool('select'); selectionBuffer = clipboardData.img; showToast("🖱️ Klicke zum Platzieren"); }
     
     function getMousePos(evt) { const r = canvas.getBoundingClientRect(); return { x: Math.floor((evt.clientX - r.left)/currentZoom), y: Math.floor((evt.clientY - r.top)/currentZoom) }; }
+
+    canvas.addEventListener('mousedown', function(e) { if(canvasSnapshot) ctx.putImageData(canvasSnapshot, 0, 0); if(currentTool !== 'select' || !selectionBuffer) saveState(); const pos = getMousePos(e); if (currentTool === 'picker') { const p = ctx.getImageData(pos.x, pos.y, 1, 1).data; const hex = "#" + ((1 << 24) + (p[0] << 16) + (p[1] << 8) + p[2]).toString(16).slice(1); selectedColor = hex; document.getElementById('colorPicker').value = hex; window.setTool('brush'); } else if (currentTool === 'fill') { floodFill(pos.x, pos.y, isEraseMode); refreshSnapshot(); } else if (currentTool === 'text') { if(!document.getElementById('textInput').value) showToast("⚠️ Kein Text!"); drawPixelText(document.getElementById('textInput').value, window.getAutoX(pos, 'text'), window.getAutoY(pos), false); refreshSnapshot(); } else if (currentTool === 'stamp') { drawStamp(window.currentStamp, window.getAutoX(pos), window.getAutoY(pos), false); refreshSnapshot(); } else if (currentTool === 'import' && importedImage) { const w = importedImage.width; const h = importedImage.height; ctx.drawImage(importedImage, Math.floor(pos.x - w/2), Math.floor(pos.y - h/2)); refreshSnapshot(); } else if (currentTool === 'select' && selectionBuffer) { ctx.putImageData(selectionBuffer, pos.x, pos.y); selectionBuffer = null; saveState(); } else { isDrawing = true; startPos = pos; if(isEraseMode) ctx.globalCompositeOperation = 'destination-out'; if (currentTool === 'brush') { drawBrush(pos.x, pos.y); refreshSnapshot(); } else if (currentTool === 'eraser') { drawEraser(pos.x, pos.y); refreshSnapshot(); } else if (currentTool === 'lighten' || currentTool === 'darken') { shadingBrush(pos.x, pos.y, currentTool==='lighten'); refreshSnapshot(); } if(isEraseMode) ctx.globalCompositeOperation = 'source-over'; } });
+    canvas.addEventListener('mousemove', function(e) { const pos = getMousePos(e); if(canvasSnapshot) ctx.putImageData(canvasSnapshot, 0, 0); if (isDrawing) { if(isEraseMode) ctx.globalCompositeOperation = 'destination-out'; if (currentTool === 'brush') { drawBrush(pos.x, pos.y); refreshSnapshot(); } else if (currentTool === 'eraser') { drawEraser(pos.x, pos.y); refreshSnapshot(); } else if (currentTool === 'lighten' || currentTool === 'darken') { shadingBrush(pos.x, pos.y, currentTool==='lighten'); refreshSnapshot(); } else if (currentTool === 'line') drawLine(startPos.x, startPos.y, pos.x, pos.y); else if (currentTool === 'rect') drawRectShape(startPos.x, startPos.y, pos.x, pos.y, false); else if (currentTool === 'rectFill') drawRectShape(startPos.x, startPos.y, pos.x, pos.y, true); else if (currentTool === 'select' && !selectionBuffer) drawSelectionBox(startPos.x, startPos.y, pos.x, pos.y); else if (currentTool === 'copy') drawSelectionBox(startPos.x, startPos.y, pos.x, pos.y); if(isEraseMode) ctx.globalCompositeOperation = 'source-over'; } else { if (['rect', 'rectFill', 'line', 'select', 'copy', 'picker', 'fill'].includes(currentTool)) drawPixelCursor(pos.x, pos.y); else if (['brush', 'lighten', 'darken'].includes(currentTool)) drawBrushPreview(pos.x, pos.y); else if (currentTool === 'eraser') drawBrushPreview(pos.x, pos.y, true); else if (currentTool === 'stamp') drawStamp(window.currentStamp, window.getAutoX(pos), window.getAutoY(pos), true); else if (currentTool === 'text') drawPixelText(document.getElementById('textInput').value, window.getAutoX(pos, 'text'), window.getAutoY(pos), true); else if (currentTool === 'select' && selectionBuffer) ctx.putImageData(selectionBuffer, pos.x, pos.y); else if (currentTool === 'import' && importedImage) { const w = importedImage.width; const h = importedImage.height; ctx.globalAlpha = 0.6; ctx.drawImage(importedImage, Math.floor(pos.x - w/2), Math.floor(pos.y - h/2)); ctx.globalAlpha = 1.0; } } });
+    canvas.addEventListener('mouseout', function() { if(canvasSnapshot) ctx.putImageData(canvasSnapshot, 0, 0); isDrawing = false; });
+    window.addEventListener('mouseup', function(e) { if (!isDrawing) return; const pos = getMousePos(e); if(isEraseMode) ctx.globalCompositeOperation = 'destination-out'; if (currentTool === 'line') { drawLine(startPos.x, startPos.y, pos.x, pos.y); } else if (currentTool === 'rect') { drawRectShape(startPos.x, startPos.y, pos.x, pos.y, false); } else if (currentTool === 'rectFill') { drawRectShape(startPos.x, startPos.y, pos.x, pos.y, true); } if(isEraseMode) ctx.globalCompositeOperation = 'source-over'; if (currentTool === 'select' && !selectionBuffer) { const x = Math.min(startPos.x, pos.x), y = Math.min(startPos.y, pos.y); const w = Math.abs(pos.x - startPos.x) + 1, h = Math.abs(pos.y - startPos.y) + 1; if (w > 0 && h > 0) { selectionBuffer = ctx.getImageData(x, y, w, h); ctx.clearRect(x, y, w, h); } } else if (currentTool === 'copy') { ctx.putImageData(canvasSnapshot, 0, 0); const x = Math.min(startPos.x, pos.x), y = Math.min(startPos.y, pos.y); const w = Math.abs(pos.x - startPos.x) + 1, h = Math.abs(pos.y - startPos.y) + 1; if (w > 0 && h > 0) { const data = ctx.getImageData(x, y, w, h); clipboardData = { img: data, x: x, y: y }; showToast("✅ Kopiert!"); } } isDrawing = false; refreshSnapshot(); window.updateGuides(); });
+
+    window.toggleGrid = function() { document.getElementById('gridOverlay').style.display = document.getElementById('gridCheck').checked ? 'block' : 'none'; window.updateGuides(); }
+    window.toggleAutoCenter = function() { autoCenter = !autoCenter; document.getElementById('btnAutoCenter').classList.toggle('active'); document.getElementById('btnAutoCenter').innerText = autoCenter ? "🧲 Zentrieren (AN)" : "🧲 Zentrieren (Aus)"; document.getElementById('centerSettings').style.display = autoCenter ? 'block' : 'none'; window.updateGuides(); }
+    window.toggleYInput = function() { const el = document.getElementById('fixedYVal'); const active = document.getElementById('useFixedY').checked; el.disabled = !active; el.style.opacity = active ? "1" : "0.5"; }
+    window.addToPalette = function(){window.createPaletteSwatch(document.getElementById('colorPicker').value);}
+    window.createPaletteSwatch = function(c){const d=document.createElement('div');d.className='color-swatch';d.style.backgroundColor=c;d.onclick=()=>{selectedColor=c;document.getElementById('colorPicker').value=c;document.querySelectorAll('#gui-editor .color-swatch').forEach(e=>e.classList.remove('active'));d.classList.add('active'); window.setTool('brush');};document.getElementById('paletteGrid').appendChild(d);}
+    window.clearCanvasSilent = function() { ctx.clearRect(0,0,canvas.width,canvas.height); saveState(); }
+    window.clearCanvas = function(){if(confirm("Löschen?")){window.clearCanvasSilent();}}
+    window.hexToRgb = function(h){const r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h);return r?{r:parseInt(r[1],16),g:parseInt(r[2],16),b:parseInt(r[3],16)}:null;}
+    window.getAutoY = function(p){if(autoCenter&&document.getElementById('useFixedY').checked)return parseInt(document.getElementById('fixedYVal').value)||0;return p.y;}
+    window.getAutoX = function(p,t){if(!autoCenter)return p.x;let cx=canvas.width/2;if(document.getElementById('useContentAlign').checked)cx=window.getContentBounds().centerX;if(t==='text'){const txt=document.getElementById('textInput').value;const s=parseInt(document.getElementById('textScale').value)||1;let w=0;for(let c of txt.toUpperCase()){const m=fontMap[c]||fontMap[' '];w+=((m[0]?.length||3)*s)+s;}w-=s;return Math.floor(cx-(w/2));}else{const w=(t.startsWith('job')?45:(window.currentStamp==='slot')?18:16);return Math.floor(cx-(w/2));}}
+    window.getContentBounds = function() {const w=canvas.width, h=canvas.height, d=ctx.getImageData(0,0,w,h).data;let minX=w, maxX=0, found=false;for(let y=0;y<h;y++) for(let x=0;x<w;x++) if(d[(y*w+x)*4+3]>0) { if(x<minX)minX=x; if(x>maxX)maxX=x; found=true; }return found ? {minX, maxX, centerX:Math.floor(minX+(maxX-minX)/2), found:true} : {minX:0, maxX:w, centerX:w/2, found:false};}
     
-    canvas.addEventListener('mousedown', function(e) { 
-        isDrawing = true; const pos = getMousePos(e); 
-        ctx.fillStyle = selectedColor; ctx.fillRect(pos.x, pos.y, 1, 1); 
-    });
-    canvas.addEventListener('mousemove', function(e) { 
-        if (!isDrawing) return; const pos = getMousePos(e); 
-        ctx.fillStyle = selectedColor; ctx.fillRect(pos.x, pos.y, 1, 1); 
-    });
-    window.addEventListener('mouseup', function() { isDrawing = false; });
+    window.updateGuides = function() { const cl=document.getElementById('centerLine'); cl.style.display='none'; const grid = document.getElementById('gridOverlay'); const gridSize = 18 * currentZoom; grid.style.backgroundSize = `${gridSize}px ${gridSize}px`; const refImg = document.getElementById('refOverlay'); if (refImg && refImg.style.display === 'block') { refImg.style.width = (canvas.width * currentZoom) + 'px'; refImg.style.height = (canvas.height * currentZoom) + 'px'; } grid.style.width = (canvas.width * currentZoom) + 'px'; grid.style.height = (canvas.height * currentZoom) + 'px'; if (autoCenter) { let cp = canvas.width / 2; if (document.getElementById('useContentAlign').checked) { const b = window.getContentBounds(); if(b.found) { cp=b.centerX; } } cl.style.left = (cp * currentZoom) + 'px'; cl.style.display = 'block'; } }
+
+    function drawBrush(x, y) { ctx.fillStyle = selectedColor; const s = parseInt(document.getElementById('brushSize').value); ctx.fillRect(x - Math.floor(s/2), y - Math.floor(s/2), s, s); }
+    function drawEraser(x, y) { const s = parseInt(document.getElementById('brushSize').value); ctx.clearRect(x - Math.floor(s/2), y - Math.floor(s/2), s, s); }
+    function drawPixelCursor(x, y) { ctx.fillStyle = selectedColor; ctx.fillRect(x, y, 1, 1); }
+    function drawBrushPreview(x, y, eraser) { const s = parseInt(document.getElementById('brushSize').value); ctx.fillStyle = selectedColor; if(currentTool==='eraser'||eraser) ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.5; ctx.fillRect(x - Math.floor(s/2), y - Math.floor(s/2), s, s); ctx.globalAlpha = 1.0; }
+    function shadingBrush(x, y, l) { const s = parseInt(document.getElementById('brushSize').value); const sx = x - Math.floor(s/2); const sy = y - Math.floor(s/2); const i = ctx.getImageData(sx, sy, s, s); const d = i.data; const a = 15; for(let k=0; k<d.length; k+=4) { if(d[k+3] === 0) continue; if(l) { d[k]=Math.min(255,d[k]+a); d[k+1]=Math.min(255,d[k+1]+a); d[k+2]=Math.min(255,d[k+2]+a); } else { d[k]=Math.max(0,d[k]-a); d[k+1]=Math.max(0,d[k+1]-a); d[k+2]=Math.max(0,d[k+2]-a); } } ctx.putImageData(i, sx, sy); }
+    function drawLine(x0,y0,x1,y1){const dx=x1-x0,dy=y1-y0;const st=Math.max(Math.abs(dx),Math.abs(dy));const s=parseInt(document.getElementById('brushSize').value);const o=Math.floor(s/2);ctx.fillStyle=selectedColor;for(let i=0;i<=st;i++){const t=st===0?0:i/st;ctx.fillRect(Math.round(x0+dx*t)-o,Math.round(y0+dy*t)-o,s,s);}}
+    function drawRectShape(x0,y0,x1,y1,f){const x=Math.min(x0,x1),y=Math.min(y0,y1);const w=Math.abs(x1-x0)+1,h=Math.abs(y1-y0)+1;ctx.fillStyle=selectedColor;if(f){ctx.fillRect(x,y,w,h);}else{const s=parseInt(document.getElementById('brushSize').value);ctx.fillRect(x,y,w,s);ctx.fillRect(x,y+h-s,w,s);ctx.fillRect(x,y,s,h);ctx.fillRect(x+w-s,y,s,h);}}
+    function drawSelectionBox(x0,y0,x1,y1){const x=Math.min(x0,x1),y=Math.min(y0,y1);const w=Math.abs(x1-x0),h=Math.abs(y1-y0);ctx.strokeStyle='#fff';ctx.setLineDash([4,2]);ctx.strokeRect(x+0.5,y+0.5,w,h);ctx.setLineDash([]);}
     
+    function drawStamp(t,x,y,p){
+        if(p)ctx.globalAlpha=0.5;
+        if(t==='slot'){drawRect(x,y,18,18,'#8b8b8b');drawRect(x,y,17,1,'#373737');drawRect(x,y,1,18,'#373737');drawRect(x,y+17,18,1,'#ffffff');drawRect(x+17,y,1,18,'#ffffff');drawRect(x+1,y+1,16,16,'#8b8b8b');}
+        else if(t.startsWith('job')) { drawJobIcon(t, x, y); }
+        else {
+            ctx.fillStyle=selectedColor;let m=[];
+            if(t==='sArrowR')m=["00100","00110","11111","00110","00100"]; else if(t==='iconExclam')m=["0000001111000000","0000001111000000","0000001111000000","0000001111000000","0000001111000000","0000001111000000","0000001111000000","0000001111000000","0000001111000000","0000000000000000","0000000000000000","0000001111000000","0000001111000000","0000001111000000","0000000000000000","0000000000000000"]; else if(t==='iconWarn')m=["0000000000000000","0000000110000000","0000001111000000","0000001111000000","0000011111100000","0000011111100000","0000111111110000","0000111111110000","0001100110011000","0001100110011000","0011100110011100","0011100000011100","0111100110011110","0111111111111110","1111111111111111","0000000000000000"]; else if(t==='iconGear')m=["0000001111000000","0000111111110000","0011100110011100","0011000000001100","0011000000001100","0110000000000110","1100000000000011","1100000000000011","1100000000000011","1100000000000011","0110000000000110","0011000000001100","0011000000001100","0011100110011100","0000111111110000","0000001111000000"]; else if(t==='iconPlus')m=["0000000000000000","0000000110000000","0000000110000000","0000000110000000","0000000110000000","0000000110000000","0000000110000000","1111111111111111","1111111111111111","0000000110000000","0000000110000000","0000000110000000","0000000110000000","0000000110000000","0000000110000000","0000000000000000"]; else if(t==='iconMinus')m=["0000000000000000","0000000000000000","0000000000000000","0000000000000000","0000000000000000","0000000000000000","0000000000000000","1111111111111111","1111111111111111","0000000000000000","0000000000000000","0000000000000000","0000000000000000","0000000000000000","0000000000000000","0000000000000000"]; else if(t==='lArrowR')m=["0000000010000000","0000000011000000","0000000011100000","0000000011110000","0000000011111000","1111111111111100","1111111111111110","1111111111111111","1111111111111111","1111111111111110","1111111111111100","0000000011111000","0000000011110000","0000000011100000","0000000011000000","0000000010000000"]; else if(t==='lArrowL')m=["0000000100000000","0000001100000000","0000011100000000","0000111100000000","0001111100000000","0011111111111111","0111111111111111","1111111111111111","1111111111111111","0111111111111111","0011111111111111","0001111100000000","0000111100000000","0000011100000000","0000001100000000","0000000100000000"]; else if(t==='lArrowU')m=["0000000110000000","0000001111000000","0000011111100000","0000111111110000","0001111111111000","0011111111111100","0111111111111110","1111111111111111","0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000"]; else if(t==='lArrowD')m=["0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000","0000011111100000","1111111111111111","0111111111111110","0011111111111100","0001111111111000","0000111111110000","0000011111100000","0000001111000000","0000000110000000"];
+            for(let r=0;r<m.length;r++)for(let c=0;c<m[r].length;c++)if(m[r][c]==='1')ctx.fillRect(x+c,y+r,1,1);
+        }
+        if(p)ctx.globalAlpha=1.0;
+    }
+
+    function drawJobIcon(t, x, y) { ctx.fillStyle = selectedColor; if(t==='jobMiner') { for(let i=0;i<30;i++) ctx.fillRect(x+10+i, y+10+i, 3, 3); for(let i=0;i<15;i++) { ctx.fillRect(x+5+i, y+5+15-i, 4, 4); ctx.fillRect(x+35+i, y+5+i, 4, 4); } } else if(t==='jobDigger') { ctx.fillRect(x+20, y+15, 5, 25); ctx.fillRect(x+15, y+5, 15, 12); ctx.fillRect(x+17, y+17, 11, 2); } else if(t==='jobLumber') { for(let i=0;i<30;i++) ctx.fillRect(x+35-i, y+10+i, 3, 3); ctx.fillRect(x+5, y+5, 15, 15); ctx.fillRect(x+20, y+10, 5, 5); } else if(t==='jobHunter') { ctx.fillRect(x+10, y+5, 5, 35); ctx.fillRect(x+15, y+5, 15, 2); ctx.fillRect(x+30, y+7, 2, 31); ctx.fillRect(x+15, y+38, 15, 2); } else if(t==='jobCrafter') { ctx.fillRect(x+5, y+5, 35, 35); ctx.clearRect(x+15, y+5, 2, 35); ctx.clearRect(x+28, y+5, 2, 35); ctx.clearRect(x+5, y+15, 35, 2); ctx.clearRect(x+5, y+28, 35, 2); } else if(t==='jobSmith') { ctx.fillRect(x+5, y+10, 35, 10); ctx.fillRect(x+15, y+20, 15, 15); ctx.fillRect(x+5, y+35, 35, 5); } }
+    function drawPixelText(t, x, y, preview) { if(!t) return; if(preview) ctx.globalAlpha = 0.5; t = t.toUpperCase(); const s = parseInt(document.getElementById('textScale').value)||1; const shad = document.getElementById('textShadow').checked; function dC(ch, dx, dy, col) { ctx.fillStyle = col; const m = fontMap[ch]||fontMap[' ']; if(!m) return 4*s; for(let r=0;r<m.length;r++) for(let c=0;c<m[r].length;c++) if(m[r][c]) ctx.fillRect(dx+(c*s), dy+(r*s), s, s); return ((m[0]?.length||3)*s)+s; } if(shad) { let sx=x+s; for(let c of t) sx+=dC(c, sx, y+s, "#1a1a1a"); } let cx=x; for(let c of t) cx+=dC(c, cx, y, selectedColor); if(preview) ctx.globalAlpha = 1.0; }
+    function drawRect(x,y,w,h,col){ctx.fillStyle=col;ctx.fillRect(x,y,w,h);}
+    function drawGuiBase(x,y,w,h){ctx.fillStyle='#c6c6c6';ctx.fillRect(x,y,w,h);ctx.fillStyle='#ffffff';ctx.fillRect(x,y,w,2);ctx.fillRect(x,y,2,h);ctx.fillStyle='#555555';ctx.fillRect(x+2,y+h-2,w-2,2);ctx.fillRect(x+w-2,y+2,2,h-2);}
+    
+    window.applyTemplate = function(type) { 
+        saveState(); const w=canvas.width; const cx=Math.floor((w-176)/2); 
+        if(type==='chest'){ const sy=10; drawGuiBase(cx,sy,176,166); for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+17+r*18,false); for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+83+r*18,false); for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+141,false); } else if(type==='double'){ const sy=5; drawGuiBase(cx,sy,176,222); for(let r=0;r<6;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+17+r*18,false); for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+139+r*18,false); for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+197,false); } else if(type==='inv'){ const sy=80; for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+r*18,false); for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+58,false); } 
+        refreshSnapshot(); 
+    }
+    
+    function floodFill(x,y,erase){ const startPixel=ctx.getImageData(x,y,1,1).data; const startR=startPixel[0],startG=startPixel[1],startB=startPixel[2],startA=startPixel[3]; const f=window.hexToRgb(selectedColor); if(erase){ if(startA===0) return; } else { if(startR===f.r&&startG===f.g&&startB===f.b&&startA===255) return; } const img=ctx.getImageData(0,0,canvas.width,canvas.height); const d=img.data; const s=[[x,y]]; const w=canvas.width,h=canvas.height; while(s.length){ const[cx,cy]=s.pop(); if(cx<0||cx>=w||cy<0||cy>=h)continue; const i=(cy*w+cx)*4; if(d[i]===startR&&d[i+1]===startG&&d[i+2]===startB&&d[i+3]===startA){ if(erase) d[i+3]=0; else { d[i]=f.r; d[i+1]=f.g; d[i+2]=f.b; d[i+3]=255; } s.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]); } } ctx.putImageData(img,0,0); }
+
     window.saveEditorToFirebase = async function() {
         const pkgId = document.getElementById('editor-pkg-select').value;
         const guiName = document.getElementById('editor-gui-name').value;
-        if(!pkgId || !guiName) return alert("Paket und Name fehlen!");
+        const editItemId = document.getElementById('editor-gui-item-id').value;
+
+        if(!pkgId) return alert("Bitte wähle ein Ziel-Paket im Dropdown aus!");
+        if(!guiName) return alert("Bitte gib dem GUI einen Namen!");
 
         const btn = document.getElementById('btn-editor-save');
+        const oldText = btn.innerText;
         btn.innerText = "Lade hoch...";
         
         try {
             const dataUrl = canvas.toDataURL('image/png');
             const storageRef = ref(storage, `guis/images/gui_${Date.now()}.png`);
+            
             await uploadString(storageRef, dataUrl, 'data_url');
             const imageUrl = await getDownloadURL(storageRef);
             
             const pkgRef = doc(db, "guis", pkgId);
             const pkg = allGUIs.find(g => g.id === pkgId);
+            if(!pkg) throw new Error("Das ausgewählte Paket wurde nicht in der Datenbank gefunden.");
+
             let updatedItems = [...(pkg.items || [])];
-            updatedItems.push({ id: Date.now().toString(), name: guiName, image_url: imageUrl });
+
+            if (editItemId) {
+                const idx = updatedItems.findIndex(i => i.id === editItemId);
+                if(idx > -1) {
+                    updatedItems[idx].name = guiName;
+                    updatedItems[idx].image_url = imageUrl;
+                } else {
+                    updatedItems.push({ id: editItemId, name: guiName, image_url: imageUrl });
+                }
+            } else {
+                updatedItems.push({ id: Date.now().toString(), name: guiName, image_url: imageUrl });
+            }
+
             await updateDoc(pkgRef, { items: updatedItems });
 
             btn.innerText = "Erfolgreich!";
-            setTimeout(() => { btn.innerText = "💾 In Paket speichern"; ctx.clearRect(0,0,canvas.width,canvas.height); }, 1000);
-        } catch (error) { console.error(error); alert("Fehler: " + error.message); }
+            setTimeout(() => {
+                btn.innerText = oldText;
+                document.getElementById('editor-gui-name').value = '';
+                document.getElementById('editor-gui-item-id').value = '';
+                ctx.clearRect(0,0,canvas.width,canvas.height); 
+                refreshSnapshot();
+                document.querySelector('[data-target="gui"]').click();
+            }, 1000);
+            
+        } catch (error) { 
+            console.error(error); 
+            btn.innerText = oldText;
+            alert("FEHLER BEIM SPEICHERN:\n" + error.message);
+        }
     }
 }
