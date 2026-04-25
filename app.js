@@ -17,41 +17,22 @@ const db = getFirestore(app);
 const storage = getStorage(app);
 const auth = getAuth(app);
 
-// Globale Variablen für alle Daten
+// Globale Listen
 let allRanks = [], allGUIs = [], allCrates = [], allShop = [], allAds = [], allPlugins = [], allBroadcasts = [];
 let allQuestBatches = [], allHolograms = [], allEvents = [];
 
-// Globale IDs für den Bearbeitungs-Modus
 let editingRankId = null, editingPluginId = null, editingShopId = null, editingEventId = null;
 let listenersActive = false; 
 
-// Zustände für einklappbare Boxen und Einstellungen
-window.crateCollapsed = {}; 
-window.crateSortModes = {}; 
-window.pluginCollapsed = {}; 
-window.adCollapsed = {}; 
-window.guiCollapsed = {}; 
-window.questCollapsed = {}; 
-window.holoCollapsed = {};
-let draggedCrateBox = null; 
-window.dragDropActive = false;
+// Toggle States
+window.crateCollapsed = {}; window.crateSortModes = {}; window.pluginCollapsed = {}; window.adCollapsed = {}; window.guiCollapsed = {}; window.questCollapsed = {}; window.holoCollapsed = {};
+let draggedCrateBox = null; window.dragDropActive = false;
 
-// ==========================================
-// DARK MODE
-// ==========================================
+// Dark Mode Toggle
 const savedTheme = localStorage.getItem('theme');
 if (savedTheme === 'dark') { document.body.classList.add('dark-mode'); }
+document.getElementById('btn-darkmode').addEventListener('click', () => { document.body.classList.toggle('dark-mode'); localStorage.setItem('theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light'); });
 
-document.getElementById('btn-darkmode').addEventListener('click', () => {
-    document.body.classList.toggle('dark-mode');
-    const isDark = document.body.classList.contains('dark-mode');
-    localStorage.setItem('theme', isDark ? 'dark' : 'light');
-});
-
-
-// ==========================================
-// HILFSFUNKTIONEN & AUTH
-// ==========================================
 async function uploadImage(file, folderPath) {
     if (!file) return null;
     const storageRef = ref(storage, `${folderPath}/${Date.now()}_${file.name}`);
@@ -63,12 +44,7 @@ onAuthStateChanged(auth, (user) => {
     if (user) {
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('main-app').style.display = 'flex';
-        if (!listenersActive) { 
-            startRealtimeListeners(); 
-            initEditor(); 
-            if(window.initMenuPlanner) window.initMenuPlanner(); 
-            listenersActive = true; 
-        }
+        if (!listenersActive) { startRealtimeListeners(); listenersActive = true; }
     } else {
         document.getElementById('login-screen').style.display = 'flex';
         document.getElementById('main-app').style.display = 'none';
@@ -77,10 +53,8 @@ onAuthStateChanged(auth, (user) => {
 
 document.getElementById('btn-login').addEventListener('click', async () => {
     const email = document.getElementById('login-email').value; const password = document.getElementById('login-password').value; const errorText = document.getElementById('login-error');
-    if(!email || !password) return errorText.innerText = "Bitte beides ausfüllen!";
-    errorText.innerText = "Logge ein..."; errorText.style.color = "var(--text-muted)";
-    try { await signInWithEmailAndPassword(auth, email, password); errorText.innerText = ""; } 
-    catch (error) { errorText.style.color = "var(--danger)"; errorText.innerText = "Falsche E-Mail oder Passwort!"; }
+    if(!email || !password) return errorText.innerText = "Bitte beides ausfüllen!"; errorText.innerText = "Logge ein..."; errorText.style.color = "var(--text-muted)";
+    try { await signInWithEmailAndPassword(auth, email, password); errorText.innerText = ""; } catch (error) { errorText.style.color = "var(--danger)"; errorText.innerText = "Falsche E-Mail oder Passwort!"; }
 });
 
 document.getElementById('btn-logout').addEventListener('click', () => { signOut(auth); });
@@ -89,42 +63,27 @@ document.querySelectorAll('.nav-item:not(#btn-logout):not(#btn-darkmode)').forEa
     item.addEventListener('click', (e) => {
         document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active')); e.target.classList.add('active');
         const targetId = e.target.getAttribute('data-target');
-        document.querySelectorAll('.category-section').forEach(sec => sec.classList.remove('active')); 
-        document.getElementById(targetId).classList.add('active');
-        
+        document.querySelectorAll('.category-section').forEach(sec => sec.classList.remove('active')); document.getElementById(targetId).classList.add('active');
         if(targetId === 'gui-editor') { setTimeout(() => { initEditor(); if(window.resizeCanvas) window.resizeCanvas(); }, 100); }
         if(targetId === 'menu-planner') { setTimeout(() => { if(window.initMenuPlanner) window.initMenuPlanner(); }, 100); }
     });
 });
 
 function updateDashboard() {
-    document.getElementById('stat-ranks').innerText = allRanks.length;
-    document.getElementById('stat-crates').innerText = allCrates.length;
-    document.getElementById('stat-plugins').innerText = allPlugins.length;
-    document.getElementById('stat-shop').innerText = allShop.length;
-    document.getElementById('stat-guis').innerText = allGUIs.length; 
-    document.getElementById('stat-events').innerText = allEvents.length;
+    if(document.getElementById('stat-ranks')) document.getElementById('stat-ranks').innerText = allRanks.length;
+    if(document.getElementById('stat-crates')) document.getElementById('stat-crates').innerText = allCrates.length;
+    if(document.getElementById('stat-plugins')) document.getElementById('stat-plugins').innerText = allPlugins.length;
+    if(document.getElementById('stat-shop')) document.getElementById('stat-shop').innerText = allShop.length;
+    if(document.getElementById('stat-guis')) document.getElementById('stat-guis').innerText = allGUIs.length; 
+    if(document.getElementById('stat-events')) document.getElementById('stat-events').innerText = allEvents.length;
     let questCount = 0; allQuestBatches.forEach(b => { questCount += (b.quests || []).length; });
-    document.getElementById('stat-quests').innerText = questCount; 
-    document.getElementById('stat-holograms').innerText = allHolograms.length; 
+    if(document.getElementById('stat-quests')) document.getElementById('stat-quests').innerText = questCount; 
+    if(document.getElementById('stat-holograms')) document.getElementById('stat-holograms').innerText = allHolograms.length; 
 }
 
-function sortRanksHierarchically(ranks) {
-    let sorted = [], visited = new Set(), baseRanks = ranks.filter(r => !r.inherits_from);
-    function addChildren(parentName) { let children = ranks.filter(r => r.inherits_from === parentName); children.forEach(child => { if (!visited.has(child.id)) { visited.add(child.id); sorted.push(child); addChildren(child.name); } }); }
-    baseRanks.forEach(baseRank => { if (!visited.has(baseRank.id)) { visited.add(baseRank.id); sorted.push(baseRank); addChildren(baseRank.name); } });
-    ranks.forEach(r => { if (!visited.has(r.id)) sorted.push(r); });
-    return sorted;
-}
-
-
-// ==========================================
-// LIVE SERVER STATUS PING
-// ==========================================
 window.checkServerStatus = async function() {
     const ip = document.getElementById('server-ip').value; const resDiv = document.getElementById('server-status-result');
-    if(!ip) return alert("Bitte eine Minecraft-Server IP eingeben!");
-    resDiv.style.display = 'block'; resDiv.innerHTML = "<span style='color: var(--text-muted);'>📡 Pinge Server an... Bitte warten.</span>";
+    if(!ip) return alert("Bitte eine Minecraft-Server IP eingeben!"); resDiv.style.display = 'block'; resDiv.innerHTML = "<span style='color: var(--text-muted);'>📡 Pinge Server an... Bitte warten.</span>";
     try {
         const response = await fetch('https://api.mcsrvstat.us/3/' + ip); const data = await response.json();
         if(data.online) {
@@ -134,24 +93,16 @@ window.checkServerStatus = async function() {
     } catch(e) { resDiv.innerHTML = "<span style='color:var(--danger);'>❌ Fehler beim Abrufen der API.</span>"; }
 }
 
-window.deleteEntry = async (collectionName, id) => {
-    if(confirm('Wirklich komplett löschen?')) { await deleteDoc(doc(db, collectionName, id)); }
-};
+window.deleteEntry = async (collectionName, id) => { if(confirm('Wirklich komplett löschen?')) { await deleteDoc(doc(db, collectionName, id)); } };
 
-
-// ==========================================
-// DATEN LADEN (REALTIME LISTENER)
-// ==========================================
 function startRealtimeListeners() {
-    
     // EVENTS
     onSnapshot(collection(db, "events"), (snap) => {
         allEvents = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         allEvents.sort((a, b) => new Date(a.date + 'T' + (a.time || '00:00')) - new Date(b.date + 'T' + (b.time || '00:00')));
         const container = document.getElementById('events-container'); if(!container) return; container.innerHTML = '';
         allEvents.forEach(ev => {
-            const dateObj = new Date(ev.date);
-            const formattedDate = dateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const dateObj = new Date(ev.date); const formattedDate = dateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
             container.innerHTML += `<div class="event-card"><div class="event-card-date">📅 ${formattedDate} ${ev.time ? '- ' + ev.time + ' Uhr' : ''}</div><div style="margin-top: 25px; margin-bottom: 10px;"><h3 style="margin: 0; font-size: 18px;">${ev.name}</h3></div><p style="font-size: 13px; color: var(--text-muted); flex-grow: 1;">${ev.description || 'Keine Beschreibung'}</p><div class="button-group" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 10px;"><button class="btn btn-secondary btn-sm" onclick="window.editEvent('${ev.id}')">✏️ Bearbeiten</button><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('events', '${ev.id}')">🗑️ Löschen</button></div></div>`;
         });
         updateDashboard();
@@ -169,7 +120,12 @@ function startRealtimeListeners() {
 
     // RÄNGE
     onSnapshot(collection(db, "ranks"), (snap) => {
-        allRanks = sortRanksHierarchically(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        let rawRanks = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let sorted = [], visited = new Set(), baseRanks = rawRanks.filter(r => !r.inherits_from);
+        function addC(pn) { rawRanks.filter(r => r.inherits_from === pn).forEach(c => { if (!visited.has(c.id)) { visited.add(c.id); sorted.push(c); addC(c.name); } }); }
+        baseRanks.forEach(br => { if (!visited.has(br.id)) { visited.add(br.id); sorted.push(br); addC(br.name); } });
+        rawRanks.forEach(r => { if (!visited.has(r.id)) sorted.push(r); }); allRanks = sorted;
+
         const list = document.getElementById('rank-list'); if(list) list.innerHTML = '';
         allRanks.forEach(rank => {
             const myPerms = rank.permissions || []; const parentRank = rank.inherits_from ? allRanks.find(r => r.name === rank.inherits_from) : null; const inherited = parentRank ? (parentRank.permissions || []) : [];
@@ -187,19 +143,16 @@ function startRealtimeListeners() {
     // PLUGINS
     onSnapshot(collection(db, "plugins"), (snap) => {
         allPlugins = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const container = document.getElementById('plugins-container');
-        if(!container) return; container.innerHTML = '';
+        const container = document.getElementById('plugins-container'); if(!container) return; container.innerHTML = '';
         allPlugins.forEach(plugin => { 
-            let permsText = plugin.perms || plugin.info || '-';
-            let settingsHtml = '';
+            let permsText = plugin.perms || plugin.info || '-'; let settingsHtml = '';
             if (plugin.settingsType === 'daily') {
                 settingsHtml = `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; margin-top:5px;">`;
                 (plugin.dailyRewards || []).forEach((req, idx) => { settingsHtml += `<div style="background:var(--bg-color); padding:4px 8px; border-radius:4px; font-size:12px; border:1px solid var(--border-color);"><strong>Tag ${idx+1}:</strong> ${req}</div>`; });
                 settingsHtml += `</div>`;
             } else { settingsHtml = `<div style="white-space:pre-wrap; font-size:13px; margin-top:5px;">${plugin.settingsText || '-'}</div>`; }
 
-            let isCollapsed = window.pluginCollapsed[plugin.id] !== false; 
-            let displayStyle = isCollapsed ? 'none' : 'block'; let iconText = isCollapsed ? '▶️' : '🔽';
+            let isCollapsed = window.pluginCollapsed[plugin.id] !== false; let displayStyle = isCollapsed ? 'none' : 'block'; let iconText = isCollapsed ? '▶️' : '🔽';
 
             container.innerHTML += `<div class="crate-box"><div class="crate-header" style="cursor: pointer; margin-bottom: 0; padding-bottom: ${isCollapsed ? '0' : '15px'}; border-bottom: ${isCollapsed ? 'none' : '1px solid var(--border-color)'};" onclick="window.togglePlugin('${plugin.id}')"><div class="crate-header-left"><span id="plugin-icon-${plugin.id}" style="margin-right: 8px; font-size: 14px;">${iconText}</span><h3 style="font-size: 18px; margin: 0;">${plugin.name}</h3></div><div class="button-group" onclick="event.stopPropagation()"><button class="btn btn-secondary btn-sm" onclick="window.editPlugin('${plugin.id}')">✏️ Bearbeiten</button><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('plugins', '${plugin.id}')">🗑️ Löschen</button></div></div><div id="plugin-content-${plugin.id}" style="display: ${displayStyle}; margin-top: 15px;"><div style="margin-bottom: 15px;"><h4 style="font-size: 13px; color: var(--text-muted); margin-bottom: 5px;">Permissions / Commands:</h4><div style="font-size:13px; white-space:pre-wrap; background: var(--bg-color); padding: 10px; border-radius: 4px; border: 1px solid var(--border-color);">${permsText}</div></div><div><h4 style="font-size: 13px; color: var(--text-muted); margin-bottom: 5px;">Einstellungen:</h4>${settingsHtml}</div></div></div>`; 
         });
@@ -225,11 +178,10 @@ function startRealtimeListeners() {
         updateDashboard();
     });
 
-    // KAMPAGNEN (WERBUNG)
+    // WERBUNG KAMPAGNEN
     onSnapshot(collection(db, "ads"), (snap) => {
         allAds = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const container = document.getElementById('ad-campaigns-container');
-        if(!container) return; container.innerHTML = '';
+        const container = document.getElementById('ad-campaigns-container'); if(!container) return; container.innerHTML = '';
         allAds.forEach(camp => {
             let itemsHtml = (camp.items || []).map(item => {
                 let linkHtml = item.link ? `<a href="${item.link}" target="_blank" style="font-size:12px; display:block; margin-bottom:10px; color:#00BCD4;">Link öffnen</a>` : '';
@@ -243,8 +195,7 @@ function startRealtimeListeners() {
     // QUESTS BATCHES
     onSnapshot(collection(db, "quest_batches"), (snap) => {
         allQuestBatches = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const container = document.getElementById('quest-batches-container');
-        if(!container) return; container.innerHTML = '';
+        const container = document.getElementById('quest-batches-container'); if(!container) return; container.innerHTML = '';
         allQuestBatches.forEach(batch => {
             let questsHtml = (batch.quests || []).map(quest => {
                 let tasksHtml = (quest.tasks || []).map(task => {
@@ -253,7 +204,6 @@ function startRealtimeListeners() {
                 }).join('');
                 return `<div style="background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 6px; padding: 15px; margin-bottom: 15px;"><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;"><h4 style="margin:0; font-size:16px;">${quest.name}</h4><div class="button-group"><button class="btn btn-primary btn-sm" onclick="window.openQuestTaskModal('${batch.id}', '${quest.id}')">+ Aufgabe</button><button class="btn btn-secondary btn-sm" onclick="window.editQuest('${batch.id}', '${quest.id}')">✏️ Bearbeiten</button><button class="btn btn-danger btn-sm" onclick="window.deleteQuest('${batch.id}', '${quest.id}')">🗑️ Löschen</button></div></div><p style="font-size:13px; color:var(--text-muted); margin-bottom:5px;"><strong>Beschreibung:</strong> ${window.formatMcText(quest.desc || '-')}</p><p style="font-size:13px; color:var(--text-muted); margin-bottom:15px;"><strong>Belohnung:</strong> ${quest.reward || '-'}</p>${(quest.tasks && quest.tasks.length > 0) ? `<table class="crate-items-table" style="background: var(--bg-color);"><thead><tr><th style="width: 120px;">Typ</th><th>Ziel</th><th>Anzahl</th><th style="text-align: right;">Aktion</th></tr></thead><tbody>${tasksHtml}</tbody></table>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Aufgaben.</p>'}</div>`;
             }).join('');
-
             let isCollapsed = window.questCollapsed[batch.id] !== false; let displayStyle = isCollapsed ? 'none' : 'block'; let iconText = isCollapsed ? '▶️' : '🔽';
             container.innerHTML += `<div class="crate-box"><div class="crate-header" style="cursor: pointer; margin-bottom: 0; padding-bottom: ${isCollapsed ? '0' : '15px'}; border-bottom: ${isCollapsed ? 'none' : '1px solid var(--border-color)'};" onclick="window.toggleQuestBatch('${batch.id}')"><div class="crate-header-left"><span id="quest-icon-${batch.id}" style="margin-right: 8px; font-size: 14px;">${iconText}</span><h3 style="font-size: 18px; margin: 0;">${batch.name}</h3></div><div class="button-group" onclick="event.stopPropagation()"><button class="btn btn-info btn-sm" onclick="window.exportQuestYaml('${batch.id}')">📥 Quest Export</button><button class="btn btn-primary btn-sm" onclick="window.openQuestModal('${batch.id}')">+ Quest erstellen</button><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('quest_batches', '${batch.id}')">Batch löschen</button></div></div><div id="quest-content-${batch.id}" style="display: ${displayStyle}; margin-top: 15px; padding: 15px; background: var(--bg-color); border-radius: 8px;">${(batch.quests && batch.quests.length > 0) ? questsHtml : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine Quests in diesem Batch.</p>'}</div></div>`;
         });
@@ -263,8 +213,7 @@ function startRealtimeListeners() {
     // HOLOGRAMME
     onSnapshot(collection(db, "holograms"), (snap) => {
         allHolograms = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const container = document.getElementById('holograms-container');
-        if(!container) return; container.innerHTML = '';
+        const container = document.getElementById('holograms-container'); if(!container) return; container.innerHTML = '';
         allHolograms.forEach(holo => {
             let linesPreviewHtml = ''; let linesTableHtml = '';
             (holo.lines || []).forEach(line => {
@@ -281,9 +230,7 @@ function startRealtimeListeners() {
     onSnapshot(collection(db, "guis"), (snap) => {
         allGUIs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const container = document.getElementById('gui-packages-container');
-        const editorSelect = document.getElementById('editor-pkg-select');
-        const plannerSelect = document.getElementById('planner-pkg-select'); 
-        const plannerBgSelect = document.getElementById('planner-bg-select');
+        const editorSelect = document.getElementById('editor-pkg-select'); const plannerSelect = document.getElementById('planner-pkg-select'); const plannerBgSelect = document.getElementById('planner-bg-select');
         if(!container) return; container.innerHTML = '';
         
         const currentEditorVal = editorSelect ? editorSelect.value : ''; const currentPlannerVal = plannerSelect ? plannerSelect.value : ''; const currentBgVal = plannerBgSelect ? plannerBgSelect.value : '';
@@ -299,12 +246,23 @@ function startRealtimeListeners() {
             }).join('');
 
             let isCollapsed = window.guiCollapsed[pkg.id] !== false; let displayStyle = isCollapsed ? 'none' : 'block'; let iconText = isCollapsed ? '▶️' : '🔽';
+
             container.innerHTML += `<div class="crate-box"><div class="crate-header" style="cursor: pointer; margin-bottom: 0; padding-bottom: ${isCollapsed ? '0' : '15px'}; border-bottom: ${isCollapsed ? 'none' : '1px solid var(--border-color)'};" onclick="window.toggleGuiPackage('${pkg.id}')"><div class="crate-header-left"><span id="gui-icon-${pkg.id}" style="margin-right: 8px; font-size: 14px;">${iconText}</span><h3 style="font-size: 18px; margin: 0;">${pkg.name}</h3></div><div class="button-group" onclick="event.stopPropagation()"><button class="btn btn-info btn-sm" onclick="window.openMenuPlannerForPkg('${pkg.id}')">📋 Menü planen</button><button class="btn btn-secondary btn-sm" onclick="window.openGuiEditorForPkg('${pkg.id}')">🖌️ Pixel Editor</button><button class="btn btn-primary btn-sm" onclick="window.openGuiUploadModal('${pkg.id}')">🖼️ Upload</button><button class="btn btn-danger btn-sm" onclick="window.deleteEntry('guis', '${pkg.id}')">Paket löschen</button></div></div><div id="gui-content-${pkg.id}" style="display: ${displayStyle}; margin-top: 15px;">${items.length > 0 ? `<div class="gui-grid">${itemsHtml}</div>` : '<p style="font-size: 13px; color: var(--text-muted);">Noch keine GUIs in diesem Paket.</p>'}</div></div>`;
         });
         if(editorSelect && currentEditorVal) editorSelect.value = currentEditorVal; if(plannerSelect && currentPlannerVal) plannerSelect.value = currentPlannerVal; if(plannerBgSelect && currentBgVal) plannerBgSelect.value = currentBgVal;
         updateDashboard();
     });
 }
+
+// ==========================================
+// ALLGEMEINE TOGGLE FUNKTIONEN
+// ==========================================
+window.toggleGuiPackage = (id) => { window.guiCollapsed[id] = window.guiCollapsed[id] === false ? true : false; const content = document.getElementById(`gui-content-${id}`); const icon = document.getElementById(`gui-icon-${id}`); const header = content.previousElementSibling; if (window.guiCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } else { content.style.display = 'block'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; } };
+window.togglePlugin = (id) => { window.pluginCollapsed[id] = window.pluginCollapsed[id] === false ? true : false; const content = document.getElementById(`plugin-content-${id}`); const icon = document.getElementById(`plugin-icon-${id}`); const header = content.previousElementSibling; if (window.pluginCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } else { content.style.display = 'block'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; } };
+window.toggleAdCampaign = (id) => { window.adCollapsed[id] = window.adCollapsed[id] === false ? true : false; const content = document.getElementById(`ad-content-${id}`); const icon = document.getElementById(`ad-icon-${id}`); const header = content.previousElementSibling; if (window.adCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } else { content.style.display = 'block'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; } };
+window.toggleQuestBatch = (id) => { window.questCollapsed[id] = window.questCollapsed[id] === false ? true : false; const content = document.getElementById(`quest-content-${id}`); const icon = document.getElementById(`quest-icon-${id}`); const header = content.previousElementSibling; if (window.questCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } else { content.style.display = 'block'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; } };
+window.toggleHolo = (id) => { window.holoCollapsed[id] = window.holoCollapsed[id] === false ? true : false; const content = document.getElementById(`holo-content-${id}`); const icon = document.getElementById(`holo-icon-${id}`); const header = content.previousElementSibling; if (window.holoCollapsed[id] !== false) { content.style.display = 'none'; icon.innerText = '▶️'; header.style.paddingBottom = '0'; header.style.borderBottom = 'none'; } else { content.style.display = 'flex'; icon.innerText = '🔽'; header.style.paddingBottom = '15px'; header.style.borderBottom = '1px solid var(--border-color)'; } };
+
 
 // ==========================================
 // EVENTS LOGIK
@@ -361,9 +319,9 @@ document.getElementById('btn-save-crate').addEventListener('click', async () => 
 
 window.changeCrateItemType = (preserveName = false) => { const type = document.getElementById('modal-item-type').value; const nameInput = document.getElementById('modal-item-name'); const enchSection = document.getElementById('enchantment-section'); if(type === 'money') { nameInput.placeholder = "Geld-Betrag (z.B. 1000)"; if(!preserveName) nameInput.value = ""; enchSection.style.display = 'none'; } else if(type === 'perk') { if(!preserveName) nameInput.value = "Platzhalter Perk"; enchSection.style.display = 'none'; } else if(type === 'special') { if(!preserveName) nameInput.value = "Platzhalter Spezial"; enchSection.style.display = 'none'; } else { nameInput.placeholder = "Item Name (z.B. Diamant)"; if(!preserveName) nameInput.value = ""; enchSection.style.display = 'block'; } };
 window.addEnchantmentField = (name = '', level = '1') => { const container = document.getElementById('enchantments-container'); const row = document.createElement('div'); row.style.display = 'flex'; row.style.gap = '5px'; row.innerHTML = `<input type="text" class="ench-name" placeholder="z.B. sharpness" value="${name}" style="flex:2; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-color); color: var(--text-main);"><input type="number" class="ench-level" placeholder="Lvl" value="${level}" style="flex:1; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-color); color: var(--text-main);"><button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">X</button>`; container.appendChild(row); };
-window.openItemModal = (crateId) => { document.getElementById('item-modal-title').innerText = "Neues Item hinzufügen"; document.getElementById('modal-crate-id').value = crateId; document.getElementById('modal-edit-item-id').value = ''; document.getElementById('modal-item-name').value = ''; document.getElementById('modal-item-quantity').value = '1'; document.getElementById('modal-item-chance').value = ''; document.getElementById('enchantments-container').innerHTML = ''; window.changeCrateItemType(false); document.getElementById('item-modal').classList.add('active'); };
+window.openItemModal = (crateId) => { document.getElementById('item-modal-title').innerText = "Neues Item hinzufügen"; document.getElementById('modal-crate-id').value = crateId; document.getElementById('modal-edit-item-id').value = ''; document.getElementById('modal-item-type').value = 'item'; document.getElementById('modal-item-name').value = ''; document.getElementById('modal-item-quantity').value = '1'; document.getElementById('modal-item-chance').value = ''; document.getElementById('enchantments-container').innerHTML = ''; window.changeCrateItemType(false); document.getElementById('item-modal').classList.add('active'); };
 window.editCrateItem = (crateId, itemId) => { const crate = allCrates.find(c => c.id === crateId); if (!crate) return; const item = (crate.items || []).find(i => i.id === itemId); if (!item) return; document.getElementById('item-modal-title').innerText = "Item bearbeiten"; document.getElementById('modal-crate-id').value = crateId; document.getElementById('modal-edit-item-id').value = item.id; document.getElementById('modal-item-type').value = item.type || 'item'; window.changeCrateItemType(true); document.getElementById('modal-item-name').value = item.name || ''; document.getElementById('modal-item-quantity').value = item.quantity || 1; document.getElementById('modal-item-chance').value = item.chance || ''; const enchContainer = document.getElementById('enchantments-container'); enchContainer.innerHTML = ''; if (item.enchantments && item.enchantments.length > 0) { item.enchantments.forEach(ench => { const parts = ench.split(':'); window.addEnchantmentField(parts[0], parts[1] || '1'); }); } document.getElementById('item-modal').classList.add('active'); };
-document.getElementById('btn-save-item').addEventListener('click', async () => { try { const crateId = document.getElementById('modal-crate-id').value; const editItemId = document.getElementById('modal-edit-item-id').value; const type = document.getElementById('modal-item-type').value; const name = document.getElementById('modal-item-name').value; const quantity = document.getElementById('modal-item-quantity').value; const chance = document.getElementById('modal-item-chance').value; const file = document.getElementById('modal-item-image').files[0]; if(!name || !chance || !quantity) return alert("Pflichtfelder fehlen!"); const enchNames = document.querySelectorAll('.ench-name'); const enchLevels = document.querySelectorAll('.ench-level'); let enchantments = []; for(let i=0; i<enchNames.length; i++) { const eName = enchNames[i].value.trim(); const eLevel = enchLevels[i].value.trim() || '1'; if(eName) enchantments.push(`${eName}:${eLevel}`); } let imageUrl = null; if(file) imageUrl = await uploadImage(file, 'crates/items'); const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId); let updatedItems = [...(crate.items || [])]; if(editItemId) { const idx = updatedItems.findIndex(i => i.id === editItemId); if(idx > -1) { updatedItems[idx].type = type; updatedItems[idx].name = name; updatedItems[idx].quantity = Number(quantity); updatedItems[idx].chance = Number(chance); updatedItems[idx].enchantments = enchantments; if(file) updatedItems[idx].image_url = imageUrl; } } else { updatedItems.push({ id: Date.now().toString(), type, name, quantity: Number(quantity), chance: Number(chance), enchantments, image_url: imageUrl }); } await updateDoc(crateRef, { items: updatedItems }); document.getElementById('item-modal').classList.remove('active'); } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
+document.getElementById('btn-save-item').addEventListener('click', async () => { try { const crateId = document.getElementById('modal-crate-id').value; const editItemId = document.getElementById('modal-edit-item-id').value; const type = document.getElementById('modal-item-type').value; const name = document.getElementById('modal-item-name').value; const quantity = document.getElementById('modal-item-quantity').value; const chance = document.getElementById('modal-item-chance').value; const file = document.getElementById('modal-item-image').files[0]; const status = document.getElementById('modal-status'); if(!name || !chance || !quantity) return alert("Pflichtfelder fehlen!"); status.innerText = "Speichere Item..."; const enchNames = document.querySelectorAll('.ench-name'); const enchLevels = document.querySelectorAll('.ench-level'); let enchantments = []; for(let i=0; i<enchNames.length; i++) { const eName = enchNames[i].value.trim(); const eLevel = enchLevels[i].value.trim() || '1'; if(eName) enchantments.push(`${eName}:${eLevel}`); } let imageUrl = null; if(file) imageUrl = await uploadImage(file, 'crates/items'); const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId); let updatedItems = [...(crate.items || [])]; if(editItemId) { const idx = updatedItems.findIndex(i => i.id === editItemId); if(idx > -1) { updatedItems[idx].type = type; updatedItems[idx].name = name; updatedItems[idx].quantity = Number(quantity); updatedItems[idx].chance = Number(chance); updatedItems[idx].enchantments = enchantments; if(file) updatedItems[idx].image_url = imageUrl; } } else { updatedItems.push({ id: Date.now().toString(), type, name, quantity: Number(quantity), chance: Number(chance), enchantments, image_url: imageUrl }); } await updateDoc(crateRef, { items: updatedItems }); status.innerText = "Erfolgreich!"; setTimeout(() => { status.innerText = ""; document.getElementById('item-modal').classList.remove('active'); }, 1000); } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
 window.deleteCrateItem = async (crateId, itemId) => { if(confirm("Item entfernen?")) { try { const crateRef = doc(db, "crates", crateId); const crate = allCrates.find(c => c.id === crateId); await updateDoc(crateRef, { items: (crate.items || []).filter(i => i.id !== itemId) }); } catch (error) { console.error(error); } } };
 window.simulateCrate = function(crateId) { const crate = allCrates.find(c => c.id === crateId); if(!crate || !crate.items || crate.items.length === 0) return alert("Die Kiste hat noch keine Items!"); let totalChance = crate.items.reduce((sum, item) => sum + (Number(item.chance) || 0), 0); if(totalChance === 0) return alert("Die Items in dieser Kiste haben keine Wahrscheinlichkeit (0%)!"); let results = {}; crate.items.forEach(i => results[i.id] = 0); for(let i=0; i<1000; i++) { let rand = Math.random() * totalChance; let current = 0; for(let item of crate.items) { current += (Number(item.chance) || 0); if(rand <= current) { results[item.id]++; break; } } } let html = `<ul style="list-style:none; padding:0; margin:0;">`; let sortedItems = [...crate.items].sort((a, b) => results[b.id] - results[a.id]); sortedItems.forEach(item => { let count = results[item.id]; let realPercent = ((count / 1000) * 100).toFixed(1); html += `<li style="padding: 8px 0; border-bottom: 1px solid var(--border-color); display:flex; justify-content:space-between;"><span><strong>${item.name}</strong></span><span style="color:var(--text-muted);">${count}x gezogen <b style="color:#00BCD4;">(${realPercent}%)</b></span></li>`; }); html += `</ul>`; document.getElementById('crate-test-result').innerHTML = html; document.getElementById('crate-test-modal').classList.add('active'); };
 window.exportCrateYaml = function(crateId) { const crate = allCrates.find(c => c.id === crateId); if(!crate) return alert("Kiste nicht gefunden!"); let safeName = crate.name ? crate.name.replace(/[^a-zA-Z0-9]/g, '') : 'CustomCrate'; let yaml = `Crate:\n  CrateType: CSGO\n  CrateName: '&8${crate.name || 'Unbenannte Kiste'}'\n  Preview-Name: '&8${crate.name || 'Unbenannte Kiste'} Preview'\n  StartingKeys: 0\n  InGUI: true\n  Slot: 14\nPrizes:\n`; let items = crate.items || []; items.forEach((item, index) => { yaml += `  '${index + 1}':\n    DisplayName: '&f${item.name}'\n    DisplayAmount: ${item.quantity || 1}\n    MaxRange: 100\n    Chance: ${item.chance}\n`; if(item.type === 'money') { yaml += `    DisplayItem: 'SUNFLOWER'\n    Commands:\n      - 'eco give %player% ${item.quantity || 1000}'\n`; } else if(item.type === 'perk' || item.type === 'special') { yaml += `    DisplayItem: 'NETHER_STAR'\n    Commands:\n      - 'lp user %player% permission set <deine_permission> true'\n`; } else { yaml += `    DisplayItem: 'STONE'\n    Items:\n      - 'Item:STONE, Amount:${item.quantity || 1}'\n`; } if(item.enchantments && item.enchantments.length > 0) { yaml += `    DisplayEnchantments:\n`; item.enchantments.forEach(ench => { yaml += `      - '${ench}'\n`; }); } }); const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${safeName}.yml`; a.click(); URL.revokeObjectURL(url); };
@@ -371,57 +329,31 @@ window.exportCrateYaml = function(crateId) { const crate = allCrates.find(c => c
 // --- SHOP ---
 window.resetShopForm = () => { editingShopId = null; document.getElementById('shop-form-title').innerText = "Neues Item im Shop anbieten"; document.getElementById('btn-save-shop').innerText = "Shop-Item speichern"; document.getElementById('btn-cancel-shop').style.display = "none"; document.getElementById('shop-item').value = ''; document.getElementById('shop-price').value = ''; };
 window.editShopItem = (id) => { const item = allShop.find(s => s.id === id); if(!item) return; editingShopId = id; document.getElementById('shop-item').value = item.name; document.getElementById('shop-price').value = item.price; document.getElementById('shop-form-title').innerText = "Item bearbeiten: " + item.name; document.getElementById('btn-save-shop').innerText = "Änderungen speichern"; document.getElementById('btn-cancel-shop').style.display = "inline-block"; window.scrollTo({ top: 0, behavior: 'smooth' }); };
+document.getElementById('btn-cancel-shop').addEventListener('click', window.resetShopForm);
 document.getElementById('btn-save-shop').addEventListener('click', async () => { try { const name = document.getElementById('shop-item').value; const price = document.getElementById('shop-price').value; const file = document.getElementById('shop-image').files[0]; if(!name || !price) return alert("Name und Preis fehlen!"); document.getElementById('shop-status').innerText = "Speichere..."; let imageUrl = file ? await uploadImage(file, 'shop') : null; if(editingShopId) { let updateData = { name, price: Number(price) }; if(imageUrl) updateData.image_url = imageUrl; await updateDoc(doc(db, "shop", editingShopId), updateData); } else { await addDoc(collection(db, "shop"), { name, price: Number(price), image_url: imageUrl }); } document.getElementById('shop-status').innerText = "Erfolgreich!"; setTimeout(() => document.getElementById('shop-status').innerText = "", 2000); window.resetShopForm(); } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
 window.exportShopYaml = function() { if(allShop.length === 0) return alert("Der Shop ist leer!"); let yaml = `shops:\n  main:\n    name: '&8Server Shop'\n    size: 54\n    items:\n`; allShop.forEach((item, index) => { yaml += `      '${index + 1}':\n        type: item\n        item:\n          material: STONE\n          name: '&e${item.name}'\n        buyPrice: ${item.price}\n        sellPrice: ${Math.floor(item.price * 0.5)}\n        slot: ${index}\n`; }); const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `shopgui_main.yml`; a.click(); URL.revokeObjectURL(url); }
 
-// --- QUESTS BATCHES ---
-document.getElementById('btn-create-quest-batch').addEventListener('click', async () => { const name = document.getElementById('quest-batch-name').value; if(!name) return alert("Bitte Kategorien-Namen eingeben!"); await addDoc(collection(db, "quest_batches"), { name: name, quests: [] }); document.getElementById('quest-batch-name').value = ''; });
-window.openQuestModal = (batchId) => { document.getElementById('quest-modal-title').innerText = "Neue Quest erstellen"; document.getElementById('modal-quest-batch-id').value = batchId; document.getElementById('modal-quest-edit-id').value = ''; document.getElementById('modal-quest-name').value = ''; document.getElementById('modal-quest-desc').value = ''; document.getElementById('modal-quest-reward').value = ''; document.getElementById('quest-modal').classList.add('active'); };
-window.editQuest = (batchId, questId) => { const batch = allQuestBatches.find(b => b.id === batchId); if(!batch) return; const quest = (batch.quests || []).find(q => q.id === questId); if(!quest) return; document.getElementById('quest-modal-title').innerText = "Quest bearbeiten"; document.getElementById('modal-quest-batch-id').value = batchId; document.getElementById('modal-quest-edit-id').value = questId; document.getElementById('modal-quest-name').value = quest.name || ''; document.getElementById('modal-quest-desc').value = quest.desc || ''; document.getElementById('modal-quest-reward').value = quest.reward || ''; document.getElementById('quest-modal').classList.add('active'); };
-document.getElementById('btn-save-quest-data').addEventListener('click', async () => { const batchId = document.getElementById('modal-quest-batch-id').value; const editQuestId = document.getElementById('modal-quest-edit-id').value; const name = document.getElementById('modal-quest-name').value; const desc = document.getElementById('modal-quest-desc').value; const reward = document.getElementById('modal-quest-reward').value; if(!name) return alert("Quest Name darf nicht leer sein!"); const bRef = doc(db, "quest_batches", batchId); const batch = allQuestBatches.find(b => b.id === batchId); let updatedQuests = [...(batch.quests || [])]; if(editQuestId) { const idx = updatedQuests.findIndex(q => q.id === editQuestId); if(idx > -1) { updatedQuests[idx].name = name; updatedQuests[idx].desc = desc; updatedQuests[idx].reward = reward; } } else { updatedQuests.push({ id: Date.now().toString(), name, desc, reward, tasks: [] }); } await updateDoc(bRef, { quests: updatedQuests }); document.getElementById('quest-modal').classList.remove('active'); });
-window.deleteQuest = async (batchId, questId) => { if(confirm("Quest löschen?")) { const bRef = doc(db, "quest_batches", batchId); const batch = allQuestBatches.find(b => b.id === batchId); await updateDoc(bRef, { quests: (batch.quests || []).filter(q => q.id !== questId) }); } };
-window.openQuestTaskModal = (batchId, questId) => { document.getElementById('modal-task-batch-id').value = batchId; document.getElementById('modal-task-quest-id').value = questId; document.getElementById('modal-quest-task-target').value = ''; document.getElementById('modal-quest-task-amount').value = '1'; document.getElementById('quest-task-modal').classList.add('active'); };
-document.getElementById('btn-save-quest-task').addEventListener('click', async () => { const batchId = document.getElementById('modal-task-batch-id').value; const questId = document.getElementById('modal-task-quest-id').value; const type = document.getElementById('modal-quest-task-type').value; const target = document.getElementById('modal-quest-task-target').value; const amount = document.getElementById('modal-quest-task-amount').value; if(!target || !amount) return alert("Ziel und Anzahl ausfüllen!"); const bRef = doc(db, "quest_batches", batchId); const batch = allQuestBatches.find(b => b.id === batchId); let updatedQuests = [...(batch.quests || [])]; const qIdx = updatedQuests.findIndex(q => q.id === questId); if(qIdx > -1) { let updatedTasks = [...(updatedQuests[qIdx].tasks || [])]; updatedTasks.push({ id: Date.now().toString(), type, target, amount: Number(amount) }); updatedQuests[qIdx].tasks = updatedTasks; await updateDoc(bRef, { quests: updatedQuests }); } document.getElementById('quest-task-modal').classList.remove('active'); });
-window.deleteQuestTask = async (batchId, questId, taskId) => { if(confirm("Aufgabe löschen?")) { const bRef = doc(db, "quest_batches", batchId); const batch = allQuestBatches.find(b => b.id === batchId); let updatedQuests = [...(batch.quests || [])]; const qIdx = updatedQuests.findIndex(q => q.id === questId); if(qIdx > -1) { updatedQuests[qIdx].tasks = (updatedQuests[qIdx].tasks || []).filter(t => t.id !== taskId); await updateDoc(bRef, { quests: updatedQuests }); } } };
-window.exportQuestYaml = function(batchId) { const batch = allQuestBatches.find(b => b.id === batchId); if(!batch) return; if(!batch.quests || batch.quests.length === 0) return alert("Dieser Batch hat keine Quests!"); let safeBatchName = batch.name ? batch.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'quest_batch'; let yaml = ``; batch.quests.forEach(quest => { let safeQuestName = quest.name ? quest.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'quest'; yaml += `${safeQuestName}:\n  name: '${quest.name}'\n  ask-message: '${quest.desc || 'Schließe diese Quest ab!'}'\n  finish-message: '&aQuest abgeschlossen!'\n  tasks:\n`; (quest.tasks || []).forEach(task => { if(task.type === 'FARMING') yaml += `    mining:\n      - ${task.target}:${task.amount}\n`; if(task.type === 'CRAFTING') yaml += `    crafting:\n      - ${task.target}:${task.amount}\n`; if(task.type === 'KILL_MOB') yaml += `    mob-killing:\n      - ${task.target}:${task.amount}\n`; if(task.type === 'KILL_PLAYER') yaml += `    player-killing: ${task.amount}\n`; }); yaml += `  rewards:\n    commands:\n      - 'say %player% hat ${quest.reward || 'nichts'} bekommen!'\n\n`; }); const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${safeBatchName}.yml`; a.click(); URL.revokeObjectURL(url); };
 
-// --- HOLOGRAMME ---
-document.getElementById('btn-save-holo').addEventListener('click', async () => { const name = document.getElementById('holo-name').value; const loc = document.getElementById('holo-location').value; const status = document.getElementById('holo-status'); if(!name) return alert("Bitte Namen eingeben!"); status.innerText = "Erstelle..."; await addDoc(collection(db, "holograms"), { name: name, location: loc, lines: [] }); status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('holo-name').value = ''; document.getElementById('holo-location').value = ''; });
-window.changeHoloLineType = () => { const type = document.getElementById('modal-holo-line-type').value; const input = document.getElementById('modal-holo-line-content'); const hint = document.getElementById('holo-line-hint'); if(type === 'item') { input.placeholder = "Material Name (z.B. DIAMOND_SWORD)"; hint.innerText = "Gib den genauen Minecraft Material-Namen ein."; } else { input.placeholder = "Text (z.B. &aWillkommen!)"; hint.innerText = "Nutze Minecraft Color-Codes wie &c oder &l."; } };
-window.openHoloLineModal = (holoId) => { document.getElementById('modal-holo-id').value = holoId; document.getElementById('modal-holo-line-type').value = 'text'; document.getElementById('modal-holo-line-content').value = ''; window.changeHoloLineType(); document.getElementById('holo-line-modal').classList.add('active'); };
-document.getElementById('btn-save-holo-line').addEventListener('click', async () => { const holoId = document.getElementById('modal-holo-id').value; const type = document.getElementById('modal-holo-line-type').value; const content = document.getElementById('modal-holo-line-content').value; if(!content) return alert("Inhalt darf nicht leer sein!"); const newLine = { id: Date.now().toString(), type, content }; const hRef = doc(db, "holograms", holoId); const holo = allHolograms.find(h => h.id === holoId); await updateDoc(hRef, { lines: [...(holo.lines || []), newLine] }); document.getElementById('holo-line-modal').classList.remove('active'); });
-window.deleteHoloLine = async (holoId, lineId) => { if(confirm("Zeile löschen?")) { const hRef = doc(db, "holograms", holoId); const holo = allHolograms.find(h => h.id === holoId); await updateDoc(hRef, { lines: (holo.lines || []).filter(l => l.id !== lineId) }); } };
-window.exportHoloYaml = function(holoId) { const holo = allHolograms.find(h => h.id === holoId); if(!holo) return; let safeName = holo.name ? holo.name.replace(/[^a-zA-Z0-9]/g, '') : 'Hologram'; let yaml = `holos:\n  ${safeName}:\n    location: ${holo.location || 'world:0:100:0'}\n    lines:\n`; (holo.lines || []).forEach(line => { if(line.type === 'item') { yaml += `      - content: '#ICON:${line.content}'\n`; } else { yaml += `      - content: '${line.content}'\n`; } }); const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${safeName}.yml`; a.click(); URL.revokeObjectURL(url); };
-
-// --- BROADCASTER ---
-window.formatMcText = function(text) { if(!text) return ''; let safeText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;"); let html = ''; let parts = safeText.split(/(&[0-9a-fl-or])/i); let currentClasses = ['mc-f']; for(let part of parts) { if(/^&[0-9a-fl-or]$/i.test(part)) { let code = part.charAt(1).toLowerCase(); if(code === 'r') { currentClasses = ['mc-f']; } else if(/[0-9a-f]/.test(code)) { currentClasses = [`mc-${code}`]; } else { currentClasses.push(`mc-${code}`); } } else if(part) { html += `<span class="${currentClasses.join(' ')}">${part}</span>`; } } return html; };
-window.updateMcPreview = function() { let text = document.getElementById('bc-message').value; document.getElementById('bc-preview').innerHTML = window.formatMcText(text) || 'Vorschau...'; };
-window.editBroadcast = function(id) { const bc = allBroadcasts.find(b => b.id === id); if(!bc) return; document.getElementById('bc-edit-id').value = bc.id; document.getElementById('bc-message').value = bc.message; document.getElementById('bc-interval').value = bc.interval; document.getElementById('btn-save-bc').innerText = "Änderungen speichern"; document.getElementById('btn-cancel-bc').style.display = "inline-block"; window.updateMcPreview(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-window.cancelEditBroadcast = function() { document.getElementById('bc-edit-id').value = ''; document.getElementById('bc-message').value = ''; document.getElementById('bc-interval').value = '300'; document.getElementById('btn-save-bc').innerText = "Speichern"; document.getElementById('btn-cancel-bc').style.display = "none"; window.updateMcPreview(); };
-window.saveBroadcast = async function() { const msg = document.getElementById('bc-message').value; const interval = document.getElementById('bc-interval').value; const editId = document.getElementById('bc-edit-id').value; if(!msg || !interval) return alert("Bitte Nachricht und Intervall ausfüllen!"); document.getElementById('bc-status').innerText = "Speichere..."; try { if(editId) { await updateDoc(doc(db, "broadcasts", editId), { message: msg, interval: Number(interval) }); } else { await addDoc(collection(db, "broadcasts"), { message: msg, interval: Number(interval) }); } document.getElementById('bc-status').innerText = "Gespeichert!"; setTimeout(() => document.getElementById('bc-status').innerText = "", 2000); window.cancelEditBroadcast(); } catch(e) { console.error(e); alert("Fehler!"); } };
-window.exportBroadcastYaml = function() { if(allBroadcasts.length === 0) return alert("Keine Nachrichten vorhanden!"); let yaml = `settings:\n  interval: 300\n  prefix: '&8[&cServer&8] &7'\nbroadcasts:\n`; allBroadcasts.forEach((bc, i) => { yaml += `  'msg${i + 1}':\n    text:\n`; bc.message.split('\n').forEach(line => { yaml += `      - '${line}'\n`; }); yaml += `    interval: ${bc.interval}\n`; }); const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'autobroadcaster.yml'; a.click(); URL.revokeObjectURL(url); };
-
-// --- PLUGINS ---
-window.togglePluginSettings = function() { const type = document.getElementById('plugin-settings-type').value; if (type === 'daily') { document.getElementById('plugin-settings-text-container').style.display = 'none'; document.getElementById('plugin-settings-daily-container').style.display = 'block'; window.generateDailyFields(); } else { document.getElementById('plugin-settings-text-container').style.display = 'block'; document.getElementById('plugin-settings-daily-container').style.display = 'none'; } };
-window.generateDailyFields = () => { const days = parseInt(document.getElementById('plugin-daily-days').value) || 0; const grid = document.getElementById('plugin-daily-grid'); grid.innerHTML = ''; for(let i=1; i<=days; i++) { grid.innerHTML += `<div style="display:flex; align-items:center; gap:5px;"><span style="width:50px; color:var(--text-muted); font-size:12px;">Tag ${i}:</span><input type="text" class="daily-reward-input" data-day="${i}" placeholder="z.B. eco give %player% 1000" style="flex:1; padding:6px; border-radius:4px; border:1px solid var(--border-color); background:var(--surface-color); color:var(--text-main);"></div>`; } };
-window.resetPluginForm = () => { editingPluginId = null; document.getElementById('plugin-form-title').innerText = "Neues Plugin hinzufügen"; document.getElementById('btn-save-plugin').innerText = "Plugin speichern"; document.getElementById('btn-cancel-plugin').style.display = "none"; document.getElementById('plugin-name').value = ''; document.getElementById('plugin-perms').value = ''; document.getElementById('plugin-settings-type').value = 'text'; document.getElementById('plugin-settings-text').value = ''; document.getElementById('plugin-daily-days').value = ''; window.togglePluginSettings(); }
-window.editPlugin = (id) => { const plugin = allPlugins.find(p => p.id === id); if(!plugin) return; editingPluginId = id; document.getElementById('plugin-name').value = plugin.name; document.getElementById('plugin-perms').value = plugin.perms || plugin.info || ''; document.getElementById('plugin-settings-type').value = plugin.settingsType || 'text'; window.togglePluginSettings(); if (plugin.settingsType === 'daily') { document.getElementById('plugin-daily-days').value = plugin.dailyDays || 0; window.generateDailyFields(); const inputs = document.querySelectorAll('.daily-reward-input'); inputs.forEach((input, idx) => { input.value = plugin.dailyRewards[idx] || ''; }); } else { document.getElementById('plugin-settings-text').value = plugin.settingsText || ''; } document.getElementById('plugin-form-title').innerText = "Plugin bearbeiten: " + plugin.name; document.getElementById('btn-save-plugin').innerText = "Änderungen speichern"; document.getElementById('btn-cancel-plugin').style.display = "inline-block"; window.scrollTo({ top: 0, behavior: 'smooth' }); };
-document.getElementById('btn-cancel-plugin').addEventListener('click', window.resetPluginForm);
-document.getElementById('btn-save-plugin').addEventListener('click', async () => { try { const name = document.getElementById('plugin-name').value; const perms = document.getElementById('plugin-perms').value; const settingsType = document.getElementById('plugin-settings-type').value; const settingsText = document.getElementById('plugin-settings-text').value; const dailyDays = document.getElementById('plugin-daily-days').value; let dailyRewards = []; if (settingsType === 'daily') { const inputs = document.querySelectorAll('.daily-reward-input'); inputs.forEach(input => dailyRewards.push(input.value)); } const status = document.getElementById('plugin-status'); if(!name) return alert("Bitte gib einen Plugin-Namen ein!"); status.innerText = "Speichere..."; const pluginData = { name: name, perms: perms, info: perms, settingsType: settingsType, settingsText: settingsText, dailyDays: Number(dailyDays), dailyRewards: dailyRewards }; if (editingPluginId) { await updateDoc(doc(db, "plugins", editingPluginId), pluginData); } else { await addDoc(collection(db, "plugins"), pluginData); } status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); window.resetPluginForm(); } catch (error) { console.error(error); alert("Fehler: " + error.message); } });
-
-// --- WERBUNG & KAMPAGNEN ---
-document.getElementById('btn-create-ad-campaign').addEventListener('click', async () => { const name = document.getElementById('ad-campaign-name').value; const status = document.getElementById('ad-campaign-status'); if(!name) return alert("Bitte Kampagnen-Namen eingeben!"); status.innerText = "Erstelle Kampagne..."; await addDoc(collection(db, "ads"), { name: name, items: [] }); status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('ad-campaign-name').value = ''; });
+// ==========================================
+// WERBUNG & KAMPAGNEN
+// ==========================================
+document.getElementById('btn-create-ad-campaign').addEventListener('click', async () => { const name = document.getElementById('ad-campaign-name').value; if(!name) return alert("Bitte Kampagnen-Namen eingeben!"); await addDoc(collection(db, "ads"), { name: name, items: [] }); document.getElementById('ad-campaign-name').value = ''; });
 window.openAdUploadModal = (id) => { document.getElementById('modal-ad-campaign-id').value = id; document.getElementById('ad-upload-modal').classList.add('active'); };
-document.getElementById('btn-save-ad-upload').addEventListener('click', async () => { const campId = document.getElementById('modal-ad-campaign-id').value; const title = document.getElementById('modal-ad-title').value; const link = document.getElementById('modal-ad-link').value; const file = document.getElementById('modal-ad-image').files[0]; const status = document.getElementById('modal-ad-status'); if(!title || !file) return alert("Titel und Bild sind Pflicht!"); status.innerText = "Lade hoch..."; try { const imageUrl = await uploadImage(file, 'ads/images'); const newItem = { id: Date.now().toString(), title, link, image_url: imageUrl }; const campRef = doc(db, "ads", campId); const camp = allAds.find(a => a.id === campId); await updateDoc(campRef, { items: [...(camp.items || []), newItem] }); status.innerText = "Erfolgreich!"; setTimeout(() => { status.innerText = ""; document.getElementById('modal-ad-title').value = ''; document.getElementById('modal-ad-link').value = ''; document.getElementById('modal-ad-image').value = ''; document.getElementById('ad-upload-modal').classList.remove('active'); }, 1500); } catch(e) { console.error(e); alert("Fehler beim Upload!"); } });
+document.getElementById('btn-save-ad-item').addEventListener('click', async () => { const campId = document.getElementById('modal-ad-campaign-id').value; const title = document.getElementById('modal-ad-title').value; const link = document.getElementById('modal-ad-link').value; const file = document.getElementById('modal-ad-image').files[0]; const status = document.getElementById('modal-ad-status'); if(!title || !file) return alert("Titel und Bild sind Pflicht!"); status.innerText = "Lade hoch..."; try { const imageUrl = await uploadImage(file, 'ads/images'); const newItem = { id: Date.now().toString(), title, link, image_url: imageUrl }; const campRef = doc(db, "ads", campId); const camp = allAds.find(a => a.id === campId); await updateDoc(campRef, { items: [...(camp.items || []), newItem] }); status.innerText = "Erfolgreich!"; setTimeout(() => { status.innerText = ""; document.getElementById('modal-ad-title').value = ''; document.getElementById('modal-ad-link').value = ''; document.getElementById('modal-ad-image').value = ''; document.getElementById('ad-upload-modal').classList.remove('active'); }, 1500); } catch(e) { console.error(e); alert("Fehler beim Upload!"); } });
 window.deleteAdItem = async (campId, itemId) => { if(confirm("Werbung aus der Kampagne löschen?")) { const campRef = doc(db, "ads", campId); const camp = allAds.find(a => a.id === campId); await updateDoc(campRef, { items: (camp.items || []).filter(i => i.id !== itemId) }); } };
 
-// --- GUI PAKETE ---
+// ==========================================
+// GUI PAKETE & UPLOAD LOGIK
+// ==========================================
 document.getElementById('btn-save-gui-package').addEventListener('click', async () => { try { const pkgName = document.getElementById('gui-package-name').value; const status = document.getElementById('gui-package-status'); if(!pkgName) return alert("Bitte gib dem GUI Paket einen Namen!"); status.innerText = "Erstelle Paket..."; await addDoc(collection(db, "guis"), { name: pkgName, items: [] }); status.innerText = "Erfolgreich!"; setTimeout(() => status.innerText = "", 2000); document.getElementById('gui-package-name').value = ''; } catch (e) { console.error(e); alert("Fehler: " + e.message); } });
 window.openGuiUploadModal = (pkgId) => { document.getElementById('modal-gui-package-id').value = pkgId; document.getElementById('gui-upload-modal').classList.add('active'); };
 document.getElementById('btn-save-gui-upload').addEventListener('click', async () => { const status = document.getElementById('modal-gui-status'); try { const pkgId = document.getElementById('modal-gui-package-id').value; const name = document.getElementById('modal-gui-name').value; const file = document.getElementById('modal-gui-image').files[0]; if(!name || !file) return alert("Bitte Name und Bild angeben!"); status.innerText = "Lade hoch (Bitte warten)..."; const imageUrl = await uploadImage(file, 'guis/images'); if(!imageUrl) throw new Error("Upload fehlgeschlagen."); status.innerText = "Speichere in Paket..."; const newItem = { id: Date.now().toString(), name: name, image_url: imageUrl }; const pkgRef = doc(db, "guis", pkgId); const pkg = allGUIs.find(g => g.id === pkgId); await updateDoc(pkgRef, { items: [...(pkg.items || []), newItem] }); status.innerText = "Erfolgreich!"; setTimeout(() => { status.innerText = ""; document.getElementById('modal-gui-name').value = ''; document.getElementById('modal-gui-image').value = ''; document.getElementById('gui-upload-modal').classList.remove('active'); }, 1500); } catch (e) { console.error("Upload Error:", e); status.innerText = "Fehler!"; alert("Fehler beim Hochladen: " + e.message); } });
 window.deleteGuiItem = async (pkgId, itemId) => { if(confirm("Element wirklich löschen?")) { try { const pkgRef = doc(db, "guis", pkgId); const pkg = allGUIs.find(g => g.id === pkgId); await updateDoc(pkgRef, { items: (pkg.items || []).filter(i => i.id !== itemId) }); } catch (error) { console.error(error); alert("Fehler: " + error.message); } } };
 
-// --- MENÜ PLANER ---
+
+// ==========================================
+// MENÜ PLANER LOGIK
+// ==========================================
 const plannerPresets = [ { id: 'btn_next', text: 'Nächste', icon: '▶️' }, { id: 'btn_prev', text: 'Letzte', icon: '◀️' }, { id: 'btn_close', text: 'Schließen', icon: '❌' }, { id: 'btn_money', text: 'Geld / Eco', icon: '💰' }, { id: 'btn_info', text: 'Information', icon: 'ℹ️' }, { id: 'btn_item', text: 'Item-Platz', icon: '📦' } ];
 let currentMenuLayout = {}; let plannerBgImage = null;
 
@@ -437,21 +369,21 @@ window.editLayoutInPlanner = (pkgId, itemId) => { const pkg = allGUIs.find(g => 
 window.saveMenuLayout = async function() { const pkgId = document.getElementById('planner-pkg-select').value; const menuName = document.getElementById('planner-menu-name').value; const editItemId = document.getElementById('planner-menu-id').value; const rows = parseInt(document.getElementById('menu-rows').value); const bgUrl = document.getElementById('planner-bg-select').value; const offX = parseInt(document.getElementById('planner-offset-x').value); const offY = parseInt(document.getElementById('planner-offset-y').value); if(!pkgId) return alert("Bitte wähle ein Ziel-Paket aus!"); if(!menuName) return alert("Bitte gib dem Layout einen Namen!"); try { const pkgRef = doc(db, "guis", pkgId); const pkg = allGUIs.find(g => g.id === pkgId); let updatedItems = [...(pkg.items || [])]; const layoutData = { type: 'layout', rows: rows, bg_url: bgUrl, offset_x: offX, offset_y: offY, layout: currentMenuLayout }; if (editItemId) { const idx = updatedItems.findIndex(i => i.id === editItemId); if(idx > -1) { updatedItems[idx].name = menuName; updatedItems[idx].rows = rows; updatedItems[idx].bg_url = bgUrl; updatedItems[idx].offset_x = offX; updatedItems[idx].offset_y = offY; updatedItems[idx].layout = currentMenuLayout; } else { updatedItems.push({ id: editItemId, name: menuName, ...layoutData }); } } else { updatedItems.push({ id: Date.now().toString(), name: menuName, ...layoutData }); } await updateDoc(pkgRef, { items: updatedItems }); alert("Erfolgreich im Paket gespeichert!"); document.querySelector('[data-target="gui"]').click(); } catch (error) { console.error(error); alert("Fehler beim Speichern!"); } };
 window.exportMenuYaml = function() { const name = document.getElementById('planner-menu-name').value || 'custom_menu'; const rows = parseInt(document.getElementById('menu-rows').value); let yaml = `menu_title: '&8${name}'\nopen_command: '${name.toLowerCase().replace(/\s+/g, '')}'\nsize: ${rows * 9}\nitems:\n`; for(let slot in currentMenuLayout) { const itemId = currentMenuLayout[slot]; const preset = plannerPresets.find(p => p.id === itemId); if(!preset) continue; yaml += `  '${itemId}_${slot}':\n`; if(itemId === 'btn_next') { yaml += `    material: arrow\n    slot: ${slot}\n    display_name: '&aNächste Seite'\n    left_click_commands:\n      - '[player] menu open nächste_seite'\n`; } else if(itemId === 'btn_prev') { yaml += `    material: arrow\n    slot: ${slot}\n    display_name: '&cLetzte Seite'\n    left_click_commands:\n      - '[player] menu open vorherige_seite'\n`; } else if(itemId === 'btn_close') { yaml += `    material: barrier\n    slot: ${slot}\n    display_name: '&cSchließen'\n    left_click_commands:\n      - '[close]'\n`; } else if(itemId === 'btn_money') { yaml += `    material: gold_ingot\n    slot: ${slot}\n    display_name: '&eDein Guthaben'\n    lore:\n      - '&7Du hast: %vault_eco_balance%'\n`; } else { yaml += `    material: stone\n    slot: ${slot}\n    display_name: '&f${preset.text}'\n`; } } const blob = new Blob([yaml], { type: 'text/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${name.toLowerCase().replace(/\s+/g, '_')}.yml`; a.click(); URL.revokeObjectURL(url); };
 
-// --- GUI PIXEL EDITOR ---
+
+// ==========================================
+// 7. GUI PIXEL EDITOR LOGIK
+// ==========================================
+
 window.openGuiEditorForPkg = (pkgId) => { document.querySelector('[data-target="gui-editor"]').click(); document.getElementById('editor-pkg-select').value = pkgId; document.getElementById('editor-gui-name').value = ''; document.getElementById('editor-gui-item-id').value = ''; if(window.clearCanvasSilent) window.clearCanvasSilent(); };
-window.editGuiItemInEditor = async (pkgId, itemId) => { const pkg = allGUIs.find(g => g.id === pkgId); if(!pkg) return; const item = (pkg.items || []).find(i => i.id === itemId); if(!item) return; document.querySelector('[data-target="gui-editor"]').click(); setTimeout(async () => { document.getElementById('editor-pkg-select').value = pkgId; document.getElementById('editor-gui-name').value = item.name; document.getElementById('editor-gui-item-id').value = item.id; if(item.image_url) { try { const imgRef = ref(storage, item.image_url); const blob = await getBlob(imgRef); const localUrl = URL.createObjectURL(blob); const img = new Image(); img.onload = () => { if(window.clearCanvasSilent) window.clearCanvasSilent(); const canvas = document.getElementById('pixelCanvas'); const ctx = canvas.getContext('2d'); ctx.imageSmoothingEnabled = false; ctx.drawImage(img, 0, 0, canvas.width, canvas.height); URL.revokeObjectURL(localUrl); if(window.triggerSaveState) window.triggerSaveState(); }; img.src = localUrl; } catch (error) { console.error(error); alert("Fehler beim Importieren: " + error.message); } } else { if(window.clearCanvasSilent) window.clearCanvasSilent(); } }, 200); };
+window.editGuiItemInEditor = async (pkgId, itemId) => { const pkg = allGUIs.find(g => g.id === pkgId); if(!pkg) return; const item = (pkg.items || []).find(i => i.id === itemId); if(!item) return; document.querySelector('[data-target="gui-editor"]').click(); setTimeout(async () => { document.getElementById('editor-pkg-select').value = pkgId; document.getElementById('editor-gui-name').value = item.name; document.getElementById('editor-gui-item-id').value = item.id; if(item.image_url) { try { const imgRef = ref(storage, item.image_url); const blob = await getBlob(imgRef); const localUrl = URL.createObjectURL(blob); const img = new Image(); img.onload = () => { if(window.clearCanvasSilent) window.clearCanvasSilent(); const canvas = document.getElementById('pixelCanvas'); const ctx = canvas.getContext('2d'); ctx.imageSmoothingEnabled = false; ctx.drawImage(img, 0, 0, canvas.width, canvas.height); URL.revokeObjectURL(localUrl); if(window.triggerSaveState) window.triggerSaveState(); }; img.src = localUrl; } catch (error) { console.error("Firebase Download Error:", error); alert("Fehler beim Importieren: " + error.message); } } else { if(window.clearCanvasSilent) window.clearCanvasSilent(); } }, 200); };
 
 let editorInitialized = false;
+
 function initEditor() {
-    if (editorInitialized) return; 
-    const canvas = document.getElementById('pixelCanvas'); 
-    if(!canvas) return;
-    editorInitialized = true;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    
-    // FONT MAP
+    if (editorInitialized) return; editorInitialized = true;
     const fontMap={A:[[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],Ä:[[1,0,0,1],[0,0,0,0],[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],B:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,1],[1,1,1,0]],C:[[0,1,1,1],[1,0,0,0],[1,0,0,0],[1,0,0,0],[0,1,1,1]],D:[[1,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,0]],E:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,1,1,1]],F:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,0,0,0]],G:[[0,1,1,1],[1,0,0,0],[1,0,1,1],[1,0,0,1],[0,1,1,1]],H:[[1,0,0,1],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],I:[[1,1,1],[0,1,0],[0,1,0],[0,1,0],[1,1,1]],J:[[0,0,1,1],[0,0,0,1],[0,0,0,1],[1,0,0,1],[0,1,1,0]],K:[[1,0,0,1],[1,0,1,0],[1,1,0,0],[1,0,1,0],[1,0,0,1]],L:[[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,1,1,1]],M:[[1,0,0,0,1],[1,1,0,1,1],[1,0,1,0,1],[1,0,0,0,1],[1,0,0,0,1]],N:[[1,0,0,1],[1,1,0,1],[1,0,1,1],[1,0,0,1],[1,0,0,1]],O:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],Ö:[[1,0,0,1],[0,0,0,0],[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],P:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,0],[1,0,0,0]],Q:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,1,1],[0,1,1,1]],R:[[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,1,0],[1,0,0,1]],S:[[0,1,1,1],[1,0,0,0],[0,1,1,0],[0,0,0,1],[1,1,1,0]],T:[[1,1,1],[0,1,0],[0,1,0],[0,1,0],[0,1,0]],U:[[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],Ü:[[1,0,0,1],[0,0,0,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],V:[[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0],[0,0,1,0]],W:[[1,0,0,0,1],[1,0,0,0,1],[1,0,1,0,1],[1,1,0,1,1],[1,0,0,0,1]],X:[[1,0,0,1],[0,1,1,0],[0,1,1,0],[1,0,0,1]],Y:[[1,0,0,1],[0,1,1,0],[0,0,1,0],[0,0,1,0],[0,0,1,0]],Z:[[1,1,1,1],[0,0,0,1],[0,1,1,0],[1,0,0,0],[1,1,1,1]],0:[[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],1:[[0,1,0],[1,1,0],[0,1,0],[0,1,0],[1,1,1]],2:[[1,1,1,0],[0,0,0,1],[0,1,1,0],[1,0,0,0],[1,1,1,1]],3:[[1,1,1,0],[0,0,0,1],[0,1,1,0],[0,0,0,1],[1,1,1,0]],4:[[1,0,0,1],[1,0,0,1],[1,1,1,1],[0,0,0,1],[0,0,0,1]],5:[[1,1,1,1],[1,0,0,0],[1,1,1,0],[0,0,0,1],[1,1,1,0]],6:[[0,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,1],[0,1,1,0]],7:[[1,1,1,1],[0,0,0,1],[0,0,1,0],[0,1,0,0],[0,1,0,0]],8:[[0,1,1,0],[1,0,0,1],[0,1,1,0],[1,0,0,1],[0,1,1,0]],9:[[0,1,1,0],[1,0,0,1],[0,1,1,1],[0,0,0,1],[0,1,1,0]],' ':[[0],[0],[0],[0],[0]],'.':[[0],[0],[0],[0],[1]],'ß':[[0,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,1],[1,1,1,0]]};
-    
+
+    const canvas = document.getElementById('pixelCanvas'); const ctx = canvas.getContext('2d', { willReadFrequently: true });
     let currentZoom = 2; let currentTool = 'brush'; let selectedColor = '#a49e95'; window.currentStamp = 'slot'; let autoCenter = false; let isDrawing = false; let isEraseMode = false; let startPos = {x:0, y:0}; let canvasSnapshot; let selectionBuffer = null; let clipboardData = { img: null, x: 0, y: 0 }; let importedImage = null; const undoStack = []; const maxUndoSteps = 30;
 
     function showToast(msg) { const t = document.getElementById('editor-toast'); t.innerText = msg; t.style.opacity = 1; setTimeout(() => t.style.opacity = 0, 2000); }
@@ -465,7 +397,7 @@ function initEditor() {
     window.undo = function() { if (undoStack.length > 0) { const data = undoStack.pop(); ctx.putImageData(data, 0, 0); refreshSnapshot(); isDrawing = false; selectionBuffer = null; window.updateGuides(); } }
     document.addEventListener('keydown', e => { if((e.ctrlKey||e.metaKey)&&e.key==='z') window.undo(); });
 
-    window.changeZoom = function(val) { currentZoom = parseInt(val); window.updateGuides(); }
+    window.changeZoom = function(val) { currentZoom = parseInt(val); document.getElementById('zoomVal').innerText = currentZoom; canvas.style.width = (canvas.width * currentZoom) + 'px'; canvas.style.height = (canvas.height * currentZoom) + 'px'; window.updateGuides(); }
     window.resizeCanvas = function() { saveState(); const s = document.querySelector('#gui-editor input[name="size"]:checked').value; const tempCanvas = document.createElement('canvas'); tempCanvas.width = canvas.width; tempCanvas.height = canvas.height; tempCanvas.getContext('2d').putImageData(ctx.getImageData(0,0,canvas.width, canvas.height), 0, 0); if (s === 'square') { canvas.width = 256; canvas.height = 256; } else if (s === 'rect') { canvas.width = 256; canvas.height = 128; } else if (s === 'tall') { canvas.width = 192; canvas.height = 256; } else if (s === 'mid') { canvas.width = 50; canvas.height = 50; } else if (s === 'icon') { canvas.width = 16; canvas.height = 16; } canvas.style.width = (canvas.width * currentZoom) + 'px'; canvas.style.height = (canvas.height * currentZoom) + 'px'; window.updateGuides(); ctx.imageSmoothingEnabled = false; ctx.drawImage(tempCanvas, 0, 0); saveState(); }
     document.getElementById('uploadInput').addEventListener('change', e => { if(e.target.files[0]){ saveState(); const r = new FileReader(); r.onload = ev => { const i = new Image(); i.onload = () => { ctx.imageSmoothingEnabled = false; ctx.drawImage(i, 0, 0, canvas.width, canvas.height); saveState(); }; i.src = ev.target.result; }; r.readAsDataURL(e.target.files[0]); } });
 
@@ -484,8 +416,10 @@ function initEditor() {
     window.toggleGrid = function() { document.getElementById('gridOverlay').style.display = document.getElementById('gridCheck').checked ? 'block' : 'none'; window.updateGuides(); }
     window.toggleAutoCenter = function() { autoCenter = !autoCenter; document.getElementById('btnAutoCenter').classList.toggle('active'); document.getElementById('btnAutoCenter').innerText = autoCenter ? "🧲 Zentrieren (AN)" : "🧲 Zentrieren (Aus)"; document.getElementById('centerSettings').style.display = autoCenter ? 'block' : 'none'; window.updateGuides(); }
     window.toggleYInput = function() { const el = document.getElementById('fixedYVal'); const active = document.getElementById('useFixedY').checked; el.disabled = !active; el.style.opacity = active ? "1" : "0.5"; }
-    window.addToPalette = function(){window.createPaletteSwatch(document.getElementById('colorPicker').value);}
+    
+    // FÜR DIE PALETTE
     window.createPaletteSwatch = function(c){const d=document.createElement('div');d.className='color-swatch';d.style.backgroundColor=c;d.onclick=()=>{selectedColor=c;document.getElementById('colorPicker').value=c;document.querySelectorAll('#gui-editor .color-swatch').forEach(e=>e.classList.remove('active'));d.classList.add('active'); window.setTool('brush');};document.getElementById('paletteGrid').appendChild(d);}
+    window.addToPalette = function(){window.createPaletteSwatch(document.getElementById('colorPicker').value);}
     
     window.clearCanvasSilent = function() { ctx.clearRect(0,0,canvas.width,canvas.height); saveState(); }
     window.clearCanvas = function(){if(confirm("Löschen?")){window.clearCanvasSilent();}}
@@ -494,15 +428,7 @@ function initEditor() {
     window.getAutoX = function(p,t){if(!autoCenter)return p.x;let cx=canvas.width/2;if(document.getElementById('useContentAlign').checked)cx=window.getContentBounds().centerX;if(t==='text'){const txt=document.getElementById('textInput').value;const s=parseInt(document.getElementById('textScale').value)||1;let w=0;for(let c of txt.toUpperCase()){const m=fontMap[c]||fontMap[' '];w+=((m[0]?.length||3)*s)+s;}w-=s;return Math.floor(cx-(w/2));}else{const w=(t.startsWith('job')?45:(window.currentStamp==='slot')?18:16);return Math.floor(cx-(w/2));}}
     window.getContentBounds = function() {const w=canvas.width, h=canvas.height, d=ctx.getImageData(0,0,w,h).data;let minX=w, maxX=0, found=false;for(let y=0;y<h;y++) for(let x=0;x<w;x++) if(d[(y*w+x)*4+3]>0) { if(x<minX)minX=x; if(x>maxX)maxX=x; found=true; }return found ? {minX, maxX, centerX:Math.floor(minX+(maxX-minX)/2), found:true} : {minX:0, maxX:w, centerX:w/2, found:false};}
     
-    window.updateGuides = function() { 
-        const cl=document.getElementById('centerLine'); cl.style.display='none'; 
-        const grid = document.getElementById('gridOverlay'); const gridSize = 18 * currentZoom; grid.style.backgroundSize = `${gridSize}px ${gridSize}px`; 
-        const refImg = document.getElementById('refOverlay'); 
-        if (refImg && refImg.style.display === 'block') { refImg.style.width = (canvas.width * currentZoom) + 'px'; refImg.style.height = (canvas.height * currentZoom) + 'px'; } 
-        canvas.style.width = (canvas.width * currentZoom) + 'px'; canvas.style.height = (canvas.height * currentZoom) + 'px'; 
-        grid.style.width = (canvas.width * currentZoom) + 'px'; grid.style.height = (canvas.height * currentZoom) + 'px';
-        if (autoCenter) { let cp = canvas.width / 2; if (document.getElementById('useContentAlign').checked) { const b = window.getContentBounds(); if(b.found) { cp=b.centerX; } } cl.style.left = (cp * currentZoom) + 'px'; cl.style.display = 'block'; } 
-    }
+    window.updateGuides = function() { const cl=document.getElementById('centerLine'); cl.style.display='none'; const grid = document.getElementById('gridOverlay'); const gridSize = 18 * currentZoom; grid.style.backgroundSize = `${gridSize}px ${gridSize}px`; const refImg = document.getElementById('refOverlay'); if (refImg && refImg.style.display === 'block') { refImg.style.width = (canvas.width * currentZoom) + 'px'; refImg.style.height = (canvas.height * currentZoom) + 'px'; } grid.style.width = (canvas.width * currentZoom) + 'px'; grid.style.height = (canvas.height * currentZoom) + 'px'; if (autoCenter) { let cp = canvas.width / 2; if (document.getElementById('useContentAlign').checked) { const b = window.getContentBounds(); if(b.found) { cp=b.centerX; } } cl.style.left = (cp * currentZoom) + 'px'; cl.style.display = 'block'; } }
 
     function drawBrush(x, y) { ctx.fillStyle = selectedColor; const s = parseInt(document.getElementById('brushSize').value); ctx.fillRect(x - Math.floor(s/2), y - Math.floor(s/2), s, s); }
     function drawEraser(x, y) { const s = parseInt(document.getElementById('brushSize').value); ctx.clearRect(x - Math.floor(s/2), y - Math.floor(s/2), s, s); }
@@ -513,7 +439,7 @@ function initEditor() {
     function drawRectShape(x0,y0,x1,y1,f){const x=Math.min(x0,x1),y=Math.min(y0,y1);const w=Math.abs(x1-x0)+1,h=Math.abs(y1-y0)+1;ctx.fillStyle=selectedColor;if(f){ctx.fillRect(x,y,w,h);}else{const s=parseInt(document.getElementById('brushSize').value);ctx.fillRect(x,y,w,s);ctx.fillRect(x,y+h-s,w,s);ctx.fillRect(x,y,s,h);ctx.fillRect(x+w-s,y,s,h);}}
     function drawSelectionBox(x0,y0,x1,y1){const x=Math.min(x0,x1),y=Math.min(y0,y1);const w=Math.abs(x1-x0),h=Math.abs(y1-y0);ctx.strokeStyle='#fff';ctx.setLineDash([4,2]);ctx.strokeRect(x+0.5,y+0.5,w,h);ctx.setLineDash([]);}
     
-    function drawStamp(t,x,y,p){
+    window.drawStamp = function(t,x,y,p){
         if(p)ctx.globalAlpha=0.5;
         if(t==='slot'){drawRect(x,y,18,18,'#8b8b8b');drawRect(x,y,17,1,'#373737');drawRect(x,y,1,18,'#373737');drawRect(x,y+17,18,1,'#ffffff');drawRect(x+17,y,1,18,'#ffffff');drawRect(x+1,y+1,16,16,'#8b8b8b');}
         else {
@@ -524,13 +450,15 @@ function initEditor() {
         if(p)ctx.globalAlpha=1.0;
     }
 
-    function drawPixelText(t, x, y, preview) { if(!t) return; if(preview) ctx.globalAlpha = 0.5; t = t.toUpperCase(); const s = parseInt(document.getElementById('textScale').value)||1; const shad = document.getElementById('textShadow').checked; function dC(ch, dx, dy, col) { ctx.fillStyle = col; const m = fontMap[ch]||fontMap[' ']; if(!m) return 4*s; for(let r=0;r<m.length;r++) for(let c=0;c<m[r].length;c++) if(m[r][c]) ctx.fillRect(dx+(c*s), dy+(r*s), s, s); return ((m[0]?.length||3)*s)+s; } if(shad) { let sx=x+s; for(let c of t) sx+=dC(c, sx, y+s, "#1a1a1a"); } let cx=x; for(let c of t) cx+=dC(c, cx, y, selectedColor); if(preview) ctx.globalAlpha = 1.0; }
+    window.drawPixelText = function(t, x, y, preview) { if(!t) return; if(preview) ctx.globalAlpha = 0.5; t = t.toUpperCase(); const s = parseInt(document.getElementById('textScale').value)||1; const shad = document.getElementById('textShadow').checked; function dC(ch, dx, dy, col) { ctx.fillStyle = col; const m = fontMap[ch]||fontMap[' ']; if(!m) return 4*s; for(let r=0;r<m.length;r++) for(let c=0;c<m[r].length;c++) if(m[r][c]) ctx.fillRect(dx+(c*s), dy+(r*s), s, s); return ((m[0]?.length||3)*s)+s; } if(shad) { let sx=x+s; for(let c of t) sx+=dC(c, sx, y+s, "#1a1a1a"); } let cx=x; for(let c of t) cx+=dC(c, cx, y, selectedColor); if(preview) ctx.globalAlpha = 1.0; }
     function drawRect(x,y,w,h,col){ctx.fillStyle=col;ctx.fillRect(x,y,w,h);}
     function drawGuiBase(x,y,w,h){ctx.fillStyle='#c6c6c6';ctx.fillRect(x,y,w,h);ctx.fillStyle='#ffffff';ctx.fillRect(x,y,w,2);ctx.fillRect(x,y,2,h);ctx.fillStyle='#555555';ctx.fillRect(x+2,y+h-2,w-2,2);ctx.fillRect(x+w-2,y+2,2,h-2);}
     
     window.applyTemplate = function(type) { 
         saveState(); const w=canvas.width; const cx=Math.floor((w-176)/2); 
-        if(type==='chest'){ const sy=10; drawGuiBase(cx,sy,176,166); for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+17+r*18,false); for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+83+r*18,false); for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+141,false); } else if(type==='double'){ const sy=5; drawGuiBase(cx,sy,176,222); for(let r=0;r<6;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+17+r*18,false); for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+139+r*18,false); for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+197,false); } else if(type==='inv'){ const sy=80; for(let r=0;r<3;r++)for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+r*18,false); for(let c=0;c<9;c++)drawStamp('slot',cx+7+c*18,sy+58,false); } 
+        if(type==='chest'){ const sy=10; drawGuiBase(cx,sy,176,166); for(let r=0;r<3;r++)for(let c=0;c<9;c++) window.drawStamp('slot',cx+7+c*18,sy+17+r*18,false); for(let r=0;r<3;r++)for(let c=0;c<9;c++) window.drawStamp('slot',cx+7+c*18,sy+83+r*18,false); for(let c=0;c<9;c++) window.drawStamp('slot',cx+7+c*18,sy+141,false); } 
+        else if(type==='double'){ const sy=5; drawGuiBase(cx,sy,176,222); for(let r=0;r<6;r++)for(let c=0;c<9;c++) window.drawStamp('slot',cx+7+c*18,sy+17+r*18,false); for(let r=0;r<3;r++)for(let c=0;c<9;c++) window.drawStamp('slot',cx+7+c*18,sy+139+r*18,false); for(let c=0;c<9;c++) window.drawStamp('slot',cx+7+c*18,sy+197,false); } 
+        else if(type==='inv'){ const sy=80; for(let r=0;r<3;r++)for(let c=0;c<9;c++) window.drawStamp('slot',cx+7+c*18,sy+r*18,false); for(let c=0;c<9;c++) window.drawStamp('slot',cx+7+c*18,sy+58,false); } 
         refreshSnapshot(); 
     }
     
@@ -557,6 +485,7 @@ function initEditor() {
             
             const pkgRef = doc(db, "guis", pkgId);
             const pkg = allGUIs.find(g => g.id === pkgId);
+            if(!pkg) throw new Error("Das ausgewählte Paket wurde nicht in der Datenbank gefunden.");
 
             let updatedItems = [...(pkg.items || [])];
 
@@ -591,6 +520,7 @@ function initEditor() {
         }
     }
 
+    // Farben initialisieren
     const myColors = ['#a49e95', '#766f6a', '#483f46', '#231c2c', '#1e1829', '#539d33', '#ffffff', '#000000'];
     myColors.forEach(c => window.createPaletteSwatch(c));
     window.resizeCanvas(); saveState(); refreshSnapshot();
