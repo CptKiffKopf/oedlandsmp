@@ -44,12 +44,13 @@
                 <li class="nav-item" data-target="menu-planner" style="color: #00BCD4;">📋 Menü Planer</li>
                 
                 <div style="flex-grow: 1; min-height: 20px;"></div>
-                <li id="btn-darkmode" style="border-top: 1px solid var(--border-color); margin-top: 15px; padding-top: 15px; font-weight:bold;">🌙 Dark Mode</li>
-                <li id="btn-logout" style="color: var(--danger);">🚪 Logout</li>
+                <li id="btn-darkmode" style="border-top: 1px solid var(--border-color); margin-top: 15px; padding-top: 15px; font-weight:bold; cursor: pointer; color: var(--text-muted);">🌙 Dark Mode</li>
+                <li id="btn-logout" style="color: var(--danger); cursor: pointer;">🚪 Logout</li>
             </ul>
         </nav>
 
         <main class="content">
+            
             <section id="uebersicht" class="category-section active">
                 <h2>Dashboard</h2>
                 <div class="dashboard-grid">
@@ -58,12 +59,14 @@
                     <div class="stat-card"><h3>Shop-Items</h3><p class="stat-number" id="stat-shop">0</p></div>
                     <div class="stat-card"><h3>Events</h3><p class="stat-number" id="stat-events">0</p></div>
                     <div class="stat-card"><h3>Quest-Batches</h3><p class="stat-number" id="stat-quests">0</p></div>
+                    <div class="stat-card"><h3>Hologramme</h3><p class="stat-number" id="stat-holograms">0</p></div>
                     <div class="stat-card"><h3>Plugins</h3><p class="stat-number" id="stat-plugins">0</p></div>
                     <div class="stat-card"><h3>GUI Pakete</h3><p class="stat-number" id="stat-guis">0</p></div>
                 </div>
 
                 <div class="form-card" style="margin-top: 30px;">
                     <h3>📡 Live Server Status Ping</h3>
+                    <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;">Gib eine IP ein, um zu prüfen, ob dein Server online ist.</p>
                     <div class="input-group">
                         <input type="text" id="server-ip" placeholder="Server IP (z.B. mc.hypixel.net)" style="max-width: 300px;">
                         <button class="btn btn-primary" onclick="window.checkServerStatus()">Status abrufen</button>
@@ -72,7 +75,6 @@
                 </div>
             </section>
 
-            <!-- EVENTS -->
             <section id="events" class="category-section">
                 <h2>📅 Events & Kalender</h2>
                 <div class="form-card">
@@ -90,11 +92,10 @@
                     </div>
                     <p id="event-status" class="status-text"></p>
                 </div>
-                <h3 style="margin-bottom: 15px; margin-top: 30px; font-size: 18px;">Kommende Events (Nach Datum sortiert)</h3>
+                <h3 style="margin-bottom: 15px; margin-top: 30px; font-size: 18px;">Kommende Events</h3>
                 <div id="events-container" class="gui-grid"></div>
             </section>
 
-            <!-- RÄNGE -->
             <section id="raenge" class="category-section">
                 <h2>Ränge verwalten</h2>
                 <div class="form-card">
@@ -102,20 +103,25 @@
                     <div class="input-group">
                         <input type="text" id="rank-name" placeholder="Rang Name (z.B. VIP)">
                         <select id="rank-inherit"><option value="">Erbt von... (Keiner)</option></select>
-                        <input type="file" id="rank-image" accept="image/png, image/jpeg" title="Titelbild für Rang (Optional)">
+                        <input type="file" id="rank-image" accept="image/png, image/jpeg" title="Titelbild für Rang">
                     </div>
                     <textarea id="rank-perms" placeholder="Permissions (eine pro Zeile)" rows="4"></textarea>
                     <div style="margin-top: 5px; text-align: right;"><button type="button" class="btn btn-secondary btn-sm" onclick="window.importPluginPerms()" style="color: #00BCD4; border-color: #00BCD4;">🪄 Perms importieren</button></div>
                     <div class="button-group" style="margin-top: 15px;"><button id="btn-save-rank" class="btn btn-primary">Rang speichern</button><button id="btn-cancel-rank" class="btn btn-secondary" style="display: none;">Abbrechen</button></div>
                     <p id="rank-status" class="status-text"></p>
                 </div>
-                <div class="table-container"><table class="data-table"><thead><tr><th>Bild</th><th>Name</th><th>Erbt von</th><th>Permissions</th><th>Aktionen</th></tr></thead><tbody id="rank-list"></tbody></table></div>
+                <div class="table-container">
+                    <div style="padding: 15px 16px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: var(--bg-color);">
+                        <h3 style="margin:0; font-size: 14px; color: var(--text-muted);">Gespeicherte Ränge</h3>
+                        <button id="btn-export-ranks" class="btn btn-secondary btn-sm" style="border-color: #3b82f6; color: #3b82f6;">LuckPerms .yml Exportieren</button>
+                    </div>
+                    <table class="data-table"><thead><tr><th>Bild</th><th>Name</th><th>Erbt von</th><th>Permissions</th><th>Aktionen</th></tr></thead><tbody id="rank-list"></tbody></table>
+                </div>
             </section>
 
-            <!-- KISTEN -->
             <section id="kisten" class="category-section">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h2>Kisten verwalten</h2>
+                    <h2 style="margin:0;">Kisten verwalten</h2>
                     <button id="btn-toggle-drag" class="btn btn-secondary" onclick="window.toggleDragDrop()">🔒 Drag & Drop: AUS</button>
                 </div>
                 <div class="form-card">
@@ -127,20 +133,21 @@
                 <div id="crates-container" class="crates-layout"></div>
             </section>
 
-            <!-- PUNKTESHOP -->
             <section id="punkteshop" class="category-section">
-                <h2 style="margin-bottom: 20px;">Punkteshop</h2>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 style="margin:0;">Punkteshop</h2>
+                    <button class="btn btn-secondary" style="color: #00BCD4; border-color: #00BCD4;" onclick="window.exportShopYaml()">📥 ShopGUI+ Export</button>
+                </div>
                 <div class="form-card">
                     <h3 id="shop-form-title">Neues Item im Shop anbieten</h3>
                     <input type="hidden" id="shop-edit-id">
                     <div class="input-group"><input type="text" id="shop-item" placeholder="Item Name (z.B. 1000 Münzen)"><input type="number" id="shop-price" placeholder="Preis (Punkte)"><input type="file" id="shop-image" accept="image/png, image/jpeg"></div>
-                    <div class="button-group"><button id="btn-save-shop" class="btn btn-primary">Shop-Item speichern</button><button id="btn-cancel-shop" class="btn btn-secondary" style="display:none;" onclick="window.resetShopForm()">Abbrechen</button></div>
+                    <div class="button-group"><button id="btn-save-shop" class="btn btn-primary">Item speichern</button><button id="btn-cancel-shop" class="btn btn-secondary" style="display:none;" onclick="window.resetShopForm()">Abbrechen</button></div>
                     <p id="shop-status" class="status-text"></p>
                 </div>
                 <div class="table-container"><table class="data-table"><thead><tr><th>Bild</th><th>Item Name</th><th>Preis</th><th style="text-align: right;">Aktionen</th></tr></thead><tbody id="shop-list"></tbody></table></div>
             </section>
 
-            <!-- QUESTS -->
             <section id="quests" class="category-section">
                 <h2>📜 Quest Editor (Batches)</h2>
                 <div class="form-card">
@@ -150,7 +157,6 @@
                 <div id="quest-batches-container" class="crates-layout"></div>
             </section>
 
-            <!-- HOLOGRAMME -->
             <section id="holograms" class="category-section">
                 <h2>🪄 DecentHolograms Creator</h2>
                 <div class="form-card">
@@ -162,9 +168,11 @@
                 <div id="holograms-container" class="crates-layout"></div>
             </section>
 
-            <!-- BROADCASTER -->
             <section id="broadcaster" class="category-section">
-                <h2 style="margin-bottom: 20px;">📢 Auto-Broadcaster</h2>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 style="margin:0;">📢 Auto-Broadcaster</h2>
+                    <button class="btn btn-secondary" style="color: #FF9800; border-color: #FF9800;" onclick="window.exportBroadcastYaml()">📥 AutoBroadcaster Export</button>
+                </div>
                 <div class="form-card">
                     <h3>Neue Nachricht erstellen</h3>
                     <div style="display: flex; gap: 20px; flex-wrap: wrap;">
@@ -180,21 +188,22 @@
                 <div class="table-container"><table class="data-table"><thead><tr><th>Nachricht (Original & Vorschau)</th><th style="width:120px;">Intervall</th><th style="text-align: right; width:180px;">Aktion</th></tr></thead><tbody id="bc-list"></tbody></table></div>
             </section>
 
-            <!-- PLUGINS -->
             <section id="plugins" class="category-section">
                 <h2>Server Plugins & Einstellungen</h2>
                 <div class="form-card">
                     <h3 id="plugin-form-title">Neues Plugin hinzufügen</h3>
                     <div class="input-group"><input type="text" id="plugin-name" placeholder="Plugin Name (z.B. DailyRewards)" style="width: 100%; max-width: 300px;"></div>
-                    <textarea id="plugin-perms" placeholder="essentials.kit.vip..." rows="3"></textarea>
-                    <div id="plugin-settings-text-container" style="margin-top: 10px;"><textarea id="plugin-settings-text" placeholder="Allgemeine Einstellungen..." rows="4"></textarea></div>
+                    <textarea id="plugin-perms" placeholder="Permissions / Commands..." rows="3"></textarea>
+                    <h4 style="margin-top:15px; font-size: 13px; color: var(--text-muted);">Einstellungen Typ:</h4>
+                    <select id="plugin-settings-type" onchange="window.togglePluginSettings()" style="width: 100%; max-width: 300px; margin-bottom: 10px;"><option value="text">Einfaches Textfeld (Normal)</option><option value="daily">Tägliche Belohnungen (Tabelle)</option></select>
+                    <div id="plugin-settings-text-container"><textarea id="plugin-settings-text" placeholder="Allgemeine Einstellungen, Config-Notizen..." rows="4"></textarea></div>
+                    <div id="plugin-settings-daily-container" style="display: none; background: var(--bg-color); padding: 15px; border-radius: 6px; border: 1px solid var(--border-color);"><div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;"><label style="font-size: 14px;">Anzahl der Tage:</label><input type="number" id="plugin-daily-days" placeholder="z.B. 7" min="1" max="30" onchange="window.generateDailyFields()" style="width: 100px;"></div><div id="plugin-daily-grid" style="display: flex; flex-direction: column; gap: 8px;"></div></div>
                     <div class="button-group" style="margin-top: 20px;"><button id="btn-save-plugin" class="btn btn-primary">Plugin speichern</button><button id="btn-cancel-plugin" class="btn btn-secondary" style="display: none;">Abbrechen</button></div>
                     <p id="plugin-status" class="status-text"></p>
                 </div>
                 <div id="plugins-container" class="crates-layout" style="margin-top: 20px;"></div>
             </section>
 
-            <!-- WERBUNG -->
             <section id="werbung" class="category-section">
                 <h2>Werbung & Kampagnen</h2>
                 <div class="form-card">
@@ -204,7 +213,6 @@
                 <div id="ad-campaigns-container" class="crates-layout"></div>
             </section>
 
-            <!-- GUI PAKETE -->
             <section id="gui" class="category-section">
                 <h2>GUI Pakete verwalten</h2>
                 <div class="form-card">
@@ -215,7 +223,6 @@
                 <div id="gui-packages-container" class="crates-layout"></div>
             </section>
             
-            <!-- MENÜ PLANER -->
             <section id="menu-planner" class="category-section" style="background: #2c2c2c; color: #fff; padding: 20px; border-radius: 8px;">
                 <h1>📋 Custom Menü Planer</h1>
                 <div style="display: flex; gap: 20px; align-items: flex-start;">
@@ -224,7 +231,7 @@
                         <div style="width: 100%; display: flex; gap: 10px; margin-bottom: 15px; background: #3c3c3c; padding: 10px; border-radius: 6px; flex-wrap: wrap;">
                             <div style="flex: 1;"><label style="color: #aaa; font-size: 12px; display: block; margin-bottom: 4px;">Hintergrund GUI:</label><select id="planner-bg-select" onchange="window.updateMenuGrid()" style="width: 100%; padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;"><option value="">Kein Bild (Nur Grid)</option></select></div>
                             <div><label style="color: #aaa; font-size: 12px; display: block; margin-bottom: 4px;">Grid Reihen:</label><select id="menu-rows" onchange="window.updateMenuGrid()" style="width: 120px; padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;"><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6" selected>6</option></select></div>
-                            <div style="display: flex; gap: 5px;"><div><label style="color: #aaa; font-size: 12px; display: block; margin-bottom: 4px;">Verschieben X:</label><input type="number" id="planner-offset-x" value="47" onchange="window.updateMenuGrid()" style="width: 60px; padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;"></div><div><label style="color: #aaa; font-size: 12px; display: block; margin-bottom: 4px;">Verschieben Y:</label><input type="number" id="planner-offset-y" value="22" onchange="window.updateMenuGrid()" style="width: 60px; padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;"></div></div>
+                            <div style="display: flex; gap: 5px;"><div><label style="color: #aaa; font-size: 12px; display: block; margin-bottom: 4px;">X:</label><input type="number" id="planner-offset-x" value="47" onchange="window.updateMenuGrid()" style="width: 60px; padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;"></div><div><label style="color: #aaa; font-size: 12px; display: block; margin-bottom: 4px;">Y:</label><input type="number" id="planner-offset-y" value="22" onchange="window.updateMenuGrid()" style="width: 60px; padding: 6px; background: #222; border: 1px solid #555; color: #fff; border-radius: 4px;"></div></div>
                         </div>
                         <div class="planner-canvas-outer"><div class="planner-canvas-inner" id="planner-inner-canvas"><div id="mc-inventory" class="mc-inventory-overlay"></div></div></div>
                     </div>
@@ -232,7 +239,6 @@
                 </div>
             </section>
 
-            <!-- GUI EDITOR -->
             <section id="gui-editor" class="category-section" style="background: #2c2c2c; color: #fff; padding: 20px; border-radius: 8px;">
                 <h1>MC GUI Editor</h1>
                 <div class="main-container-editor">
@@ -273,17 +279,15 @@
         </main>
     </div>
 
-    <!-- Modals -->
     <div id="item-modal" class="modal">
         <div class="modal-content">
             <h3 id="item-modal-title">Item zur Kiste hinzufügen</h3>
             <input type="hidden" id="modal-crate-id"><input type="hidden" id="modal-edit-item-id">
             <div class="input-group" style="flex-direction: column; gap: 10px; margin-top: 15px;">
-                <select id="modal-item-type" onchange="window.changeCrateItemType()" style="width:100%; padding: 6px; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;"><option value="item">📦 Normales Item</option><option value="money">💰 Geld</option></select>
-                <input type="text" id="modal-item-name" placeholder="Item Name (z.B. Diamant)" style="width:100%;">
+                <select id="modal-item-type" onchange="window.changeCrateItemType()" style="width:100%; padding: 6px; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;"><option value="item">📦 Normales Item</option><option value="money">💰 Geld</option><option value="perk">🌟 Perk</option><option value="special">✨ Spezial</option></select>
+                <input type="text" id="modal-item-name" placeholder="Item Name" style="width:100%;">
                 <div style="display: flex; gap: 10px; width: 100%;"><input type="number" id="modal-item-quantity" placeholder="Menge" min="1" value="1" style="flex: 1;"><input type="number" id="modal-item-chance" placeholder="Chance %" min="0" max="100" style="flex: 1;"></div>
                 <input type="file" id="modal-item-image" accept="image/png, image/jpeg" style="width:100%;">
-                
                 <div id="enchantment-section" style="border-top: 1px solid var(--border-color); margin-top: 10px; padding-top: 10px;">
                     <h4 style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;">Verzauberungen</h4>
                     <div id="enchantments-container" style="display: flex; flex-direction: column; gap: 5px;"></div>
@@ -305,17 +309,59 @@
         </div>
     </div>
 
-    <!-- QUEST MODALS etc. -->
+    <div id="ad-upload-modal" class="modal">
+        <div class="modal-content">
+            <h3>Werbung zur Kampagne hinzufügen</h3>
+            <input type="hidden" id="modal-ad-campaign-id">
+            <div class="input-group" style="flex-direction: column; gap: 10px; margin-top: 15px;"><input type="text" id="modal-ad-title" placeholder="Titel / Beschreibung" style="width:100%;"><input type="text" id="modal-ad-link" placeholder="Link (URL)" style="width:100%;"><input type="file" id="modal-ad-image" accept="image/png, image/jpeg, image/gif" style="width:100%;"></div>
+            <div class="button-group" style="margin-top: 20px;"><button id="btn-save-ad-item" class="btn btn-primary">Werbung speichern</button><button onclick="document.getElementById('ad-upload-modal').classList.remove('active')" class="btn btn-secondary">Abbrechen</button></div>
+            <p id="modal-ad-status" class="status-text"></p>
+        </div>
+    </div>
+
     <div id="quest-modal" class="modal">
         <div class="modal-content" style="max-width: 500px;">
             <h3 id="quest-modal-title">Neue Quest erstellen</h3>
             <input type="hidden" id="modal-quest-batch-id"><input type="hidden" id="modal-quest-edit-id">
             <div class="input-group" style="flex-direction: column; gap: 10px; margin-top: 15px;">
                 <input type="text" id="modal-quest-name" placeholder="Quest Name" style="width:100%;">
-                <textarea id="modal-quest-desc" placeholder="Quest Beschreibung" rows="3"></textarea>
+                <textarea id="modal-quest-desc" placeholder="Quest Beschreibung (Nutze & Farben)" rows="3"></textarea>
                 <input type="text" id="modal-quest-reward" placeholder="Belohnung" style="width:100%;">
             </div>
             <div class="button-group" style="margin-top: 20px;"><button id="btn-save-quest-data" class="btn btn-primary">Speichern</button><button onclick="document.getElementById('quest-modal').classList.remove('active')" class="btn btn-secondary">Abbrechen</button></div>
+        </div>
+    </div>
+
+    <div id="quest-task-modal" class="modal">
+        <div class="modal-content">
+            <h3>Aufgabe zur Quest hinzufügen</h3>
+            <input type="hidden" id="modal-task-batch-id"><input type="hidden" id="modal-task-quest-id">
+            <div class="input-group" style="flex-direction: column; gap: 10px; margin-top: 15px;">
+                <select id="modal-quest-task-type" style="width:100%; padding: 6px; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;"><option value="FARMING">⛏️ Abbauen</option><option value="CRAFTING">🛠️ Craften</option><option value="KILL_MOB">🧟 Mob töten</option><option value="KILL_PLAYER">⚔️ Spieler töten</option></select>
+                <input type="text" id="modal-quest-task-target" placeholder="Ziel (z.B. ZOMBIE)" style="width:100%;"><input type="number" id="modal-quest-task-amount" placeholder="Anzahl" min="1" value="1" style="width:100%;">
+            </div>
+            <div class="button-group" style="margin-top: 20px;"><button id="btn-save-quest-task" class="btn btn-primary">Aufgabe speichern</button><button onclick="document.getElementById('quest-task-modal').classList.remove('active')" class="btn btn-secondary">Abbrechen</button></div>
+        </div>
+    </div>
+
+    <div id="holo-line-modal" class="modal">
+        <div class="modal-content">
+            <h3>Zeile zum Hologramm hinzufügen</h3>
+            <input type="hidden" id="modal-holo-id">
+            <div class="input-group" style="flex-direction: column; gap: 10px; margin-top: 15px;">
+                <select id="modal-holo-line-type" onchange="window.changeHoloLineType()" style="width:100%; padding: 6px; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;"><option value="text">📝 Text</option><option value="item">💎 Item</option></select>
+                <input type="text" id="modal-holo-line-content" placeholder="Text (z.B. &aWillkommen!)" style="width:100%;">
+                <p id="holo-line-hint" style="font-size: 11px; color: var(--text-muted); margin-top: -5px;">Nutze Minecraft Color-Codes.</p>
+            </div>
+            <div class="button-group" style="margin-top: 20px;"><button id="btn-save-holo-line" class="btn btn-primary">Zeile hinzufügen</button><button onclick="document.getElementById('holo-line-modal').classList.remove('active')" class="btn btn-secondary">Abbrechen</button></div>
+        </div>
+    </div>
+
+    <div id="crate-test-modal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h3>🎲 Kisten-Simulator (1.000 Öffnungen)</h3>
+            <div id="crate-test-result" style="background: var(--bg-color); padding: 15px; border-radius: 6px; max-height: 300px; overflow-y: auto;"></div>
+            <div class="button-group" style="margin-top: 20px;"><button onclick="document.getElementById('crate-test-modal').classList.remove('active')" class="btn btn-secondary" style="width: 100%;">Schließen</button></div>
         </div>
     </div>
 
