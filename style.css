@@ -142,12 +142,15 @@ input[type="file"] { padding: 7px; background: var(--bg-color); font-size: 12px;
 .sidebar-editor { display: flex; flex-direction: column; gap: 10px; width: 300px; height: 100%; overflow-y: auto; padding-right: 5px; flex-shrink: 0; }
 .panel-editor { background: #3c3c3c; padding: 12px; border-radius: 8px; border: 1px solid #555; text-align: left; color: white;}
 .panel-editor h3 { margin: 0 0 8px 0; font-size: 0.95rem; color: #aaa; border-bottom: 1px solid #555; padding-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
+
 .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
 .btn-editor { background: #555; color: white; border: none; padding: 8px; cursor: pointer; border-radius: 4px; transition: background 0.1s; text-align: center; font-size: 0.85rem; }
 .btn-editor:hover { background: #666; }
 .btn-editor.active { background: #4CAF50; font-weight: bold; border: 2px solid #2E7D32; }
+
 .editor-btn-eraser-mode { background: #444; border: 1px dashed #aaa; }
 .editor-btn-eraser-mode.active { background: #FF9800; border: 2px solid #E65100; color: #fff; }
+
 .btn-undo { background: #FF9800; width: 100%; margin-bottom: 5px; }
 .btn-editor.btn-danger { background: #d32f2f; color: white;} 
 .btn-editor.btn-danger:hover { background: #b71c1c; }
@@ -155,12 +158,15 @@ input[type="file"] { padding: 7px; background: var(--bg-color); font-size: 12px;
 .editor-btn-template { background: #546E7A; border: 1px solid #455A64; }
 .editor-btn-copy { background: #9C27B0; } 
 .editor-btn-import { background: #009688; }
+
 .scroll-box-editor { flex-grow: 1; height: 100%; overflow: auto; border-radius: 8px; background: #1e1e1e; padding: 10px; }
+
 .editor-canvas-wrapper { position: relative; border: 2px solid #555; background-image: linear-gradient(45deg, #808080 25%, transparent 25%), linear-gradient(-45deg, #808080 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #808080 75%), linear-gradient(-45deg, transparent 75%, #808080 75%); background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px; display: inline-block; cursor: crosshair; }
 #pixelCanvas { display: block; image-rendering: pixelated; position: relative; z-index: 1; max-width: none !important; width: auto; height: auto; }
 .editor-ref-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0.2; pointer-events: none; display: none; image-rendering: pixelated; z-index: 5; max-width: none !important; }
 .editor-grid-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; background-image: linear-gradient(to right, rgba(255, 255, 255, 0.25) 1px, transparent 1px), linear-gradient(to bottom, rgba(255, 255, 255, 0.25) 1px, transparent 1px); display: none; z-index: 10; }
 .editor-center-line { position: absolute; top: 0; width: 2px; height: 100%; background: rgba(255, 0, 0, 0.6); pointer-events: none; display: none; left: 50%; transform: translateX(-50%); z-index: 10; }
+
 #editor-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 10px 20px; border-radius: 20px; pointer-events: none; opacity: 0; transition: opacity 0.3s; z-index: 20100; font-size: 0.9rem; }
 .editor-palette-grid { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 5px; }
 #gui-editor .color-swatch { width: 22px; height: 22px; border: 1px solid #000; cursor: pointer; }
